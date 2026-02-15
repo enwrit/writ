@@ -1,0 +1,21 @@
+---
+description: Annotated treeview of the .cursor folder for this repository
+alwaysApply: true
+---
+
+
+# Cursor Structure (agents, rules, plans)
+
+.cursor/
+├── agents/                          # Available agents and subagents
+│    ├── coding-agent.mdc            # Primary coding agent -- implements features according to the implementation plan (enwrit/writ)
+│    ├── devops-agent.mdc            # manages CI/CD, packaging, releases, and deployment infrastructure (enwrit/writ)
+│    ├── reviewer-agent.mdc          # Reviewer agent -- reviews code quality, architecture, and plan alignment (enwrit/writ)
+│    └── testing-agent.mdc           # Testing agent -- writes and maintains pytest tests for the writ CLI tool (enwrit.com)
+├── plans/
+│    ├── cli-tool-plan-v0.3.md       # Higher level plan with phases, MVP, competitive analysis, etc.
+│    └── implementation-plan.md      # The plan to implement to build this writ CLI tool and repo, curated through research & competitive analysis
+└── rules/
+    ├── cursor-treeview.mdc          # This file
+    ├── project-rule.mdc             # General rule for this project; info that all agents need
+    └── project-treeview.mdc         # Annotated repository structure / treeview for the full repo

@@ -1,0 +1,92 @@
+---
+description: Core project identity, architecture, and conventions for the writ CLI tool (enwrit.com)
+alwaysApply: true
+---
+
+# enwrit (writ) -- Agent Instruction Management CLI
+
+**Product**: enwrit | **CLI command**: `writ` | **Domain**: enwrit.com | **GitHub**: github.com/enwrit/writ | **PyPI**: `pip install enwrit`
+
+## What This Project Is
+
+A CLI tool that manages AI agent instructions across tools, projects, and devices. The management layer for AGENTS.md. Not a generator (agentseed does that), not a registry (PRPM has 7,500+ packages). We manage, compose, score, and route agent instructions.
+
+Three unique capabilities no competitor has (confirmed across 28+ tools studied):
+1. **Context composition** -- layer project + team + agent + handoff context into one instruction set
+2. **Personal agent library with cloud sync** -- save agents, access from any device
+3. **Cross-project memory** -- export context from Repo A, import into Repo B
+
+## Architecture
+
+```
+src/writ/
+├── cli.py              # Typer CLI entry point
+├── commands/           # One file per command group (init, agent, library, export, compose, etc.)
+├── core/               # Core logic (scanner, store, composer, formatter, linter, models)
+├── integrations/       # External registry integrations (PRPM, Agent Skills CLI, URL)
+└── utils.py            # Helpers
+```
+
+- **CLI**: Python 3.11+, Typer + Rich for beautiful terminal output
+- **Data models**: Pydantic for all config validation
+- **Config format**: YAML (structured data) + Markdown (prose instructions)
+- **Local store**: `.writ/` directory per project, `~/.writ/` global cache (synced to remote)
+- **No local database**: Everything is files. Git-friendly. Agent-readable.
+
+## How It Works
+
+The tool writes to native IDE/CLI files. It does NOT call LLM APIs.
+
+| Tool | We write to |
+|------|------------|
+| Cursor | `.cursor/rules/writ-*.mdc` |
+| Claude Code | `CLAUDE.md` |
+| AGENTS.md | `AGENTS.md` |
+| Copilot | `.github/copilot-instructions.md` |
+| Windsurf | `.windsurfrules` |
+| Codex/Kiro | `AGENTS.md` |
+
+## Core Commands
+
+```
+writ init                       Scan repo, detect existing files, create .writ/
+writ add <name>                 Create a new agent
+writ use <name>                 Compose + write to native IDE files
+writ save <name>                Save to personal library (local + remote sync)
+writ load <name>                Load from library into project
+writ export <name> <format>     Export to specific format
+writ compose <name>             Preview composed context (dry run)
+writ memory export/import       Cross-project memory sharing
+writ lint <name>                Validate quality
+```
+
+## Development Conventions
+
+1. **Typed Python**: Type hints on all functions. Pydantic for data models.
+2. **One command per file**: `commands/init.py`, `commands/agent.py`, etc.
+3. **No UI**: CLI and markdown output only. Agents consume this tool.
+4. **Tests**: pytest for all commands and core logic. Test each command independently.
+5. **Error handling**: Graceful failures with helpful messages. Never crash silently.
+6. **Keep it simple**: This is a CLI tool. Don't over-engineer. Ship fast, iterate.
+7. **Dogfood**: This repo uses AGENTS.md and .cursor/rules/ -- managed by our own tool.
+
+## Key Data Model
+
+Agent configs are YAML files in `.writ/agents/`:
+```yaml
+name: reviewer
+description: "Code reviewer for TypeScript"
+version: 1.0.0
+tags: [typescript, review]
+instructions: |
+  You are a code reviewer...
+composition:
+  inherits_from: []             # Agents whose instructions prepend
+  receives_handoff_from: []     # Agents that hand off context
+  project_context: true         # Include auto-detected project context
+```
+
+## Reference Documents
+
+- `knowledge/plans/implementation-plan.md` -- Detailed technical blueprint with pseudocode
+- `knowledge/plans/cli-tool-plan-v0.3.md` -- Strategy, competitive positioning, phases

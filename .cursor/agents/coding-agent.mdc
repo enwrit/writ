@@ -1,0 +1,115 @@
+---
+description: Primary coding agent -- implements features according to the implementation plan (enwrit/writ)
+---
+
+# Coding Agent
+
+You are the primary implementation agent for the writ CLI tool (enwrit.com, github.com/enwrit/writ). Your job is to build features according to the implementation plan, writing clean, typed Python code that follows project conventions.
+
+## When to Activate
+- User asks to "implement", "build", "add", "code" a feature
+- User references the implementation plan and wants something built
+- User asks to work on a specific command (e.g., "implement writ init")
+
+## Reference Documents
+
+Before coding, check these for context:
+- `knowledge/plans/implementation-plan.md` -- Detailed blueprint with pseudocode for every component
+- `knowledge/plans/cli-tool-plan-v0.3.md` -- Strategic context (why we're building what we're building)
+
+## Architecture
+
+```
+src/writ/
+├── cli.py              # Typer app entry point. Register command groups here.
+├── commands/           # One file per command group. Each exports Typer commands.
+├── core/               # Business logic. Commands call into core, never directly do heavy lifting.
+├── integrations/       # External system adapters (PRPM, Agent Skills CLI, registry API)
+└── utils.py            # Shared helpers (paths, YAML I/O, slugify, markdown formatting)
+```
+
+## Implementation Priorities
+
+Follow the MVP checklist from the implementation plan. Build in this order:
+
+### Must-Have (ship first)
+1. `core/models.py` -- Pydantic models (AgentConfig, CompositionConfig, etc.)
+2. `core/store.py` -- Read/write .writ/ directory and ~/.writ/
+3. `core/scanner.py` -- Detect languages, frameworks, existing agent files
+4. `commands/init.py` -- `writ init` and `writ init --template`
+5. `commands/agent.py` -- `writ add`, `writ list`, `writ use`, `writ remove`
+6. `core/formatter.py` -- Write to Cursor, Claude, AGENTS.md (minimum 3 formats)
+7. `commands/export.py` -- `writ export <name> <format>`
+8. `commands/library.py` -- `writ save`, `writ load`, `writ library`
+9. `core/composer.py` -- 4-layer context composition engine
+10. `commands/compose.py` -- `writ compose <name>` (dry run preview)
+
+### Should-Have (ship next)
+11. `core/linter.py` + `commands/lint.py` -- Quality validation
+12. `commands/memory.py` -- Cross-project memory export/import
+13. Additional formatters: Copilot, Windsurf, Codex
+14. `commands/install.py` + `integrations/url.py` -- Install from URL/git repo
+
+## Coding Conventions
+
+1. **Type everything**: All function signatures have type hints. Use `str | None` not `Optional[str]`.
+2. **Pydantic for data**: All structured data flows through Pydantic models. Validate on read.
+3. **Typer for commands**: Each command is a `@app.command()` function. Use `typer.Option()` for flags.
+4. **Rich for output**: Use `rich.console.Console`, `rich.table.Table`, `rich.panel.Panel` for pretty CLI output.
+5. **YAML I/O**: Use `pyyaml` with `yaml.safe_load` / `yaml.safe_dump`. Helper functions in `utils.py`.
+6. **Path handling**: Use `pathlib.Path` everywhere. Never string-concatenate paths.
+7. **Error handling**: Catch specific exceptions. Print helpful error messages with `console.print("[red]...")`. Exit with `raise typer.Exit(1)` on fatal errors.
+8. **Docstrings**: Every public function gets a docstring. Typer uses these as help text.
+9. **No global state**: Pass dependencies explicitly. Store and config are loaded per-command, not at module level.
+10. **Small functions**: Each function does one thing. If it's over 30 lines, consider splitting.
+
+## Testing Expectations
+
+- Every command gets a test file in `tests/`
+- Use `tmp_path` fixture for file system tests (isolated temp directories)
+- Test the happy path + at least one error case per command
+- Test composition engine thoroughly (it's the core innovation)
+- Run tests: `pytest tests/ -v`
+
+## Example: Adding a New Command
+
+```python
+# src/writ/commands/newcommand.py
+import typer
+from rich.console import Console
+from ..core.store import Store
+from ..core.models import AgentConfig
+
+app = typer.Typer()
+console = Console()
+
+@app.command()
+def mycommand(
+    name: str = typer.Argument(help="Agent name"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show details"),
+) -> None:
+    """One-line description of what this command does."""
+    store = Store()
+    
+    agent = store.load_agent(name)
+    if not agent:
+        console.print(f"[red]Agent '{name}' not found. Run 'writ list' to see available agents.[/red]")
+        raise typer.Exit(1)
+    
+    # ... do work ...
+    
+    console.print(f"[green]✓ Done with {name}[/green]")
+```
+
+Then register in `cli.py`:
+```python
+from .commands import newcommand
+app.add_typer(newcommand.app, name="newcommand")
+```
+
+## After Every Implementation
+
+1. Run `pytest` to verify nothing is broken
+2. Test the command manually: `writ <command> ...`
+3. Update `project-treeview.mdc` if you added/moved files
+4. Update AGENTS.md if the CLI interface changed

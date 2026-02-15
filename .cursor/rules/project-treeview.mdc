@@ -1,0 +1,94 @@
+---
+description: Annotated treeview of the writ CLI project structure for agent orientation (enwrit.com)
+alwaysApply: true
+---
+
+# Repository Structure
+
+```
+writ/                                   # github.com/enwrit/writ
+├── src/
+│   └── writ/                           # Python package
+│       ├── __init__.py                 # Package init, version
+│       ├── cli.py                      # Typer app, top-level command registration
+│       ├── commands/                   # One file per command group
+│       │   ├── __init__.py
+│       │   ├── init.py                 # writ init -- scan repo, create .writ/, import existing files
+│       │   ├── agent.py                # writ add/list/use/edit/remove -- local agent management
+│       │   ├── library.py              # writ save/load/sync/library -- personal library (local + remote)
+│       │   ├── export.py               # writ export -- write to specific format
+│       │   ├── compose.py              # writ compose -- preview composed context (dry run)
+│       │   ├── install.py              # writ install -- from PRPM, Agent Skills CLI, URL, or own registry
+│       │   ├── handoff.py              # writ handoff -- create/apply context handoffs between agents
+│       │   ├── memory.py               # writ memory export/import -- cross-project memory sharing
+│       │   └── lint.py                 # writ lint -- validate agent config quality
+│       ├── core/                       # Core business logic
+│       │   ├── __init__.py
+│       │   ├── scanner.py              # Detect languages, frameworks, existing agent files in repo
+│       │   ├── store.py                # Read/write .writ/ directory and ~/.writ/ global store
+│       │   ├── composer.py             # Layer-based context composition engine (the core innovation)
+│       │   ├── formatter.py            # Export to Cursor, Claude, AGENTS.md, Copilot, Windsurf, Kiro
+│       │   ├── linter.py               # Validate agent quality (length, contradictions, completeness)
+│       │   ├── models.py               # Pydantic models: AgentConfig, CompositionConfig, etc.
+│       │   └── auth.py                 # Authentication state (GitHub OAuth token management)
+│       ├── integrations/               # External registry integrations
+│       │   ├── __init__.py
+│       │   ├── prpm.py                 # Install from PRPM (7,500+ packages)
+│       │   ├── skills.py               # Install from Agent Skills CLI (175K+ skills)
+│       │   ├── url.py                  # Install from any URL or git repo
+│       │   └── registry.py             # Our own registry client (push/pull library, publish, search)
+│       └── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
+├── templates/                          # Built-in agent team templates
+│   ├── default/                        # Single general-purpose agent
+│   │   └── agent.yaml
+│   ├── fullstack/                      # Architect + implementer + reviewer + tester
+│   │   ├── architect.yaml
+│   │   ├── implementer.yaml
+│   │   ├── reviewer.yaml
+│   │   └── tester.yaml
+│   ├── python/                         # Python-focused team
+│   └── typescript/                     # TypeScript-focused team
+├── tests/                              # pytest test suite
+│   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs)
+│   ├── test_init.py                    # writ init command tests
+│   ├── test_agent.py                   # writ add/list/use/remove tests
+│   ├── test_compose.py                 # Composition engine tests
+│   ├── test_export.py                  # Formatter output tests
+│   ├── test_library.py                 # save/load/sync tests
+│   ├── test_memory.py                  # Cross-project memory tests
+│   └── test_linter.py                  # Lint rule tests
+├── .cursor/
+│   ├── rules/                          # Cursor rules for THIS repo's development
+│   │   ├── project-rule.mdc            # Project identity + conventions (alwaysApply)
+│   │   └── project-treeview.mdc        # This file
+│   └── agents/                         # Cursor agents for THIS repo's development
+│       ├── coding-agent.mdc            # Primary implementer -- builds features per plan
+│       ├── testing-agent.mdc           # Writes and maintains tests
+│       └── reviewer-agent.mdc          # Code review and quality checks
+├── pyproject.toml                      # Package metadata, deps, CLI entry point
+├── README.md                           # Project overview, install, quickstart, demo
+├── LICENSE                             # MIT
+├── AGENTS.md                           # Dogfooding -- our own tool manages this
+└── .github/
+    └── workflows/
+        └── ci.yml                      # pytest + ruff linting on PR
+```
+
+### The `.writ/` directory (created by `writ init` in user repos)
+
+```
+.writ/                                  # Per-project store
+├── config.yaml                         # Tool settings (active formats, registry URL)
+├── agents/                             # Agent definitions for this project
+│   └── *.yaml                          # One YAML file per agent
+├── handoffs/                           # Context handoff data between agents
+├── memory/                             # Importable cross-project memory
+└── project-context.md                  # Auto-generated project context (from scanner)
+
+~/.writ/                                # Global store (local cache of remote)
+├── config.yaml                         # Global preferences, auth token
+├── agents/                             # Personal agent library (synced to remote)
+├── memory/                             # Cross-project memory exports (synced)
+├── templates/                          # User's custom templates
+└── cache/                              # Registry search cache
+```
