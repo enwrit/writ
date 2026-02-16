@@ -113,3 +113,6 @@ app.add_typer(newcommand.app, name="newcommand")
 2. Test the command manually: `writ <command> ...`
 3. Update `project-treeview.mdc` if you added/moved files
 4. Update AGENTS.md if the CLI interface changed
+
+## Additional notes
+- Always consider modularity and scalability, and follow good coding practices.

@@ -50,14 +50,22 @@ The tool writes to native IDE/CLI files. It does NOT call LLM APIs.
 
 ```
 writ init                       Scan repo, detect existing files, create .writ/
+writ init --template fullstack  Bootstrap from a built-in template
 writ add <name>                 Create a new agent
+writ add --template python      Load template agents into existing project
+writ list                       Show all agents in project
 writ use <name>                 Compose + write to native IDE files
-writ save <name>                Save to personal library (local + remote sync)
+writ edit <name>                Open agent YAML in $EDITOR
+writ remove <name>              Remove agent from project
+writ save <name>                Save to personal library (~/.writ/agents/)
 writ load <name>                Load from library into project
 writ export <name> <format>     Export to specific format
 writ compose <name>             Preview composed context (dry run)
-writ memory export/import       Cross-project memory sharing
+writ search <query>             Browse agents from PRPM, Skills, registry
+writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
 writ lint <name>                Validate quality
+writ handoff create <from> <to> Create context handoff between agents
+writ memory export/import       Cross-project memory sharing
 ```
 
 ## Development Conventions
@@ -86,7 +94,28 @@ composition:
   project_context: true         # Include auto-detected project context
 ```
 
+## Development Commands
+
+```bash
+# Activate venv (required before running writ/pytest/ruff)
+venv\Scripts\activate              # PowerShell (Windows)
+source venv/bin/activate           # Bash/macOS/Linux
+
+# Install in editable mode (after fresh clone)
+pip install -e ".[dev]"
+
+# Run tests
+python -m pytest tests/ -v
+
+# Lint
+ruff check src/ tests/
+ruff check --fix src/ tests/      # auto-fix what's possible
+```
+
+**Shell note**: This project is developed on Windows/PowerShell. Use `;` to chain commands (not `&&`). Watch for cp1252 encoding -- avoid Unicode box-drawing characters in Rich output (use ASCII alternatives).
+
 ## Reference Documents
 
-- `knowledge/plans/implementation-plan.md` -- Detailed technical blueprint with pseudocode
-- `knowledge/plans/cli-tool-plan-v0.3.md` -- Strategy, competitive positioning, phases
+- `.cursor/plans/implementation-plan.md` -- Detailed technical blueprint with pseudocode + checklist
+- `.cursor/plans/cli-tool-plan-v0.3.md` -- Strategy, competitive positioning, phases
+- `.cursor/plans/example-workflows.md` -- User notes on real workflows to validate

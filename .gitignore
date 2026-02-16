@@ -1,1 +1,40 @@
+# Virtual environments
 venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# IDE
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution
+*.tar.gz
+
+# Ruff
+.ruff_cache/
+
+# Example project generated files (users should run writ init themselves)
+example_project/.writ/
+example_project/.cursor/rules/writ-*
