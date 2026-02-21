@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+
+# Workspace Structure
+enwrit-workspace/       # Workspace for enwrit development (enwrit.code-workspace in enwrit/ root)
+├── writ-CLI/           # Open-source CLI tool (github.com/enwrit/writ). Python, Typer, MIT license, C:\Users\Axel\Desktop\Game Company\enwrit\writ
+├── writ-demo-project/  # Test project for experimentation & testing writ commands in external folder, C:\Users\Axel\Desktop\Game Company\enwrit\writ-demo-project
+└── writ-platform/      # PROPRIETARY. FastAPI backend (api.enwrit.com) + React frontend (enwrit.com). Never make public. C:\Users\Axel\Desktop\Game Company\enwrit\writ-platform

@@ -6,7 +6,7 @@ alwaysApply: true
 # Repository Structure
 
 ```
-writ/                                   # github.com/enwrit/writ
+writ/                                   # github.com/enwrit/writ, writ-CLI (workspace name)
 ├── src/
 │   └── writ/                           # Python package
 │       ├── __init__.py                 # Package init, version
@@ -15,7 +15,8 @@ writ/                                   # github.com/enwrit/writ
 │       │   ├── __init__.py
 │       │   ├── init.py                 # writ init -- scan repo, create .writ/, import existing files
 │       │   ├── agent.py                # writ add/list/use/edit/remove + --template -- local agent management
-│       │   ├── library.py              # writ save/load/library -- personal library (local only for now, remote planned?)
+│       │   ├── library.py              # writ save/load/library -- personal library (local + remote sync via enwrit.com)
+│       │   ├── login.py               # writ login/logout -- authenticate with enwrit.com for cross-device sync
 │       │   ├── export.py               # writ export -- write to specific format
 │       │   ├── compose.py              # writ compose -- preview composed context (dry run)
 │       │   ├── search.py               # writ search -- browse agents from PRPM, Skills, registry
@@ -31,29 +32,29 @@ writ/                                   # github.com/enwrit/writ
 │       │   ├── formatter.py            # 7 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro
 │       │   ├── linter.py               # Validate agent quality (length, contradictions, completeness)
 │       │   ├── models.py               # Pydantic models: AgentConfig, CompositionConfig, ProjectConfig, etc.
-│       │   └── auth.py                 # PLANNED: GitHub OAuth (Phase 3). Currently stub: token read/write only
+│       │   └── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
 │       ├── integrations/               # External registry integrations
 │       │   ├── __init__.py
 │       │   ├── prpm.py                 # PLANNED: full impl. Currently stub that shells out to `prpm` CLI -> 7500+ packages
 │       │   ├── skills.py               # PLANNED: full impl. Currently stub that shells out to `agent-skills` -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
-│       │   └── registry.py             # PLANNED: enwrit registry client (Phase 3). Currently returns stubs
-│       └── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
-├── templates/                          # Built-in agent team templates
-│   ├── default/                        # Single general-purpose agent
-│   │   └── agent.yaml
-│   ├── fullstack/                      # Architect + implementer + reviewer + tester
-│   │   ├── architect.yaml
-│   │   ├── implementer.yaml
-│   │   ├── reviewer.yaml
-│   │   └── tester.yaml
-│   ├── python/                         # Python developer + reviewer
-│   │   ├── developer.yaml
-│   │   └── reviewer.yaml
-│   └── typescript/                     # TypeScript developer + reviewer
-│       ├── developer.yaml
-│       └── reviewer.yaml
-├── example_project/                    # Sample project for dogfooding & testing workflows
+│       │   └── registry.py             # enwrit platform API client (httpx): push/pull library, search registry
+│       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
+│       └── templates/                  # Built-in agent team templates (bundled in package)
+│           ├── default/                # Single general-purpose agent
+│           │   └── agent.yaml
+│           ├── fullstack/              # Architect + implementer + reviewer + tester
+│           │   ├── architect.yaml
+│           │   ├── implementer.yaml
+│           │   ├── reviewer.yaml
+│           │   └── tester.yaml
+│           ├── python/                 # Python developer + reviewer
+│           │   ├── developer.yaml
+│           │   └── reviewer.yaml
+│           └── typescript/             # TypeScript developer + reviewer
+│               ├── developer.yaml
+│               └── reviewer.yaml
+├── example_project/                    # Sample project for dogfooding & testing workflows ... Deprecated -> we use writ-demo-project/ from workspace
 │   ├── .cursor/rules/project-rules.mdc # Pre-existing Cursor rule (tests import during writ init)
 │   ├── src/                            # Sample app.py (FastAPI) + App.tsx (React)
 │   ├── AGENTS.md                       # Pre-existing agent file (tests import during writ init)

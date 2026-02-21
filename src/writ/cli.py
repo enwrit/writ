@@ -17,6 +17,7 @@ from writ.commands import (
     install,
     library,
     lint,
+    login,
     memory,
     search,
 )
@@ -48,10 +49,14 @@ app.command(name="remove")(agent.remove)
 app.command(name="export")(export.export_command)
 app.command(name="compose")(compose.compose_command)
 
-# Library commands (save/load/library/sync)
+# Library commands (save/load/library)
 app.command(name="save")(library.save)
 app.command(name="load")(library.load)
 app.command(name="library")(library.library_list)
+
+# Auth commands (login/logout)
+app.command(name="login")(login.login)
+app.command(name="logout")(login.logout)
 
 # Lint command
 app.command(name="lint")(lint.lint_command)

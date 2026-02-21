@@ -112,10 +112,13 @@ ruff check src/ tests/
 ruff check --fix src/ tests/      # auto-fix what's possible
 ```
 
-**Shell note**: This project is developed on Windows/PowerShell. Use `;` to chain commands (not `&&`). Watch for cp1252 encoding -- avoid Unicode box-drawing characters in Rich output (use ASCII alternatives).
-
 ## Reference Documents
 
 - `.cursor/plans/implementation-plan.md` -- Detailed technical blueprint with pseudocode + checklist
 - `.cursor/plans/cli-tool-plan-v0.3.md` -- Strategy, competitive positioning, phases
 - `.cursor/plans/example-workflows.md` -- User notes on real workflows to validate
+
+## Learnings:
+
+- **Shell note**: This project is developed on Windows/PowerShell. Use `;` to chain commands (not `&&`). Watch for cp1252 encoding -- avoid Unicode box-drawing characters in Rich output (use ASCII alternatives).
+- Think about how to verify large implementations and changes; like tests, prints, etc, in order to be able to iterate and work autonomously.

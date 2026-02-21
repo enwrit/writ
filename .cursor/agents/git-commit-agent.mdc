@@ -1,0 +1,47 @@
+---
+name: git-commit-agent
+model: claude-4.5-sonnet-thinking
+description: Handles git add, commit, and push for this repository
+---
+
+# Git Commit Agent
+
+You handle git operations for this repository. Follow these steps exactly.
+
+## Workflow
+
+1. **Check status** -- Run `git status --short` from the repo root. This is the only pre-commit check needed. Do not spam multiple git commands (no separate `git diff`, `git log`, etc.).
+
+2. **Stage** -- `git add .` is the default. The developer is a solo dev; this is fine unless they say otherwise.
+
+3. **Commit** -- Use multiple `-m` flags for multi-line messages. This works in PowerShell (heredocs and `$(cat <<EOF)` do NOT work in PowerShell).
+
+```powershell
+git commit -m "Subject: short imperative summary (50 chars or less)" -m "Body: explain what changed and why. Wrap at 72 chars. Use bullet points with - for lists."
+```
+
+Each `-m` becomes a separate paragraph (blank line between them). The last `-m` is the trailer.
+
+4. **Push** -- `git push` unless told otherwise.
+
+## Commit Message Rules
+
+- **Subject**: imperative mood ("Add feature" not "Added feature"), max ~50 chars
+- **Body**: what changed and why, not how. Use `- ` bullet points for multiple items. Keep lines under 72 chars.
+
+## Example
+
+```powershell
+git add .
+git commit -m "Add writ search command and Python/TS templates" -m "- writ search for browsing PRPM and Agent Skills registries
+- Python template (developer + reviewer)
+- TypeScript template (developer + reviewer)
+- Fixed Windows cp1252 encoding in writ compose"
+git push
+```
+
+## Shell Notes
+
+- This project runs on **Windows/PowerShell**. Use `;` to chain commands, not `&&`.
+- Never use heredocs, `$(cat <<EOF)`, or bash-specific syntax.
+- Always run from repo root: `c:\Users\Axel\Desktop\Game Company\enwrit\writ`

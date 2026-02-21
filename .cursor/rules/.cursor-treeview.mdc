@@ -7,19 +7,20 @@ alwaysApply: true
 
 ```
 .cursor/
-├── agents/                             # Available agents and subagents
+├── agents/                            # Available agents and subagents
 │   ├── coding-agent.mdc               # Primary implementer -- builds features per plan
 │   ├── devops-agent.mdc               # CI/CD, packaging, releases, deployment
+│   ├── git-commit-agent.mdc           # Handles git add, commit, push
 │   ├── testing-agent.mdc              # Writes and maintains pytest tests
 │   └── reviewer-agent.mdc             # Code review and quality checks
-├── plans/                              # Strategy and implementation plans
+├── plans/                             # Strategy and implementation plans
 │   ├── cli-tool-plan-v0.3.md          # Strategy, competitive analysis, phases, positioning
 │   ├── implementation-plan.md         # Detailed technical blueprint with pseudocode + checklist
 │   └── example-workflows.md           # User notes: real workflows to validate (save/load, search, etc.)
-├── to-do/                              # Task tracking per session
+├── to-do/                             # Task tracking per session
 │   ├── to-do_nomenclature.mdc         # Convention: [x] Finished, [ ] Planned, [~] Ongoing
-│   └── mvp_26-02-15.md               # MVP build checklist (first implementation session)
-└── rules/                              # Cursor rules for THIS repo's development
+│   └── mvp_26-02-15.md                # MVP build checklist (first implementation session)
+└── rules/                             # Cursor rules for THIS repo's development
     ├── .cursor-treeview.mdc           # This file -- .cursor/ folder structure
     ├── project-rule.mdc               # Project identity + conventions (alwaysApply)
     └── project-treeview.mdc           # Annotated repository structure / treeview for the full repo

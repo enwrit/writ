@@ -12,8 +12,8 @@ from writ.core import scanner, store
 from writ.core.models import ProjectConfig
 from writ.utils import console
 
-# Resolve template root once, relative to package source
-_TEMPLATE_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "templates"
+# Resolve template root once, relative to the writ package (src/writ/templates/)
+_TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates"
 
 
 def init_command(

@@ -38,3 +38,11 @@ htmlcov/
 # Example project generated files (users should run writ init themselves)
 example_project/.writ/
 example_project/.cursor/rules/writ-*
+
+
+.env
+
+# Valuable "proprietary" files
+.cursor/insights/
+.cursor/to-do/
+.cursor/plans/
