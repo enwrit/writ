@@ -1,9 +1,9 @@
 ---
-description: Annotated treeview of the .cursor folder for this repository
+description: Annotated treeview of the .cursor folder for the writ-CLI repository
 alwaysApply: true
 ---
 
-# Cursor Structure (agents, rules, plans, to-do)
+# Writ-CLI Cursor Structure (agents, rules, plans, insights, to-do)
 
 ```
 .cursor/
@@ -13,13 +13,10 @@ alwaysApply: true
 │   ├── git-commit-agent.mdc           # Handles git add, commit, push
 │   ├── testing-agent.mdc              # Writes and maintains pytest tests
 │   └── reviewer-agent.mdc             # Code review and quality checks
+├── insights/                          # Strategic research and thinking (read-only reference)
 ├── plans/                             # Strategy and implementation plans
-│   ├── cli-tool-plan-v0.3.md          # Strategy, competitive analysis, phases, positioning
-│   ├── implementation-plan.md         # Detailed technical blueprint with pseudocode + checklist
-│   └── example-workflows.md           # User notes: real workflows to validate (save/load, search, etc.)
 ├── to-do/                             # Task tracking per session
-│   ├── to-do_nomenclature.mdc         # Convention: [x] Finished, [ ] Planned, [~] Ongoing
-│   └── mvp_26-02-15.md                # MVP build checklist (first implementation session)
+│   └── to-do_nomenclature.mdc         # Convention: [x] Finished, [ ] Planned, [~] Ongoing
 └── rules/                             # Cursor rules for THIS repo's development
     ├── .cursor-treeview.mdc           # This file -- .cursor/ folder structure
     ├── project-rule.mdc               # Project identity + conventions (alwaysApply)

@@ -9,12 +9,16 @@ alwaysApply: true
 
 ## What This Project Is
 
-A CLI tool that manages AI agent instructions across tools, projects, and devices. The management layer for AGENTS.md. Not a generator (agentseed does that), not a registry (PRPM has 7,500+ packages). We manage, compose, score, and route agent instructions.
+The communication layer for AI agents. Routes context between repos, devices, and tools. Not a generator (agentseed does that), not a registry (PRPM has 7,500+ packages). We compose, sync, route, and score agent instructions.
+
+**Core framing**: Every feature is a routing operation -- `writ use` routes instructions to IDE files, `writ save/load` routes between devices, `writ handoff` routes between agents, `writ memory` routes between repos. See `.cursor/insights/2026-02-18-communication-layer.md` for the full rationale.
 
 Three unique capabilities no competitor has (confirmed across 28+ tools studied):
 1. **Context composition** -- layer project + team + agent + handoff context into one instruction set
-2. **Personal agent library with cloud sync** -- save agents, access from any device
+2. **Personal agent library with cloud sync** -- save agents to enwrit.com, access from any device
 3. **Cross-project memory** -- export context from Repo A, import into Repo B
+
+**Future direction**: Agent-to-agent routing (autonomous handoffs), ML-powered instruction intelligence (quality scoring, contradiction detection), MCP/A2A bridge for cross-repo agent communication. See `.cursor/insights/2026-02-16-advanced-vision.md`.
 
 ## Architecture
 
@@ -63,6 +67,8 @@ writ export <name> <format>     Export to specific format
 writ compose <name>             Preview composed context (dry run)
 writ search <query>             Browse agents from PRPM, Skills, registry
 writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
+writ login                      Authenticate with enwrit.com (cross-device sync)
+writ logout                     Remove stored API key
 writ lint <name>                Validate quality
 writ handoff create <from> <to> Create context handoff between agents
 writ memory export/import       Cross-project memory sharing
@@ -116,7 +122,7 @@ ruff check --fix src/ tests/      # auto-fix what's possible
 
 - `.cursor/plans/implementation-plan.md` -- Detailed technical blueprint with pseudocode + checklist
 - `.cursor/plans/cli-tool-plan-v0.3.md` -- Strategy, competitive positioning, phases
-- `.cursor/plans/example-workflows.md` -- User notes on real workflows to validate
+- `.cursor/insights/` -- Strategic thinking: advanced vision, communication layer reframing, protocol research
 
 ## Learnings:
 

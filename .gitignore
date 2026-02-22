@@ -35,14 +35,10 @@ htmlcov/
 # Ruff
 .ruff_cache/
 
-# Example project generated files (users should run writ init themselves)
-example_project/.writ/
-example_project/.cursor/rules/writ-*
-
-
 .env
 
-# Valuable "proprietary" files
-.cursor/insights/
-.cursor/to-do/
-.cursor/plans/
+# .cursor content not needed for everyone
+.cursor/insights/*.md
+.cursor/plans/*.md
+.cursor/to-do/*.md
+!.cursor/to-do/to-do_nomenclature.mdc

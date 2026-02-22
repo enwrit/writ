@@ -1,6 +1,6 @@
 ---
 name: git-commit-agent
-model: claude-4.5-sonnet-thinking
+model: claude-4.6-sonnet-medium-thinking
 description: Handles git add, commit, and push for this repository
 ---
 
@@ -39,6 +39,8 @@ git commit -m "Add writ search command and Python/TS templates" -m "- writ searc
 - Fixed Windows cp1252 encoding in writ compose"
 git push
 ```
+
+**Important**: Always finish with git push after committing. The user will approve your push, it's OK.
 
 ## Shell Notes
 

@@ -153,6 +153,67 @@ class TestParseExistingFile:
         assert result is None
 
 
+class TestWritignore:
+    def test_default_ignores_node_modules(self, tmp_project: Path):
+        """Default patterns ignore node_modules without a .writignore file."""
+        (tmp_project / "app.py").write_text("print('hello')")
+        nm = tmp_project / "node_modules" / "pkg"
+        nm.mkdir(parents=True)
+        (nm / "index.js").write_text("module.exports = {}")
+
+        from writ.core.scanner import detect_languages
+        langs = detect_languages(tmp_project)
+        assert "Python" in langs
+        assert "JavaScript" not in langs
+
+    def test_writignore_excludes_custom_dir(self, tmp_project: Path):
+        """A .writignore file excludes custom directories."""
+        (tmp_project / ".writignore").write_text("generated/\n")
+        src = tmp_project / "src"
+        src.mkdir(exist_ok=True)
+        (src / "app.py").write_text("print('hello')")
+        gen = tmp_project / "generated"
+        gen.mkdir()
+        (gen / "output.py").write_text("# auto-generated")
+
+        from writ.core.scanner import detect_languages
+        langs = detect_languages(tmp_project)
+        assert langs.get("Python", 0) == 1
+
+    def test_writignore_supports_negation(self, tmp_project: Path):
+        """Negation patterns with ! re-include previously excluded files."""
+        (tmp_project / ".writignore").write_text("*.log\n!important.log\n")
+        (tmp_project / "debug.log").write_text("debug")
+        (tmp_project / "important.log").write_text("important")
+        (tmp_project / "app.py").write_text("print('hello')")
+
+        from writ.core.scanner import load_ignore_spec
+        spec = load_ignore_spec(tmp_project)
+        assert spec.match_file("debug.log")
+        assert not spec.match_file("important.log")
+
+    def test_writignore_comments_ignored(self, tmp_project: Path):
+        """Lines starting with # are comments."""
+        (tmp_project / ".writignore").write_text("# This is a comment\n*.tmp\n")
+        from writ.core.scanner import load_ignore_spec
+        spec = load_ignore_spec(tmp_project)
+        assert spec.match_file("test.tmp")
+        assert not spec.match_file("test.py")
+
+    def test_directory_tree_respects_writignore(self, tmp_project: Path):
+        """get_directory_tree should exclude .writignore patterns."""
+        (tmp_project / ".writignore").write_text("secret/\n")
+        (tmp_project / "src").mkdir()
+        (tmp_project / "src" / "app.py").write_text("x")
+        (tmp_project / "secret").mkdir()
+        (tmp_project / "secret" / "keys.txt").write_text("x")
+
+        from writ.core.scanner import get_directory_tree
+        tree = get_directory_tree(tmp_project)
+        assert "src" in tree
+        assert "secret" not in tree
+
+
 class TestProjectAnalysis:
     def test_analyze_generates_markdown(self, tmp_project: Path):
         (tmp_project / "app.py").write_text("print('hello')")

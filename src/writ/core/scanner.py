@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pathspec
+
 if TYPE_CHECKING:
     from writ.core.models import AgentConfig
 
@@ -54,20 +56,75 @@ SKIP_DIRS: set[str] = {
     "htmlcov", ".tox", ".eggs", "*.egg-info",
 }
 
+DEFAULT_IGNORE_PATTERNS: list[str] = [
+    "node_modules/",
+    "venv/",
+    ".venv/",
+    ".git/",
+    "__pycache__/",
+    "dist/",
+    "build/",
+    ".next/",
+    ".nuxt/",
+    "target/",
+    ".cargo/",
+    "vendor/",
+    ".mypy_cache/",
+    ".pytest_cache/",
+    ".ruff_cache/",
+    "htmlcov/",
+    ".tox/",
+    ".eggs/",
+    "*.egg-info/",
+    ".writ/",
+]
+
+
+def load_ignore_spec(root: Path | None = None) -> pathspec.PathSpec:
+    """Load .writignore patterns, combined with built-in defaults.
+
+    Uses gitignore-style matching via the pathspec library.
+    """
+    patterns = list(DEFAULT_IGNORE_PATTERNS)
+
+    root = root or Path.cwd()
+    writignore = root / ".writignore"
+    if writignore.exists():
+        try:
+            content = writignore.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    patterns.append(line)
+        except (OSError, UnicodeDecodeError):
+            pass
+
+    return pathspec.PathSpec.from_lines("gitignore", patterns)
+
 
 def detect_languages(root: Path | None = None, max_files: int = 5000) -> dict[str, int]:
     """Count files by language. Returns {language_name: count}."""
     root = root or Path.cwd()
+    spec = load_ignore_spec(root)
     counts: dict[str, int] = {}
     scanned = 0
 
-    for _dirpath, dirnames, filenames in os.walk(root):
-        # Prune skip dirs
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+    for dirpath_str, dirnames, filenames in os.walk(root):
+        dirpath = Path(dirpath_str)
+        rel_dir = dirpath.relative_to(root)
+
+        # Prune ignored directories
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in SKIP_DIRS and not spec.match_file(str(rel_dir / d) + "/")
+        ]
 
         for fname in filenames:
             if scanned >= max_files:
                 return counts
+            rel_path = str(rel_dir / fname)
+            if spec.match_file(rel_path):
+                continue
             ext = Path(fname).suffix.lower()
             if ext in LANGUAGE_MAP:
                 lang = LANGUAGE_MAP[ext]
@@ -177,21 +234,23 @@ def detect_commands(root: Path | None = None) -> dict[str, str]:
 def get_directory_tree(root: Path | None = None, max_depth: int = 2) -> str:
     """Get a simplified directory tree (top N levels)."""
     root = root or Path.cwd()
+    spec = load_ignore_spec(root)
     lines: list[str] = [f"{root.name}/"]
 
     def _walk(directory: Path, prefix: str, depth: int) -> None:
         if depth > max_depth:
             return
         entries = sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
-        # Filter out skip dirs and hidden files
         entries = [
             e for e in entries
             if e.name not in SKIP_DIRS
             and not (e.name.startswith(".") and e.name not in (".github", ".cursor"))
+            and not spec.match_file(
+                str(e.relative_to(root)) + ("/" if e.is_dir() else "")
+            )
         ]
         for i, entry in enumerate(entries):
             is_last = i == len(entries) - 1
-            # Use ASCII-safe tree characters (cp1252 compatible)
             connector = "+-- " if is_last else "|-- "
             if entry.is_dir():
                 lines.append(f"{prefix}{connector}{entry.name}/")

@@ -218,6 +218,32 @@ class TestSearch:
         assert result.exit_code == 0
 
 
+class TestVersionCommand:
+    def test_version_command(self):
+        result = runner.invoke(app, ["version"])
+        assert result.exit_code == 0
+        assert "writ" in result.output
+        assert "Python" in result.output
+
+
+class TestStatus:
+    def test_status_not_initialized(self, tmp_project: Path):
+        result = runner.invoke(app, ["status"])
+        assert result.exit_code == 0
+        assert "no" in result.output
+
+    def test_status_initialized(self, initialized_project: Path):
+        result = runner.invoke(app, ["status"])
+        assert result.exit_code == 0
+        assert "yes" in result.output
+
+    def test_status_shows_agent_count(self, initialized_project: Path):
+        runner.invoke(app, ["add", "agent-a", "--instructions", "A"])
+        result = runner.invoke(app, ["status"])
+        assert result.exit_code == 0
+        assert "1" in result.output
+
+
 class TestLint:
     def test_lint_agent(self, initialized_project: Path):
         runner.invoke(app, [

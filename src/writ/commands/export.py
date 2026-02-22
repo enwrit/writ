@@ -32,7 +32,10 @@ def export_command(
 
     agent = store.load_agent(name)
     if not agent:
-        console.print(f"[red]Agent '{name}' not found.[/red]")
+        console.print(
+            f"[red]Agent '{name}' not found.[/red] "
+            "Run [cyan]writ list[/cyan] to see available agents."
+        )
         raise typer.Exit(1)
 
     # Validate format
@@ -44,8 +47,17 @@ def export_command(
     composed = composer.compose(agent, additional=with_agents or [])
 
     if dry_run:
-        console.print(f"\n[bold]Composed output for '{name}' -> {format}:[/bold]\n")
-        console.print(composed)
+        if format == "agent-card":
+            import json
+
+            from writ.core.formatter import AgentCardFormatter
+
+            card = AgentCardFormatter().format_agent_card(agent)
+            console.print(f"\n[bold]A2A Agent Card for '{name}':[/bold]\n")
+            console.print_json(json.dumps(card))
+        else:
+            console.print(f"\n[bold]Composed output for '{name}' -> {format}:[/bold]\n")
+            console.print(composed)
         return
 
     # Write to format

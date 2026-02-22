@@ -107,3 +107,46 @@ class TestFormatterRegistry:
     def test_write_agent_multiple_formats(self, tmp_project: Path, sample_agent: AgentConfig):
         paths = write_agent(sample_agent, "Instructions", ["cursor", "agents_md"], root=tmp_project)
         assert len(paths) == 2
+
+
+class TestAgentCardFormatter:
+    def test_produces_valid_json(self, tmp_project: Path, sample_agent: AgentConfig):
+        import json
+
+        from writ.core.formatter import AgentCardFormatter
+
+        fmt = AgentCardFormatter()
+        path = fmt.write(sample_agent, "Instructions", root=tmp_project)
+        assert path.exists()
+        card = json.loads(path.read_text())
+        assert card["name"] == "test-agent"
+        assert card["version"] == "1.0.0"
+
+    def test_maps_tags_to_capabilities(self):
+        from writ.core.formatter import AgentCardFormatter
+
+        agent = AgentConfig(
+            name="reviewer",
+            description="Code reviewer",
+            tags=["python", "code-review"],
+        )
+        fmt = AgentCardFormatter()
+        card = fmt.format_agent_card(agent)
+        assert len(card["capabilities"]) == 2
+        assert card["capabilities"][0]["type"] == "python"
+        assert "description" in card["capabilities"][0]
+
+    def test_includes_api_url(self):
+        from writ.core.formatter import AgentCardFormatter
+
+        agent = AgentConfig(name="test", description="Test")
+        fmt = AgentCardFormatter()
+        card = fmt.format_agent_card(agent)
+        assert card["api"]["url"] == "https://api.enwrit.com/agents/test"
+        assert card["api"]["type"] == "a2a"
+
+    def test_in_formatter_registry(self):
+        from writ.core.formatter import AgentCardFormatter
+
+        fmt = get_formatter("agent-card")
+        assert isinstance(fmt, AgentCardFormatter)

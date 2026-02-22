@@ -29,7 +29,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── scanner.py              # Detect languages, frameworks, existing files; parse into AgentConfig
 │       │   ├── store.py                # Read/write .writ/ directory and ~/.writ/ global store
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
-│       │   ├── formatter.py            # 7 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro
+│       │   ├── formatter.py            # 8 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card
 │       │   ├── linter.py               # Validate agent quality (length, contradictions, completeness)
 │       │   ├── models.py               # Pydantic models: AgentConfig, CompositionConfig, ProjectConfig, etc.
 │       │   └── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
@@ -54,20 +54,13 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           └── typescript/             # TypeScript developer + reviewer
 │               ├── developer.yaml
 │               └── reviewer.yaml
-├── example_project/                    # Sample project for dogfooding & testing workflows ... Deprecated -> we use writ-demo-project/ from workspace
-│   ├── .cursor/rules/project-rules.mdc # Pre-existing Cursor rule (tests import during writ init)
-│   ├── src/                            # Sample app.py (FastAPI) + App.tsx (React)
-│   ├── AGENTS.md                       # Pre-existing agent file (tests import during writ init)
-│   ├── package.json                    # Simulates React + Vite + Tailwind project
-│   ├── pyproject.toml                  # Simulates FastAPI + Pytest project
-│   ├── tsconfig.json                   # Simulates TypeScript strict config
-│   └── README.md                       # Testing workflow instructions
-├── tests/                              # pytest test suite (106 tests)
+├── tests/                              # pytest test suite (137 tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, use, search, templates, import)
 │   ├── test_compose.py                 # Composition engine tests
 │   ├── test_formatter.py               # Formatter output tests (Cursor, Claude, AGENTS.md, etc.)
 │   ├── test_library.py                 # save/load/library tests
+│   ├── test_login.py                   # Login/logout + remote sync tests (mocked RegistryClient)
 │   ├── test_scanner.py                 # Scanner + file parsing tests (mdc, CLAUDE.md, .windsurfrules)
 │   ├── test_store.py                   # Store read/write tests (.writ/ and ~/.writ/)
 │   ├── test_models.py                  # Pydantic model tests
@@ -81,7 +74,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 ├── .gitignore
 └── .github/
     └── workflows/
-        └── ci.yml                      # pytest + ruff linting on PR (3 OS x 3 Python versions)
+        ├── ci.yml                      # pytest + ruff linting on PR (3 OS x 3 Python versions)
+        └── publish.yml                 # Github actions publish workflow, PyPI
 ```
 
 ### The `.writ/` directory (created by `writ init` in user repos)
@@ -97,10 +91,10 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 
 ~/.writ/                                # Global store (local cache of remote)
 ├── config.yaml                         # Global preferences, auth token
-├── agents/                             # Personal agent library (local save/load works now)
-│   └── *.yaml                          # PLANNED: synced to remote backend (Phase 3)
+├── agents/                             # Personal agent library (synced to api.enwrit.com when logged in)
+│   └── *.yaml
 ├── memory/                             # Cross-project memory exports
-│   └── *.yaml                          # PLANNED: synced to remote backend (Phase 3)
+│   └── *.yaml                          # PLANNED: synced to remote backend
 ├── templates/                          # PLANNED: user's custom templates
 └── cache/                              # PLANNED: registry search cache
 ```

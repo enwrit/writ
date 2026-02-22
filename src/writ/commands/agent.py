@@ -209,7 +209,10 @@ def edit(
 
     agent = store.load_agent(name)
     if not agent:
-        console.print(f"[red]Agent '{name}' not found.[/red]")
+        console.print(
+            f"[red]Agent '{name}' not found.[/red] "
+            "Run [cyan]writ list[/cyan] to see available agents."
+        )
         raise typer.Exit(1)
 
     path = store.project_writ_dir() / "agents" / f"{name}.yaml"
@@ -239,7 +242,10 @@ def remove(
 
     agent = store.load_agent(name)
     if not agent:
-        console.print(f"[red]Agent '{name}' not found.[/red]")
+        console.print(
+            f"[red]Agent '{name}' not found.[/red] "
+            "Run [cyan]writ list[/cyan] to see available agents."
+        )
         raise typer.Exit(1)
 
     if not yes:

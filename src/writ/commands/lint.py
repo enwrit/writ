@@ -38,7 +38,10 @@ def lint_command(
     if name:
         agent = store.load_agent(name)
         if not agent:
-            console.print(f"[red]Agent '{name}' not found.[/red]")
+            console.print(
+                f"[red]Agent '{name}' not found.[/red] "
+                "Run [cyan]writ list[/cyan] to see available agents."
+            )
             raise typer.Exit(1)
         agents = [agent]
     else:

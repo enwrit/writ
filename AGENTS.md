@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-**enwrit** (`writ`) is a CLI tool for managing AI agent instructions across tools, projects, and devices. It composes, ports, and scores agent configs.
+**enwrit** (`writ`) is the communication layer for AI agents. It routes context between repos, devices, and tools -- composing, syncing, and exporting agent instructions everywhere.
 
 ## Development Conventions
 
@@ -25,6 +25,7 @@ writ compose <name>          # Preview composed context
 writ export <name> <format>  # Export to specific format
 writ save <name>             # Save to personal library
 writ load <name>             # Load from personal library
+writ login / logout          # Authenticate with enwrit.com for cross-device sync
 writ lint [name]             # Validate quality
 ```
 
@@ -33,6 +34,6 @@ writ lint [name]             # Validate quality
 - `src/writ/` -- Python package
 - `src/writ/commands/` -- One file per command group
 - `src/writ/core/` -- Business logic (models, store, composer, formatter, etc.)
-- `src/writ/integrations/` -- External registry adapters
-- `templates/` -- Built-in agent team templates
-- `tests/` -- pytest test suite
+- `src/writ/integrations/` -- External registry adapters (enwrit API, PRPM, Agent Skills, URL)
+- `src/writ/templates/` -- Built-in agent team templates (bundled in package)
+- `tests/` -- pytest test suite (124 tests)

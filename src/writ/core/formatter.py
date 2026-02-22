@@ -12,6 +12,7 @@ Supported formats:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from writ.core.models import AgentConfig
@@ -184,6 +185,59 @@ class KiroFormatter(AgentsMdFormatter):
 
 
 # ---------------------------------------------------------------------------
+# A2A Agent Card JSON
+# ---------------------------------------------------------------------------
+
+class AgentCardFormatter(BaseFormatter):
+    """A2A Agent Card JSON -- machine-readable capability metadata.
+
+    Produces a valid A2A Agent Card JSON document from a writ agent config.
+    Used for agent discovery by A2A-compatible systems.
+    """
+
+    format_name = "agent-card"
+
+    def format_agent_card(self, agent: AgentConfig) -> dict:
+        """Build the A2A Agent Card dict from an AgentConfig."""
+        capabilities = []
+        for tag in agent.tags:
+            capabilities.append({
+                "type": tag,
+                "description": f"{tag.replace('-', ' ').replace('_', ' ').title()} development",
+            })
+
+        card: dict = {
+            "name": agent.name,
+            "description": agent.description or f"Agent: {agent.name}",
+            "version": agent.version,
+            "url": f"https://enwrit.com/agents/{agent.name}",
+            "api": {
+                "type": "a2a",
+                "url": f"https://api.enwrit.com/agents/{agent.name}",
+            },
+            "capabilities": capabilities,
+            "provider": {
+                "organization": "enwrit",
+                "url": "https://enwrit.com",
+            },
+        }
+        return card
+
+    def write(
+        self,
+        agent: AgentConfig,
+        composed_instructions: str,
+        root: Path | None = None,
+    ) -> Path:
+        root = root or Path.cwd()
+        path = root / ".well-known" / f"{agent.name}.agent-card.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        card = self.format_agent_card(agent)
+        path.write_text(json.dumps(card, indent=2) + "\n", encoding="utf-8")
+        return path
+
+
+# ---------------------------------------------------------------------------
 # Formatter registry
 # ---------------------------------------------------------------------------
 
@@ -195,6 +249,7 @@ FORMATTERS: dict[str, type[BaseFormatter]] = {
     "windsurf": WindsurfFormatter,
     "codex": CodexFormatter,
     "kiro": KiroFormatter,
+    "agent-card": AgentCardFormatter,
 }
 
 ALL_FORMAT_NAMES: list[str] = list(FORMATTERS.keys())
