@@ -20,7 +20,7 @@ writ use developer
 # Done. Your IDE now has the agent instructions.
 ```
 
-## Three Things No Other Tool Does
+## What Makes It Different
 
 1. **Context composition** -- layer project + team + agent + handoff context into one coherent instruction set
 2. **Personal agent library with cloud sync** -- save agents to [enwrit.com](https://enwrit.com), access from any device
