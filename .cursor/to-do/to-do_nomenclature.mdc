@@ -1,0 +1,24 @@
+---
+description: Convention for to-do file formatting in this repository
+globs: .cursor/to-do/*.md
+alwaysApply: false
+---
+
+# To-Do Nomenclature
+
+## File Naming
+
+`YY-MM-DD_short-description.md` (e.g. `26-02-15_mvp.md`)
+
+## Status Markers
+
+- `[x]` Finished
+- `[ ]` Planned
+- `[~]` Ongoing (in progress, partially done)
+
+## Structure
+
+Each to-do file should have:
+1. A title with date
+2. Grouped tasks by category
+3. Status markers on each item
