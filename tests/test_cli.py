@@ -252,3 +252,107 @@ class TestLint:
         ])
         result = runner.invoke(app, ["lint", "reviewer"])
         assert result.exit_code == 0
+
+
+class TestPublish:
+    def test_publish_requires_init(self, tmp_project: Path):
+        result = runner.invoke(app, ["publish", "reviewer", "--yes"])
+        assert result.exit_code == 1
+        assert "Not initialized" in result.output
+
+    def test_publish_requires_login(
+        self, initialized_project: Path, monkeypatch,
+    ):
+        runner.invoke(app, [
+            "add", "reviewer", "--instructions", "Review code.",
+        ])
+        monkeypatch.setattr("writ.core.auth.is_logged_in", lambda: False)
+        result = runner.invoke(app, ["publish", "reviewer", "--yes"])
+        assert result.exit_code == 1
+        assert "Not logged in" in result.output
+
+    def test_publish_agent_not_found(
+        self, initialized_project: Path, monkeypatch,
+    ):
+        monkeypatch.setattr("writ.core.auth.is_logged_in", lambda: True)
+        result = runner.invoke(app, ["publish", "nonexistent", "--yes"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    def test_publish_success(
+        self, initialized_project: Path, monkeypatch,
+    ):
+        runner.invoke(app, [
+            "add", "reviewer", "--instructions", "Review code.",
+        ])
+        monkeypatch.setattr("writ.core.auth.is_logged_in", lambda: True)
+        monkeypatch.setattr(
+            "writ.integrations.registry.RegistryClient",
+            _MockRegistryClient,
+        )
+        result = runner.invoke(app, ["publish", "reviewer", "--yes"])
+        assert result.exit_code == 0
+        assert "Published" in result.output
+        assert "Agent Card" in result.output
+        assert "Browse" in result.output
+        assert "Install" in result.output
+
+    def test_publish_confirmation_cancelled(
+        self, initialized_project: Path, monkeypatch,
+    ):
+        runner.invoke(app, [
+            "add", "reviewer", "--instructions", "Review code.",
+        ])
+        monkeypatch.setattr("writ.core.auth.is_logged_in", lambda: True)
+        result = runner.invoke(app, ["publish", "reviewer"], input="n\n")
+        assert result.exit_code == 0
+        assert "Cancelled" in result.output
+
+
+class TestUnpublish:
+    def test_unpublish_success(
+        self, initialized_project: Path, monkeypatch,
+    ):
+        runner.invoke(app, [
+            "add", "reviewer", "--instructions", "Review code.",
+        ])
+        monkeypatch.setattr("writ.core.auth.is_logged_in", lambda: True)
+        monkeypatch.setattr(
+            "writ.integrations.registry.RegistryClient",
+            _MockRegistryClient,
+        )
+        result = runner.invoke(app, ["unpublish", "reviewer"])
+        assert result.exit_code == 0
+        assert "private" in result.output
+
+
+class TestSearchRegistry:
+    def test_search_includes_enwrit_source(
+        self, tmp_project: Path, monkeypatch,
+    ):
+        """Search reports enwrit as a searched source."""
+        result = runner.invoke(app, ["search", "python"])
+        assert result.exit_code == 0
+        assert "enwrit" in result.output or "No results" in result.output
+
+    def test_search_from_enwrit(self, tmp_project: Path):
+        result = runner.invoke(app, [
+            "search", "python", "--from", "enwrit",
+        ])
+        assert result.exit_code == 0
+
+    def test_search_limit_flag(self, tmp_project: Path):
+        result = runner.invoke(app, [
+            "search", "python", "--limit", "5",
+        ])
+        assert result.exit_code == 0
+
+
+class _MockRegistryClient:
+    """Mock RegistryClient for publish tests."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def push_to_library(self, name, agent, *, is_public=False):
+        return True

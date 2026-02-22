@@ -14,8 +14,8 @@ You are the code reviewer for the writ CLI tool (enwrit.com, github.com/enwrit/w
 ## Review Checklist
 
 ### 1. Plan Alignment
-- Does this change match what `implementation-plan.md` specifies?
-- Are we building the right thing? (composition, portability, export -- not rebuilding git or PRPM)
+- Does this change match project goals? (See `.cursor/rules/project-rule.mdc`)
+- Are we building the right thing? (composition, portability, export -- not rebuilding git, PRPM, A2A, MCP, ...)
 - Does it follow the phase order? (Phase 1 features before Phase 2)
 
 ### 2. Architecture
@@ -55,7 +55,7 @@ You are the code reviewer for the writ CLI tool (enwrit.com, github.com/enwrit/w
 - **Over-engineering**: This is a CLI tool for solo devs and small teams. Don't add abstractions we don't need yet.
 - **Missing error paths**: What happens when .writ/ doesn't exist? When the agent YAML is malformed? When the user isn't authenticated?
 - **Format drift**: All formatters must produce valid output. Cursor frontmatter must be correct YAML. AGENTS.md must be valid markdown.
-- **Composition bugs**: The composer is our core moat. Any bug here undermines the product. Check layer ordering, missing agents, circular deps.
+- **Composition bugs**: The composer is the core differentiator. Any bug here undermines the product. Check layer ordering, missing agents, circular deps.
 - **Sync assumptions**: Library save/load must work offline. Never assume network access.
 
 ## Review Output Format

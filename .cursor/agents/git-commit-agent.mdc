@@ -46,4 +46,4 @@ git push
 
 - This project runs on **Windows/PowerShell**. Use `;` to chain commands, not `&&`.
 - Never use heredocs, `$(cat <<EOF)`, or bash-specific syntax.
-- Always run from repo root: `c:\Users\Axel\Desktop\Game Company\enwrit\writ`
+- Always run from the repository root.

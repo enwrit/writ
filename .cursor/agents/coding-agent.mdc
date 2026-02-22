@@ -14,8 +14,8 @@ You are the primary implementation agent for the writ CLI tool (enwrit.com, gith
 ## Reference Documents
 
 Before coding, check these for context:
-- `knowledge/plans/implementation-plan.md` -- Detailed blueprint with pseudocode for every component
-- `knowledge/plans/cli-tool-plan-v0.3.md` -- Strategic context (why we're building what we're building)
+- `.cursor/rules/project-rule.mdc` -- Project identity, conventions, architecture
+- `.cursor/rules/project-treeview.mdc` -- Full annotated repo structure
 
 ## Architecture
 
@@ -32,23 +32,20 @@ src/writ/
 
 Follow the MVP checklist from the implementation plan. Build in this order:
 
-### Must-Have (ship first)
-1. `core/models.py` -- Pydantic models (AgentConfig, CompositionConfig, etc.)
-2. `core/store.py` -- Read/write .writ/ directory and ~/.writ/
-3. `core/scanner.py` -- Detect languages, frameworks, existing agent files
-4. `commands/init.py` -- `writ init` and `writ init --template`
-5. `commands/agent.py` -- `writ add`, `writ list`, `writ use`, `writ remove`
-6. `core/formatter.py` -- Write to Cursor, Claude, AGENTS.md (minimum 3 formats)
-7. `commands/export.py` -- `writ export <name> <format>`
-8. `commands/library.py` -- `writ save`, `writ load`, `writ library`
-9. `core/composer.py` -- 4-layer context composition engine
-10. `commands/compose.py` -- `writ compose <name>` (dry run preview)
+### Implemented (MVP complete)
+- `core/models.py` -- Pydantic models (AgentConfig, CompositionConfig, etc.)
+- `core/store.py` -- Read/write .writ/ directory and ~/.writ/
+- `core/scanner.py` -- Detect languages, frameworks, existing agent files, .writignore
+- `core/formatter.py` -- 8 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card
+- `core/composer.py` -- 4-layer context composition engine
+- `core/linter.py` -- Quality validation
+- All commands in `commands/` (init, agent, library, export, compose, lint, search, install, etc.)
 
-### Should-Have (ship next)
-11. `core/linter.py` + `commands/lint.py` -- Quality validation
-12. `commands/memory.py` -- Cross-project memory export/import
-13. Additional formatters: Copilot, Windsurf, Codex
-14. `commands/install.py` + `integrations/url.py` -- Install from URL/git repo
+### Next priorities
+- `writ mcp serve` -- MCP server for cross-repo agent communication
+- Public registry (search, install from enwrit.com)
+- `writ sync` -- Bidirectional cloud sync
+- Scoring/self-rating API
 
 ## Coding Conventions
 
@@ -76,12 +73,11 @@ Follow the MVP checklist from the implementation plan. Build in this order:
 ```python
 # src/writ/commands/newcommand.py
 import typer
-from rich.console import Console
-from ..core.store import Store
-from ..core.models import AgentConfig
+from writ.core import store
+from writ.core.models import AgentConfig
+from writ.utils import console
 
 app = typer.Typer()
-console = Console()
 
 @app.command()
 def mycommand(
@@ -89,16 +85,17 @@ def mycommand(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show details"),
 ) -> None:
     """One-line description of what this command does."""
-    store = Store()
-    
     agent = store.load_agent(name)
     if not agent:
-        console.print(f"[red]Agent '{name}' not found. Run 'writ list' to see available agents.[/red]")
+        console.print(
+            f"[red]Agent '{name}' not found.[/red] "
+            "Run [cyan]writ list[/cyan] to see available agents."
+        )
         raise typer.Exit(1)
-    
+
     # ... do work ...
-    
-    console.print(f"[green]✓ Done with {name}[/green]")
+
+    console.print(f"[green]Done with {name}[/green]")
 ```
 
 Then register in `cli.py`:

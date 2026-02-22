@@ -1,7 +1,7 @@
-"""Authentication state management for registry sync.
+"""Authentication state management for enwrit.com registry sync.
 
-Phase 1: Stub -- all remote operations gracefully degrade.
-Phase 3: GitHub OAuth token management.
+Manages API key storage in ~/.writ/config.yaml. Remote operations
+degrade gracefully when not authenticated or offline.
 """
 
 from __future__ import annotations

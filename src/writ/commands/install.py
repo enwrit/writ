@@ -35,17 +35,48 @@ def install_command(
     elif from_source == "url":
         _install_from_url(name)
     elif from_source is None:
-        # Default: try our own registry (Phase 3)
-        console.print(
-            "[yellow]Registry not available yet.[/yellow] Use --from prpm, skills, or url."
-        )
-        console.print("\nExamples:")
-        console.print("  [cyan]writ install react-reviewer --from prpm[/cyan]")
-        console.print("  [cyan]writ install --from url https://example.com/agent.yaml[/cyan]")
-        raise typer.Exit(1)
+        _install_from_registry(name)
     else:
         console.print(f"[red]Unknown source '{from_source}'.[/red] Use: prpm, skills, url.")
         raise typer.Exit(1)
+
+
+def _install_from_registry(name: str) -> None:
+    """Install from the enwrit public registry."""
+    try:
+        from writ.integrations.registry import RegistryClient
+
+        client = RegistryClient()
+        data = client.pull_public_agent(name)
+        if data:
+            from writ.core.models import AgentConfig
+
+            agent = AgentConfig(
+                name=data.get("name", name),
+                description=data.get("description", ""),
+                instructions=data.get("instructions", ""),
+                tags=data.get("tags", []),
+                version=data.get("version", "1.0.0"),
+            )
+            store.save_agent(agent)
+            console.print(
+                f"[green]Installed[/green] '{agent.name}' "
+                "from enwrit registry"
+            )
+            return
+    except Exception:  # noqa: BLE001
+        pass
+
+    console.print(
+        f"[yellow]Agent '{name}' not found on enwrit registry.[/yellow]"
+    )
+    console.print(
+        "\nTry specifying a source:\n"
+        "  [cyan]writ install <name> --from prpm[/cyan]\n"
+        "  [cyan]writ install <name> --from skills[/cyan]\n"
+        "  [cyan]writ install --from url <url>[/cyan]"
+    )
+    raise typer.Exit(1)
 
 
 def _install_from_prpm(name: str) -> None:

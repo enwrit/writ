@@ -9,16 +9,16 @@ alwaysApply: true
 
 ## What This Project Is
 
-The communication layer for AI agents. Routes context between repos, devices, and tools. Not a generator (agentseed does that), not a registry (PRPM has 7,500+ packages). We compose, sync, route, and score agent instructions.
+The communication layer for AI agents. Routes context between repos, devices, and tools. Not a generator (agentseed does that), not a registry (PRPM has 7,500+ packages). We compose, sync, route, and score context and/or agent instructions.
 
-**Core framing**: Every feature is a routing operation -- `writ use` routes instructions to IDE files, `writ save/load` routes between devices, `writ handoff` routes between agents, `writ memory` routes between repos. See `.cursor/insights/2026-02-18-communication-layer.md` for the full rationale.
+**Core framing**: Every feature is a routing operation -- `writ use` routes instructions to IDE files, `writ save/load` routes between devices, `writ handoff` routes between agents, `writ memory` routes between repos.
 
-Three unique capabilities no competitor has (confirmed across 28+ tools studied):
+Core capabilities:
 1. **Context composition** -- layer project + team + agent + handoff context into one instruction set
 2. **Personal agent library with cloud sync** -- save agents to enwrit.com, access from any device
 3. **Cross-project memory** -- export context from Repo A, import into Repo B
 
-**Future direction**: Agent-to-agent routing (autonomous handoffs), ML-powered instruction intelligence (quality scoring, contradiction detection), MCP/A2A bridge for cross-repo agent communication. See `.cursor/insights/2026-02-16-advanced-vision.md`.
+**Future direction**: Agent-to-agent routing (autonomous handoffs), ML-powered instruction intelligence (quality scoring, contradiction detection), MCP/A2A bridge for cross-repo agent communication.
 
 ## Architecture
 
@@ -118,13 +118,7 @@ ruff check src/ tests/
 ruff check --fix src/ tests/      # auto-fix what's possible
 ```
 
-## Reference Documents
-
-- `.cursor/plans/implementation-plan.md` -- Detailed technical blueprint with pseudocode + checklist
-- `.cursor/plans/cli-tool-plan-v0.3.md` -- Strategy, competitive positioning, phases
-- `.cursor/insights/` -- Strategic thinking: advanced vision, communication layer reframing, protocol research
-
 ## Learnings:
 
 - **Shell note**: This project is developed on Windows/PowerShell. Use `;` to chain commands (not `&&`). Watch for cp1252 encoding -- avoid Unicode box-drawing characters in Rich output (use ASCII alternatives).
-- Think about how to verify large implementations and changes; like tests, prints, etc, in order to be able to iterate and work autonomously.
+- All significant changes should be verified with tests before merging.

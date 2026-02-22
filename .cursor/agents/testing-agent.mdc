@@ -15,16 +15,16 @@ You are the testing agent for the writ CLI tool (enwrit.com, github.com/enwrit/w
 
 ```
 tests/
-├── conftest.py          # Shared fixtures
-├── test_init.py         # writ init command
-├── test_agent.py        # writ add/list/use/edit/remove
-├── test_compose.py      # Composition engine (CRITICAL -- most important tests)
-├── test_export.py       # Formatter output correctness
-├── test_library.py      # save/load/sync
-├── test_memory.py       # Cross-project memory
-├── test_linter.py       # Lint rules
-├── test_scanner.py      # Project scanning
-└── test_install.py      # Registry integrations
+├── conftest.py          # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
+├── test_cli.py          # CLI command tests (init, add, use, search, templates, version, status)
+├── test_compose.py      # Composition engine tests (CRITICAL -- most important tests)
+├── test_formatter.py    # Formatter output tests (Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card)
+├── test_library.py      # save/load/library tests
+├── test_login.py        # Login/logout + remote sync tests (mocked RegistryClient)
+├── test_scanner.py      # Scanner + file parsing + .writignore tests
+├── test_store.py        # Store read/write tests (.writ/ and ~/.writ/)
+├── test_models.py       # Pydantic model tests
+└── test_linter.py       # Lint rule tests
 ```
 
 ## Testing Conventions
@@ -131,9 +131,11 @@ The composition engine is our core innovation. Test extensively:
 Each formatter must produce valid output for its target tool:
 - Cursor: valid `.mdc` with correct frontmatter
 - Claude: valid markdown section in `CLAUDE.md`
-- AGENTS.md: valid markdown section
+- AGENTS.md: valid markdown section with writ markers
 - Copilot: correct path and format
-- Windsurf: correct file
+- Windsurf: correct `.windsurfrules` file
+- Codex/Kiro: `AGENTS.md` format
+- Agent Card: valid A2A JSON with name, api, capabilities
 
 ### 3. Library Sync
 - Save agent locally

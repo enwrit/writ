@@ -209,7 +209,7 @@ composition:
 git clone https://github.com/enwrit/writ.git
 cd writ
 python -m venv venv
-venv\Scripts\activate  # or source venv/bin/activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
 
 # Run tests

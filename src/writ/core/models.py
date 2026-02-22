@@ -95,7 +95,7 @@ class GlobalConfig(BaseModel):
     )
     auth_token: str | None = Field(
         default=None,
-        description="GitHub OAuth token for registry authentication.",
+        description="API key for enwrit.com authentication.",
     )
 
 

@@ -11,11 +11,15 @@ from writ.utils import console
 
 
 def search_command(
-    query: Annotated[str, typer.Argument(help="Search query (e.g. 'react typescript').")],
+    query: Annotated[
+        str,
+        typer.Argument(help="Search query (e.g. 'react typescript')."),
+    ],
     source: Annotated[
         str | None,
         typer.Option(
-            "--from", help="Search specific source: prpm, skills. Default: all.",
+            "--from",
+            help="Search specific source: enwrit, prpm, skills. Default: all.",
         ),
     ] = None,
     limit: Annotated[
@@ -24,35 +28,39 @@ def search_command(
 ) -> None:
     """Search for agents across registries.
 
-    Browse PRPM (7,500+ packages), Agent Skills CLI (175K+ skills),
-    and our own registry (coming soon).
+    Searches the enwrit registry, PRPM (7,500+ packages),
+    and Agent Skills CLI (175K+ skills).
 
     Examples:
         writ search "react typescript"
-        writ search "python fastapi" --from prpm
-        writ search "code review" --from skills
+        writ search "python fastapi" --from enwrit
+        writ search "code review" --from prpm
+        writ search "linting" --limit 5
     """
     results: list[dict] = []
+    searched: list[str] = []
+
+    if source is None or source in ("enwrit", "registry"):
+        results.extend(_search_registry(query, limit))
+        searched.append("enwrit")
 
     if source is None or source == "prpm":
         results.extend(_search_prpm(query, limit))
+        searched.append("prpm")
 
     if source is None or source == "skills":
         results.extend(_search_skills(query, limit))
+        searched.append("skills")
 
     if not results:
         console.print(f"[yellow]No results found for '{query}'.[/yellow]")
-        if source:
-            console.print(f"[dim]Searched: {source}[/dim]")
-        else:
-            console.print("[dim]Searched: prpm, skills[/dim]")
+        console.print(f"[dim]Searched: {', '.join(searched)}[/dim]")
         console.print(
             "\nTip: install directly if you know the package name:\n"
-            "  [cyan]writ install <name> --from prpm[/cyan]"
+            "  [cyan]writ install <name>[/cyan]"
         )
         return
 
-    # Display results
     table = Table(
         title=f"Search results for '{query}'", show_lines=False,
     )
@@ -72,14 +80,36 @@ def search_command(
     console.print(table)
     console.print(f"\n[dim]{len(results)} result(s)[/dim]")
     console.print(
-        "Install with: [cyan]writ install <name> --from <source>[/cyan]"
+        "Install with: [cyan]writ install <name>[/cyan]"
     )
+
+
+def _search_registry(query: str, limit: int) -> list[dict]:
+    """Search the enwrit public registry."""
+    try:
+        from writ.integrations.registry import RegistryClient
+
+        client = RegistryClient()
+        raw = client.search(query, limit=limit)
+        return [
+            {
+                "name": r.get("name", "?"),
+                "source": "enwrit",
+                "description": r.get("description", ""),
+                "tags": r.get("tags", []),
+            }
+            for r in raw[:limit]
+        ]
+    except Exception:  # noqa: BLE001
+        console.print("[dim]enwrit registry: unavailable[/dim]")
+        return []
 
 
 def _search_prpm(query: str, limit: int) -> list[dict]:
     """Search PRPM registry."""
     try:
         from writ.integrations.prpm import PRPMIntegration
+
         prpm = PRPMIntegration()
         raw = prpm.search(query)
         return [
@@ -91,7 +121,14 @@ def _search_prpm(query: str, limit: int) -> list[dict]:
             }
             for r in raw[:limit]
         ]
+    except FileNotFoundError:
+        console.print(
+            "[dim]PRPM CLI not installed "
+            "(https://github.com/AbanteAI/prpm)[/dim]"
+        )
+        return []
     except Exception:  # noqa: BLE001
+        console.print("[dim]PRPM search failed[/dim]")
         return []
 
 
@@ -99,6 +136,7 @@ def _search_skills(query: str, limit: int) -> list[dict]:
     """Search Agent Skills CLI."""
     try:
         from writ.integrations.skills import SkillsIntegration
+
         skills = SkillsIntegration()
         raw = skills.search(query)
         return [
@@ -110,5 +148,12 @@ def _search_skills(query: str, limit: int) -> list[dict]:
             }
             for r in raw[:limit]
         ]
+    except FileNotFoundError:
+        console.print(
+            "[dim]Agent Skills CLI not installed "
+            "(https://github.com/CopilotKit/agent-skills-cli)[/dim]"
+        )
+        return []
     except Exception:  # noqa: BLE001
+        console.print("[dim]Agent Skills search failed[/dim]")
         return []

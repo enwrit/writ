@@ -44,7 +44,9 @@ class RegistryClient:
 
     # -- personal library ----------------------------------------------------
 
-    def push_to_library(self, name: str, agent: AgentConfig) -> bool:
+    def push_to_library(
+        self, name: str, agent: AgentConfig, *, is_public: bool = False,
+    ) -> bool:
         """Upsert an agent to the remote personal library.
 
         Returns True on success, False on any failure.
@@ -57,6 +59,7 @@ class RegistryClient:
                 "tags": agent.tags,
                 "instructions": agent.instructions,
                 "config_yaml": yaml_dumps(agent.model_dump(mode="json")),
+                "is_public": is_public,
             }
             resp = httpx.post(
                 f"{self.base_url}/library/agents",
@@ -109,15 +112,16 @@ class RegistryClient:
             logger.debug("list_library: network error", exc_info=True)
             return []
 
-    # -- public registry (future) --------------------------------------------
+    # -- public registry -------------------------------------------------------
 
-    def search(self, query: str, sort: str = "score") -> list[dict]:
-        """Search the public registry. Not yet implemented on backend."""
+    def search(
+        self, query: str, *, limit: int = 20,
+    ) -> list[dict]:
+        """Search the public agent registry (no auth required)."""
         try:
             resp = httpx.get(
                 f"{self.base_url}/agents",
-                params={"q": query, "sort": sort},
-                headers=self._headers(),
+                params={"q": query, "limit": limit},
                 timeout=_TIMEOUT,
             )
             if resp.status_code == 200:
@@ -126,6 +130,15 @@ class RegistryClient:
         except Exception:  # noqa: BLE001
             return []
 
-    def publish(self, agent: AgentConfig) -> bool:
-        """Publish an agent to the public registry. Not yet implemented."""
-        return False
+    def pull_public_agent(self, name: str) -> dict | None:
+        """Pull a public agent by name (no auth required)."""
+        try:
+            resp = httpx.get(
+                f"{self.base_url}/agents/{name}",
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception:  # noqa: BLE001
+            return None

@@ -19,6 +19,7 @@ from writ.commands import (
     lint,
     login,
     memory,
+    publish,
     search,
 )
 from writ.utils import console
@@ -65,6 +66,10 @@ app.command(name="lint")(lint.lint_command)
 # Install + Search commands
 app.command(name="install")(install.install_command)
 app.command(name="search")(search.search_command)
+
+# Publish commands
+app.command(name="publish")(publish.publish_command)
+app.command(name="unpublish")(publish.unpublish_command)
 
 # Memory sub-group
 memory_app = typer.Typer(

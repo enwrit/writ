@@ -25,6 +25,8 @@ writ compose <name>          # Preview composed context
 writ export <name> <format>  # Export to specific format
 writ save <name>             # Save to personal library
 writ load <name>             # Load from personal library
+writ publish <name>          # Make agent publicly discoverable on enwrit.com
+writ unpublish <name>        # Remove agent from public registry
 writ login / logout          # Authenticate with enwrit.com for cross-device sync
 writ lint [name]             # Validate quality
 ```
@@ -36,4 +38,4 @@ writ lint [name]             # Validate quality
 - `src/writ/core/` -- Business logic (models, store, composer, formatter, etc.)
 - `src/writ/integrations/` -- External registry adapters (enwrit API, PRPM, Agent Skills, URL)
 - `src/writ/templates/` -- Built-in agent team templates (bundled in package)
-- `tests/` -- pytest test suite (124 tests)
+- `tests/` -- pytest test suite
