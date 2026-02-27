@@ -1,7 +1,7 @@
 """Tests for the context composition engine."""
 
 from writ.core import composer, store
-from writ.core.models import InstructionConfig, CompositionConfig
+from writ.core.models import CompositionConfig, InstructionConfig
 
 
 class TestComposer:

@@ -96,7 +96,9 @@ class TestDirectoryRouting:
         assert "agents" in path.parts
 
     def test_load_finds_rule_by_name(self, initialized_project: Path):
-        cfg = InstructionConfig(name="coding-standards", task_type="rule", instructions="Standards.")
+        cfg = InstructionConfig(
+            name="coding-standards", task_type="rule", instructions="Standards."
+        )
         store.save_instruction(cfg)
         loaded = store.load_instruction("coding-standards")
         assert loaded is not None

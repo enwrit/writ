@@ -3,8 +3,8 @@
 from datetime import date
 
 from writ.core.models import (
-    InstructionConfig,
     CompositionConfig,
+    InstructionConfig,
     LintResult,
     ProjectConfig,
 )

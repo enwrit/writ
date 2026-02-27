@@ -1,7 +1,7 @@
 """Tests for the agent linter."""
 
 from writ.core import linter
-from writ.core.models import InstructionConfig, CompositionConfig
+from writ.core.models import CompositionConfig, InstructionConfig
 
 
 class TestLinter:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from writ.core.models import InstructionConfig, GlobalConfig, ProjectConfig
+from writ.core.models import GlobalConfig, InstructionConfig, ProjectConfig
 from writ.utils import (
     ensure_dir,
     global_writ_dir,

@@ -11,7 +11,7 @@ from writ.core.formatter import (
     get_formatter,
     write_agent,
 )
-from writ.core.models import InstructionConfig, CursorOverrides, FormatOverrides
+from writ.core.models import CursorOverrides, FormatOverrides, InstructionConfig
 
 
 class TestCursorFormatter:

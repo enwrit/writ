@@ -11,7 +11,7 @@ from rich.table import Table
 
 from writ.core import composer, store
 from writ.core.formatter import get_formatter
-from writ.core.models import InstructionConfig, CompositionConfig
+from writ.core.models import CompositionConfig, InstructionConfig
 from writ.utils import console, yaml_load
 
 
@@ -324,7 +324,7 @@ def _import_from_file(
     """Import one file or all supported files in a directory."""
     from pathlib import Path
 
-    from writ.core.scanner import parse_markdown_file, _IMPORTABLE_EXTENSIONS
+    from writ.core.scanner import _IMPORTABLE_EXTENSIONS, parse_markdown_file
 
     path = Path(file_path)
 

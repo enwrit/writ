@@ -47,7 +47,9 @@ def register(
 
     console.print()
     console.print("[bold]Create your enwrit.com account[/bold]")
-    console.print("[dim]This takes 10 seconds. Your username appears as the publisher name in the Hub.[/dim]")
+    console.print(
+        "[dim]This takes 10 seconds. Your username appears as the publisher name in the Hub.[/dim]"
+    )
     console.print()
 
     if username is None:
@@ -59,7 +61,9 @@ def register(
     username = username.strip()
 
     if email is None:
-        email = typer.prompt("Email (optional, for account recovery)", default="", show_default=False)
+        email = typer.prompt(
+            "Email (optional, for account recovery)", default="", show_default=False
+        )
     email = email.strip() if email else None
 
     import httpx
@@ -80,12 +84,12 @@ def register(
             json=payload,
             timeout=15.0,
         )
-    except httpx.ConnectError:
+    except httpx.ConnectError as err:
         console.print("[red]Could not reach api.enwrit.com.[/red] Check your internet connection.")
-        raise typer.Exit(1)
-    except Exception:  # noqa: BLE001
+        raise typer.Exit(1) from err
+    except Exception as err:  # noqa: BLE001
         console.print("[red]Network error.[/red] Try again in a moment.")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from err
 
     if resp.status_code == 200:
         data = resp.json()

@@ -261,8 +261,8 @@ class TestParseMarkdownFile:
         mdc = tmp_project / "standards.mdc"
         mdc.write_text(original, encoding="utf-8")
 
-        from writ.core.scanner import parse_markdown_file
         from writ.core.formatter import CursorFormatter
+        from writ.core.scanner import parse_markdown_file
 
         cfg = parse_markdown_file(mdc)
         assert cfg is not None

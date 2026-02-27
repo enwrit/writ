@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from writ.core.models import InstructionConfig, CompositionConfig
+from writ.core.models import CompositionConfig, InstructionConfig
 
 
 @pytest.fixture()
