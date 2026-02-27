@@ -17,6 +17,19 @@ error_console = Console(stderr=True)
 # YAML I/O
 # ---------------------------------------------------------------------------
 
+class _LiteralBlockDumper(yaml.SafeDumper):
+    """SafeDumper that writes multi-line strings as YAML literal blocks (|)."""
+
+
+def _literal_str_representer(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
+    if "\n" in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+_LiteralBlockDumper.add_representer(str, _literal_str_representer)
+
+
 def yaml_load(path: Path) -> dict[str, Any]:
     """Load a YAML file and return its contents as a dict."""
     with open(path, encoding="utf-8") as f:
@@ -28,12 +41,24 @@ def yaml_dump(path: Path, data: dict[str, Any]) -> None:
     """Write a dict to a YAML file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        yaml.dump(
+            data, f,
+            Dumper=_LiteralBlockDumper,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        )
 
 
 def yaml_dumps(data: dict[str, Any]) -> str:
     """Serialize a dict to a YAML string."""
-    return yaml.safe_dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    return yaml.dump(
+        data,
+        Dumper=_LiteralBlockDumper,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
 
 
 # ---------------------------------------------------------------------------

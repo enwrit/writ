@@ -11,11 +11,11 @@ from writ.core.formatter import (
     get_formatter,
     write_agent,
 )
-from writ.core.models import AgentConfig, CursorOverrides, FormatOverrides
+from writ.core.models import InstructionConfig, CursorOverrides, FormatOverrides
 
 
 class TestCursorFormatter:
-    def test_writes_mdc_file(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_writes_mdc_file(self, tmp_project: Path, sample_agent: InstructionConfig):
         fmt = CursorFormatter()
         path = fmt.write(sample_agent, "Test instructions", root=tmp_project)
         assert path.exists()
@@ -24,7 +24,7 @@ class TestCursorFormatter:
         assert "---" in content
         assert "Test instructions" in content
 
-    def test_includes_frontmatter(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_includes_frontmatter(self, tmp_project: Path, sample_agent: InstructionConfig):
         fmt = CursorFormatter()
         path = fmt.write(sample_agent, "Instructions", root=tmp_project)
         content = path.read_text()
@@ -32,7 +32,7 @@ class TestCursorFormatter:
         assert "alwaysApply:" in content
 
     def test_cursor_overrides(self, tmp_project: Path):
-        agent = AgentConfig(
+        agent = InstructionConfig(
             name="custom",
             instructions="Custom",
             format_overrides=FormatOverrides(
@@ -45,7 +45,7 @@ class TestCursorFormatter:
         assert "Custom desc" in content
         assert "alwaysApply: true" in content
 
-    def test_clean(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_clean(self, tmp_project: Path, sample_agent: InstructionConfig):
         fmt = CursorFormatter()
         fmt.write(sample_agent, "Test", root=tmp_project)
         assert fmt.clean("test-agent", root=tmp_project) is True
@@ -53,7 +53,7 @@ class TestCursorFormatter:
 
 
 class TestClaudeFormatter:
-    def test_writes_claude_md(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_writes_claude_md(self, tmp_project: Path, sample_agent: InstructionConfig):
         fmt = ClaudeFormatter()
         path = fmt.write(sample_agent, "Claude instructions", root=tmp_project)
         assert path.name == "CLAUDE.md"
@@ -61,7 +61,7 @@ class TestClaudeFormatter:
         assert "Agent: test-agent" in content
         assert "Claude instructions" in content
 
-    def test_updates_existing(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_updates_existing(self, tmp_project: Path, sample_agent: InstructionConfig):
         (tmp_project / "CLAUDE.md").write_text("# Existing content\n\nSome rules.")
         fmt = ClaudeFormatter()
         fmt.write(sample_agent, "New instructions", root=tmp_project)
@@ -71,7 +71,7 @@ class TestClaudeFormatter:
 
 
 class TestAgentsMdFormatter:
-    def test_writes_agents_md(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_writes_agents_md(self, tmp_project: Path, sample_agent: InstructionConfig):
         fmt = AgentsMdFormatter()
         path = fmt.write(sample_agent, "Agent instructions", root=tmp_project)
         assert path.name == "AGENTS.md"
@@ -80,7 +80,7 @@ class TestAgentsMdFormatter:
 
 
 class TestCopilotFormatter:
-    def test_writes_copilot_file(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_writes_copilot_file(self, tmp_project: Path, sample_agent: InstructionConfig):
         fmt = CopilotFormatter()
         path = fmt.write(sample_agent, "Copilot instructions", root=tmp_project)
         assert path.name == "copilot-instructions.md"
@@ -88,7 +88,7 @@ class TestCopilotFormatter:
 
 
 class TestWindsurfFormatter:
-    def test_writes_windsurfrules(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_writes_windsurfrules(self, tmp_project: Path, sample_agent: InstructionConfig):
         fmt = WindsurfFormatter()
         path = fmt.write(sample_agent, "Windsurf instructions", root=tmp_project)
         assert path.name == ".windsurfrules"
@@ -104,13 +104,13 @@ class TestFormatterRegistry:
         with pytest.raises(KeyError, match="Unknown format"):
             get_formatter("nonexistent")
 
-    def test_write_agent_multiple_formats(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_write_agent_multiple_formats(self, tmp_project: Path, sample_agent: InstructionConfig):
         paths = write_agent(sample_agent, "Instructions", ["cursor", "agents_md"], root=tmp_project)
         assert len(paths) == 2
 
 
 class TestAgentCardFormatter:
-    def test_produces_valid_json(self, tmp_project: Path, sample_agent: AgentConfig):
+    def test_produces_valid_json(self, tmp_project: Path, sample_agent: InstructionConfig):
         import json
 
         from writ.core.formatter import AgentCardFormatter
@@ -125,7 +125,7 @@ class TestAgentCardFormatter:
     def test_maps_tags_to_capabilities(self):
         from writ.core.formatter import AgentCardFormatter
 
-        agent = AgentConfig(
+        agent = InstructionConfig(
             name="reviewer",
             description="Code reviewer",
             tags=["python", "code-review"],
@@ -139,7 +139,7 @@ class TestAgentCardFormatter:
     def test_includes_api_url(self):
         from writ.core.formatter import AgentCardFormatter
 
-        agent = AgentConfig(name="test", description="Test")
+        agent = InstructionConfig(name="test", description="Test")
         fmt = AgentCardFormatter()
         card = fmt.format_agent_card(agent)
         assert card["api"]["url"] == "https://api.enwrit.com/agents/test"

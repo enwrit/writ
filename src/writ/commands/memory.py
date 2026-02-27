@@ -11,7 +11,7 @@ import typer
 from rich.table import Table
 
 from writ.core import store
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 from writ.utils import console, ensure_dir, global_writ_dir, project_writ_dir
 
 GLOBAL_MEMORY = global_writ_dir() / "memory"
@@ -91,13 +91,13 @@ def import_memory(
     if as_agent:
         # Create an agent wrapping this memory
         memory_content = source.read_text(encoding="utf-8")
-        agent = AgentConfig(
+        agent = InstructionConfig(
             name=as_agent,
             description=f"Context imported from memory '{name}'",
             instructions=memory_content,
             tags=["imported", "memory", name],
         )
-        store.save_agent(agent)
+        store.save_instruction(agent)
         console.print(f"[green]Created[/green] agent '{as_agent}' from memory '{name}'")
     else:
         console.print(f"[green]Imported[/green] memory '{name}' to {dest}")

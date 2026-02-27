@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from writ.core.models import AgentConfig, LintResult
+from writ.core.models import InstructionConfig, LintResult
 
 # ---------------------------------------------------------------------------
 # Contradiction patterns (basic heuristic detection)
@@ -24,7 +24,7 @@ CONTRADICTION_PAIRS: list[tuple[str, str]] = [
 ]
 
 
-def lint(agent: AgentConfig) -> list[LintResult]:
+def lint(agent: InstructionConfig) -> list[LintResult]:
     """Run all lint checks on an agent config. Returns list of findings."""
     results: list[LintResult] = []
 
@@ -39,7 +39,7 @@ def lint(agent: AgentConfig) -> list[LintResult]:
     return results
 
 
-def _check_name(agent: AgentConfig) -> list[LintResult]:
+def _check_name(agent: InstructionConfig) -> list[LintResult]:
     """Validate agent name."""
     results: list[LintResult] = []
     if not agent.name:
@@ -55,7 +55,7 @@ def _check_name(agent: AgentConfig) -> list[LintResult]:
     return results
 
 
-def _check_instructions_length(agent: AgentConfig) -> list[LintResult]:
+def _check_instructions_length(agent: InstructionConfig) -> list[LintResult]:
     """Check instruction word count (research: shorter is better)."""
     results: list[LintResult] = []
     if not agent.instructions:
@@ -88,7 +88,7 @@ def _check_instructions_length(agent: AgentConfig) -> list[LintResult]:
     return results
 
 
-def _check_description(agent: AgentConfig) -> list[LintResult]:
+def _check_description(agent: InstructionConfig) -> list[LintResult]:
     """Check description quality."""
     results: list[LintResult] = []
     if not agent.description:
@@ -109,7 +109,7 @@ def _check_description(agent: AgentConfig) -> list[LintResult]:
     return results
 
 
-def _check_tags(agent: AgentConfig) -> list[LintResult]:
+def _check_tags(agent: InstructionConfig) -> list[LintResult]:
     """Check tags."""
     results: list[LintResult] = []
     if not agent.tags:
@@ -121,7 +121,7 @@ def _check_tags(agent: AgentConfig) -> list[LintResult]:
     return results
 
 
-def _check_project_context(agent: AgentConfig) -> list[LintResult]:
+def _check_project_context(agent: InstructionConfig) -> list[LintResult]:
     """Check if project context exists when composition references it."""
     results: list[LintResult] = []
     if agent.composition.project_context:
@@ -138,7 +138,7 @@ def _check_project_context(agent: AgentConfig) -> list[LintResult]:
     return results
 
 
-def _check_composition_references(agent: AgentConfig) -> list[LintResult]:
+def _check_composition_references(agent: InstructionConfig) -> list[LintResult]:
     """Check that referenced agents exist."""
     results: list[LintResult] = []
     agents_dir = Path.cwd() / ".writ" / "agents"
@@ -168,7 +168,7 @@ def _check_composition_references(agent: AgentConfig) -> list[LintResult]:
     return results
 
 
-def _check_contradictions(agent: AgentConfig) -> list[LintResult]:
+def _check_contradictions(agent: InstructionConfig) -> list[LintResult]:
     """Basic heuristic contradiction detection in instructions."""
     results: list[LintResult] = []
     if not agent.instructions:

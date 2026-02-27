@@ -5,15 +5,15 @@ from __future__ import annotations
 import httpx
 import yaml
 
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 from writ.utils import slugify
 
 
 class URLIntegration:
     """Install agent configs from URLs."""
 
-    def install(self, url: str) -> AgentConfig | None:
-        """Fetch a YAML file from a URL and convert to AgentConfig.
+    def install(self, url: str) -> InstructionConfig | None:
+        """Fetch a YAML file from a URL and convert to InstructionConfig.
 
         Supports:
         - Direct YAML file URLs
@@ -34,13 +34,13 @@ class URLIntegration:
         try:
             data = yaml.safe_load(content)
             if isinstance(data, dict) and "name" in data:
-                return AgentConfig(**data)
+                return InstructionConfig(**data)
         except (yaml.YAMLError, ValueError):
             pass
 
         # If not valid YAML config, treat content as raw instructions
         name = _name_from_url(url)
-        return AgentConfig(
+        return InstructionConfig(
             name=name,
             description=f"Imported from {url}",
             instructions=content,

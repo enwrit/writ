@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from writ.core.models import AgentConfig, CompositionConfig
+from writ.core.models import InstructionConfig, CompositionConfig
 
 
 @pytest.fixture()
@@ -26,9 +26,9 @@ def initialized_project(tmp_project: Path):
 
 
 @pytest.fixture()
-def sample_agent() -> AgentConfig:
+def sample_agent() -> InstructionConfig:
     """A sample agent config for testing."""
-    return AgentConfig(
+    return InstructionConfig(
         name="test-agent",
         description="A test agent",
         version="1.0.0",
@@ -43,9 +43,9 @@ def sample_agent() -> AgentConfig:
 
 
 @pytest.fixture()
-def sample_agent_with_parents() -> AgentConfig:
+def sample_agent_with_parents() -> InstructionConfig:
     """A sample agent that inherits from another agent."""
-    return AgentConfig(
+    return InstructionConfig(
         name="child-agent",
         description="A child agent that inherits",
         instructions="You are a child agent. Follow parent instructions too.",
@@ -57,9 +57,9 @@ def sample_agent_with_parents() -> AgentConfig:
 
 
 @pytest.fixture()
-def parent_agent() -> AgentConfig:
+def parent_agent() -> InstructionConfig:
     """A parent agent for composition testing."""
-    return AgentConfig(
+    return InstructionConfig(
         name="parent-agent",
         description="A parent agent",
         instructions="You are the parent agent. Define architecture.",

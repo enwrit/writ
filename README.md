@@ -96,12 +96,15 @@ writ init --template default       # General-purpose assistant
 writ init --template fullstack     # Architect + implementer + reviewer + tester
 writ init --template python        # Python developer + reviewer
 writ init --template typescript    # TypeScript developer + reviewer
+writ init --template rules         # Project rule + coding standards
+writ init --template context       # Project context + API context
 ```
 
 Or add templates to an existing project:
 
 ```bash
 writ add --template fullstack
+writ add --template rules
 ```
 
 ## Personal Library & Cloud Sync
@@ -211,6 +214,9 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
+
+# Or use requirements files directly
+pip install -r requirements-dev.txt
 
 # Run tests
 pytest

@@ -14,9 +14,10 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       ├── commands/                   # One file per command group
 │       │   ├── __init__.py
 │       │   ├── init.py                 # writ init -- scan repo, create .writ/, import existing files
-│       │   ├── agent.py                # writ add/list/use/edit/remove + --template -- local agent management
+│       │   ├── agent.py                # writ add/list/use/edit/remove + --template + --file -- local instruction management
 │       │   ├── library.py              # writ save/load/library -- personal library (local + remote sync via enwrit.com)
-│       │   ├── login.py               # writ login/logout -- authenticate with enwrit.com for cross-device sync
+│       │   ├── login.py                # writ login/logout -- authenticate with enwrit.com for cross-device sync
+│       │   ├── register.py             # writ register -- interactive account creation + auto-login
 │       │   ├── export.py               # writ export -- write to specific format
 │       │   ├── compose.py              # writ compose -- preview composed context (dry run)
 │       │   ├── search.py               # writ search -- browse agents from PRPM, Skills, registry
@@ -27,12 +28,12 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   └── lint.py                 # writ lint -- validate agent config quality
 │       ├── core/                       # Core business logic
 │       │   ├── __init__.py
-│       │   ├── scanner.py              # Detect languages, frameworks, existing files; parse into AgentConfig
-│       │   ├── store.py                # Read/write .writ/ directory and ~/.writ/ global store
+│       │   ├── scanner.py              # Detect languages, frameworks; parse_markdown_file() for --file import
+│       │   ├── store.py                # Read/write .writ/{agents,rules,context}/ and ~/.writ/ global store
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
 │       │   ├── formatter.py            # 8 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card
-│       │   ├── linter.py               # Validate agent quality (length, contradictions, completeness)
-│       │   ├── models.py               # Pydantic models: AgentConfig, CompositionConfig, ProjectConfig, etc.
+│       │   ├── linter.py               # Validate instruction quality (length, contradictions, completeness)
+│       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, etc.
 │       │   └── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
 │       ├── integrations/               # External registry integrations
 │       │   ├── __init__.py
@@ -41,7 +42,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
 │       │   └── registry.py             # enwrit platform API client (httpx): push/pull library, search registry
 │       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
-│       └── templates/                  # Built-in agent team templates (bundled in package)
+│       └── templates/                  # Built-in templates (bundled in package)
 │           ├── default/                # Single general-purpose agent
 │           │   └── agent.yaml
 │           ├── fullstack/              # Architect + implementer + reviewer + tester
@@ -52,10 +53,16 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           ├── python/                 # Python developer + reviewer
 │           │   ├── developer.yaml
 │           │   └── reviewer.yaml
-│           └── typescript/             # TypeScript developer + reviewer
-│               ├── developer.yaml
-│               └── reviewer.yaml
-├── tests/                              # pytest test suite (146 tests)
+│           ├── typescript/             # TypeScript developer + reviewer
+│           │   ├── developer.yaml
+│           │   └── reviewer.yaml
+│           ├── rules/                  # Rule templates (project-rule, coding-standards)
+│           │   ├── project-rule-template.yaml
+│           │   └── coding-standards.yaml
+│           └── context/               # Context templates (project-context, api-context)
+│               ├── project-context.yaml
+│               └── api-context.yaml
+├── tests/                              # pytest test suite (173 tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, use, search, templates, import)
 │   ├── test_compose.py                 # Composition engine tests
@@ -68,6 +75,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   └── test_linter.py                  # Lint rule tests
 ├── .cursor/                            # See .cursor-treeview.mdc for full breakdown
 ├── pyproject.toml                      # Package metadata, deps, CLI entry point ([project.scripts] writ)
+├── requirements.txt                    # Core dependencies (pinned versions)
+├── requirements-dev.txt                # Dev dependencies (pytest, ruff, etc.)
 ├── README.md                           # Project overview, install, quickstart, command list
 ├── LICENSE                             # MIT
 ├── AGENTS.md                           # Dogfooding -- our own tool manages this
@@ -83,8 +92,12 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 ```
 .writ/                                  # Per-project store
 ├── config.yaml                         # Tool settings (active formats, registry URL)
-├── agents/                             # Agent definitions for this project
-│   └── *.yaml                          # One YAML file per agent
+├── agents/                             # Agent instruction definitions (task_type: agent)
+│   └── *.yaml
+├── rules/                              # Rule definitions (task_type: rule)
+│   └── *.yaml
+├── context/                            # Context definitions (task_type: context)
+│   └── *.yaml
 ├── handoffs/                           # Context handoff data between agents
 ├── memory/                             # Importable cross-project memory
 └── project-context.md                  # Auto-generated project context (from scanner)
@@ -92,6 +105,10 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 ~/.writ/                                # Global store (local cache of remote)
 ├── config.yaml                         # Global preferences, auth token
 ├── agents/                             # Personal agent library (synced to api.enwrit.com when logged in)
+│   └── *.yaml
+├── rules/                              # Personal rule library
+│   └── *.yaml
+├── context/                            # Personal context library
 │   └── *.yaml
 ├── memory/                             # Cross-project memory exports
 │   └── *.yaml                          # PLANNED: synced to remote backend

@@ -49,16 +49,16 @@ def _install_from_registry(name: str) -> None:
         client = RegistryClient()
         data = client.pull_public_agent(name)
         if data:
-            from writ.core.models import AgentConfig
+            from writ.core.models import InstructionConfig
 
-            agent = AgentConfig(
+            agent = InstructionConfig(
                 name=data.get("name", name),
                 description=data.get("description", ""),
                 instructions=data.get("instructions", ""),
                 tags=data.get("tags", []),
                 version=data.get("version", "1.0.0"),
             )
-            store.save_agent(agent)
+            store.save_instruction(agent)
             console.print(
                 f"[green]Installed[/green] '{agent.name}' "
                 "from enwrit registry"
@@ -86,7 +86,7 @@ def _install_from_prpm(name: str) -> None:
         prpm = PRPMIntegration()
         agent = prpm.install(name)
         if agent:
-            store.save_agent(agent)
+            store.save_instruction(agent)
             console.print(f"[green]Installed[/green] '{agent.name}' from PRPM")
         else:
             console.print(f"[red]Package '{name}' not found on PRPM.[/red]")
@@ -103,7 +103,7 @@ def _install_from_skills(name: str) -> None:
         skills = SkillsIntegration()
         agent = skills.install(name)
         if agent:
-            store.save_agent(agent)
+            store.save_instruction(agent)
             console.print(f"[green]Installed[/green] '{agent.name}' from Agent Skills CLI")
         else:
             console.print(f"[red]Skill '{name}' not found.[/red]")
@@ -120,7 +120,7 @@ def _install_from_url(url: str) -> None:
         url_int = URLIntegration()
         agent = url_int.install(url)
         if agent:
-            store.save_agent(agent)
+            store.save_instruction(agent)
             console.print(f"[green]Installed[/green] '{agent.name}' from URL")
         else:
             console.print(f"[red]Could not install from URL:[/red] {url}")

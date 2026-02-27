@@ -45,7 +45,7 @@ def publish_command(
     _require_init()
     _require_login()
 
-    agent = store.load_agent(name)
+    agent = store.load_instruction(name)
     if not agent:
         console.print(
             f"[red]Agent '{name}' not found.[/red] "
@@ -99,7 +99,7 @@ def unpublish_command(
     _require_init()
     _require_login()
 
-    agent = store.load_agent(name)
+    agent = store.load_instruction(name)
     if not agent:
         console.print(
             f"[red]Agent '{name}' not found.[/red] "

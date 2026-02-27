@@ -47,7 +47,7 @@ class TestAdd:
             "--tags", "review,quality",
         ])
         assert result.exit_code == 0
-        assert "Created" in result.output
+        assert "Added" in result.output or "Created" in result.output
         assert (initialized_project / ".writ" / "agents" / "reviewer.yaml").exists()
 
     def test_add_duplicate(self, initialized_project: Path):
@@ -60,6 +60,66 @@ class TestAdd:
         result = runner.invoke(app, ["add", "test", "--instructions", "Test"])
         assert result.exit_code == 1
         assert "Not initialized" in result.output
+
+
+class TestAddFile:
+    def test_add_file_md(self, initialized_project: Path):
+        md = initialized_project / "my-rules.md"
+        md.write_text("# Coding Rules\n\nWrite clean code.\n", encoding="utf-8")
+        result = runner.invoke(app, ["add", "--file", str(md)])
+        assert result.exit_code == 0
+        assert "Added" in result.output
+        assert "my-rules" in result.output
+
+    def test_add_file_with_name_override(self, initialized_project: Path):
+        md = initialized_project / "random-file.md"
+        md.write_text("Some instructions.\n", encoding="utf-8")
+        result = runner.invoke(app, ["add", "custom-name", "--file", str(md)])
+        assert result.exit_code == 0
+        assert "custom-name" in result.output
+
+    def test_add_file_mdc(self, initialized_project: Path):
+        mdc = initialized_project / "project.mdc"
+        mdc.write_text(
+            "---\ndescription: Project rule\nalwaysApply: true\n---\n\n# Rule\n\nBe good.\n",
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["add", "--file", str(mdc)])
+        assert result.exit_code == 0
+        assert "Added" in result.output
+        assert "rule" in result.output
+
+    def test_add_file_directory(self, initialized_project: Path):
+        rules_dir = initialized_project / "my-rules"
+        rules_dir.mkdir()
+        (rules_dir / "rule-a.md").write_text("# Rule A\n\nDo A.\n", encoding="utf-8")
+        (rules_dir / "rule-b.md").write_text("# Rule B\n\nDo B.\n", encoding="utf-8")
+        (rules_dir / "ignore.json").write_text("{}", encoding="utf-8")
+        result = runner.invoke(app, ["add", "--file", str(rules_dir)])
+        assert result.exit_code == 0
+        assert "rule-a" in result.output
+        assert "rule-b" in result.output
+        assert "Imported 2" in result.output
+
+    def test_add_file_not_found(self, initialized_project: Path):
+        result = runner.invoke(app, ["add", "--file", "nonexistent.md"])
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower()
+
+    def test_add_file_duplicate(self, initialized_project: Path):
+        md = initialized_project / "my-agent.md"
+        md.write_text("Instructions.\n", encoding="utf-8")
+        runner.invoke(app, ["add", "--file", str(md)])
+        result = runner.invoke(app, ["add", "--file", str(md)])
+        assert result.exit_code == 1
+        assert "already exists" in result.output
+
+    def test_add_file_with_task_type_override(self, initialized_project: Path):
+        md = initialized_project / "api-context.md"
+        md.write_text("# API Context\n\nAPI info.\n", encoding="utf-8")
+        result = runner.invoke(app, ["add", "--file", str(md), "--task-type", "context"])
+        assert result.exit_code == 0
+        assert "context" in result.output
 
 
 class TestList:

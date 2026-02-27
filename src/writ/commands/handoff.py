@@ -38,10 +38,10 @@ def create(
         raise typer.Exit(1)
 
     # Validate agents exist
-    if not store.load_agent(from_agent):
+    if not store.load_instruction(from_agent):
         console.print(f"[red]Source agent '{from_agent}' not found.[/red]")
         raise typer.Exit(1)
-    if not store.load_agent(to_agent):
+    if not store.load_instruction(to_agent):
         console.print(f"[red]Target agent '{to_agent}' not found.[/red]")
         raise typer.Exit(1)
 

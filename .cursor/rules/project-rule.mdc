@@ -55,21 +55,24 @@ The tool writes to native IDE/CLI files. It does NOT call LLM APIs.
 ```
 writ init                       Scan repo, detect existing files, create .writ/
 writ init --template fullstack  Bootstrap from a built-in template
-writ add <name>                 Create a new agent
-writ add --template python      Load template agents into existing project
-writ list                       Show all agents in project
+writ add <name>                 Create a new instruction (agent, rule, or context)
+writ add --file <path>          Import markdown file(s) or directory into .writ/
+writ add --template rules       Load rule templates into existing project
+writ list                       Show all instructions in project
 writ use <name>                 Compose + write to native IDE files
-writ edit <name>                Open agent YAML in $EDITOR
-writ remove <name>              Remove agent from project
-writ save <name>                Save to personal library (~/.writ/agents/)
+writ edit <name>                Open instruction YAML in $EDITOR
+writ remove <name>              Remove instruction from project
+writ save <name>                Save to personal library (~/.writ/)
 writ load <name>                Load from library into project
 writ export <name> <format>     Export to specific format
 writ compose <name>             Preview composed context (dry run)
-writ search <query>             Browse agents from PRPM, Skills, registry
+writ search <query>             Browse from PRPM, Skills, registry
 writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
+writ register                   Interactive account creation + auto-login
 writ login                      Authenticate with enwrit.com (cross-device sync)
 writ logout                     Remove stored API key
 writ lint <name>                Validate quality
+writ publish <name>             Make instruction publicly discoverable on enwrit.com
 writ handoff create <from> <to> Create context handoff between agents
 writ memory export/import       Cross-project memory sharing
 ```
@@ -86,11 +89,12 @@ writ memory export/import       Cross-project memory sharing
 
 ## Key Data Model
 
-Agent configs are YAML files in `.writ/agents/`:
+Instructions are YAML files in `.writ/{agents,rules,context}/`, routed by `task_type`:
 ```yaml
 name: reviewer
 description: "Code reviewer for TypeScript"
 version: 1.0.0
+task_type: agent                # agent | rule | context | template
 tags: [typescript, review]
 instructions: |
   You are a code reviewer...
@@ -99,6 +103,9 @@ composition:
   receives_handoff_from: []     # Agents that hand off context
   project_context: true         # Include auto-detected project context
 ```
+
+The core Pydantic model is `InstructionConfig` (covers agents, rules, context, templates).
+YAML is the internal storage format; users interact primarily with markdown (`writ add --file`).
 
 ## Development Commands
 

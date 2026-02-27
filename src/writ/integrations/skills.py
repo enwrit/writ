@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 from writ.utils import slugify
 
 
@@ -27,8 +27,8 @@ class SkillsIntegration:
             pass
         return []
 
-    def install(self, skill_name: str) -> AgentConfig | None:
-        """Install a skill and convert to AgentConfig."""
+    def install(self, skill_name: str) -> InstructionConfig | None:
+        """Install a skill and convert to InstructionConfig."""
         try:
             result = subprocess.run(
                 ["agent-skills", "show", skill_name, "--json"],
@@ -40,7 +40,7 @@ class SkillsIntegration:
                 return None
 
             skill_info = json.loads(result.stdout)
-            return AgentConfig(
+            return InstructionConfig(
                 name=slugify(skill_info.get("name", skill_name)),
                 description=skill_info.get("description", ""),
                 instructions=skill_info.get("content", ""),

@@ -3,16 +3,16 @@
 from datetime import date
 
 from writ.core.models import (
-    AgentConfig,
+    InstructionConfig,
     CompositionConfig,
     LintResult,
     ProjectConfig,
 )
 
 
-class TestAgentConfig:
+class TestInstructionConfig:
     def test_default_values(self):
-        agent = AgentConfig(name="test", instructions="Do something")
+        agent = InstructionConfig(name="test", instructions="Do something")
         assert agent.name == "test"
         assert agent.description == ""
         assert agent.version == "1.0.0"
@@ -23,7 +23,7 @@ class TestAgentConfig:
         assert agent.composition.inherits_from == []
 
     def test_full_config(self):
-        agent = AgentConfig(
+        agent = InstructionConfig(
             name="reviewer",
             description="Code reviewer",
             version="2.0.0",
@@ -41,9 +41,9 @@ class TestAgentConfig:
         assert agent.composition.receives_handoff_from == ["implementer"]
 
     def test_serialization_roundtrip(self):
-        agent = AgentConfig(name="test", instructions="Hello")
+        agent = InstructionConfig(name="test", instructions="Hello")
         data = agent.model_dump()
-        restored = AgentConfig(**data)
+        restored = InstructionConfig(**data)
         assert restored.name == agent.name
         assert restored.instructions == agent.instructions
 

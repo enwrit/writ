@@ -11,7 +11,7 @@ import typer
 from rich.table import Table
 
 from writ.core import auth, store
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 from writ.integrations.registry import RegistryClient
 from writ.utils import console
 
@@ -37,7 +37,7 @@ def save(
         console.print("[red]Not initialized.[/red] Run [cyan]writ init[/cyan] first.")
         raise typer.Exit(1)
 
-    agent = store.load_agent(name)
+    agent = store.load_instruction(name)
     if not agent:
         console.print(f"[red]Agent '{name}' not found in this project.[/red]")
         raise typer.Exit(1)
@@ -103,14 +103,14 @@ def load(
         raise typer.Exit(1)
 
     # Check if already exists in project
-    existing = store.load_agent(name)
+    existing = store.load_instruction(name)
     if existing:
         overwrite = typer.confirm(f"Agent '{name}' already exists in this project. Overwrite?")
         if not overwrite:
             console.print("[dim]Cancelled.[/dim]")
             raise typer.Exit()
 
-    path = store.save_agent(agent)
+    path = store.save_instruction(agent)
     if source == "remote":
         console.print(f"[green]Loaded[/green] '{name}' from enwrit.com into project ({path})")
         # Also cache locally so future loads don't need the network
@@ -120,8 +120,8 @@ def load(
     console.print(f"\n  Activate: [cyan]writ use {name}[/cyan]")
 
 
-def _agent_from_remote(data: dict) -> AgentConfig | None:
-    """Build an AgentConfig from a remote API response dict.
+def _agent_from_remote(data: dict) -> InstructionConfig | None:
+    """Build an InstructionConfig from a remote API response dict.
 
     Returns None if the data is missing required fields so the caller
     can handle it gracefully instead of crashing on KeyError.
@@ -130,7 +130,7 @@ def _agent_from_remote(data: dict) -> AgentConfig | None:
     if not name:
         return None
     try:
-        return AgentConfig(
+        return InstructionConfig(
             name=name,
             description=data.get("description", ""),
             version=data.get("version", "1.0.0"),

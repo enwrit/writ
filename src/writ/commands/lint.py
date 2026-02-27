@@ -36,7 +36,7 @@ def lint_command(
         raise typer.Exit(1)
 
     if name:
-        agent = store.load_agent(name)
+        agent = store.load_instruction(name)
         if not agent:
             console.print(
                 f"[red]Agent '{name}' not found.[/red] "
@@ -45,7 +45,7 @@ def lint_command(
             raise typer.Exit(1)
         agents = [agent]
     else:
-        agents = store.list_agents()
+        agents = store.list_instructions()
         if not agents:
             console.print("[yellow]No agents to lint.[/yellow]")
             return

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 from writ.utils import slugify
 
 
@@ -27,8 +27,8 @@ class PRPMIntegration:
             pass
         return []
 
-    def install(self, package: str) -> AgentConfig | None:
-        """Install a package from PRPM and convert to AgentConfig."""
+    def install(self, package: str) -> InstructionConfig | None:
+        """Install a package from PRPM and convert to InstructionConfig."""
         try:
             result = subprocess.run(
                 ["prpm", "show", package, "--json"],
@@ -40,7 +40,7 @@ class PRPMIntegration:
                 return None
 
             pkg_info = json.loads(result.stdout)
-            return AgentConfig(
+            return InstructionConfig(
                 name=slugify(pkg_info.get("name", package)),
                 description=pkg_info.get("description", ""),
                 instructions=pkg_info.get("content", ""),

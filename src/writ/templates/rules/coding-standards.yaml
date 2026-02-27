@@ -1,0 +1,45 @@
+name: coding-standards
+description: "Universal coding standards for any project"
+version: 1.0.0
+tags: [rule, standards, quality, universal]
+task_type: rule
+instructions: |
+  # Coding Standards
+
+  ## Naming
+
+  - Variables and functions: descriptive, no abbreviations (`get_active_users` not `get_au`).
+  - Booleans: prefix with `is_`, `has_`, `should_` (`is_active`, `has_permission`).
+  - Constants: `UPPER_SNAKE_CASE`.
+  - Classes: `PascalCase`. Files: `snake_case`.
+
+  ## Functions
+
+  - One responsibility per function. If it needs an "and" to describe, split it.
+  - Max 30 lines. Extract helpers for complex logic.
+  - Early returns over nested conditionals.
+  - Parameters: 4 max. Beyond that, use a config object or dataclass.
+
+  ## Error Handling
+
+  - Catch specific exceptions. Never bare `except` or empty `catch`.
+  - Errors should include enough context to diagnose without a debugger.
+  - Fail fast: validate inputs at function entry.
+  - I/O operations (file, network, database) always need error handling.
+
+  ## Comments and Documentation
+
+  - Code should be self-documenting. Comments explain "why", not "what".
+  - Delete commented-out code. That's what version control is for.
+  - Public APIs get docstrings. Internal helpers only if the logic is non-obvious.
+
+  ## File Organization
+
+  - One concept per file. A file named `utils` with 500 lines needs splitting.
+  - Imports at the top, organized: stdlib, third-party, local.
+  - No circular imports. If two modules need each other, extract the shared dependency.
+
+composition:
+  inherits_from: []
+  receives_handoff_from: []
+  project_context: false

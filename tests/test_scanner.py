@@ -214,6 +214,91 @@ class TestWritignore:
         assert "secret" not in tree
 
 
+class TestParseMarkdownFile:
+    """Tests for the public parse_markdown_file / parse_markdown_content API."""
+
+    def test_parse_md_file(self, tmp_project: Path):
+        md = tmp_project / "my-rules.md"
+        md.write_text("# Project Rules\n\nAlways write tests.\n", encoding="utf-8")
+        from writ.core.scanner import parse_markdown_file
+        cfg = parse_markdown_file(md)
+        assert cfg is not None
+        assert cfg.name == "my-rules"
+        assert cfg.description == "Project Rules"
+        assert "Always write tests" in cfg.instructions
+
+    def test_parse_md_name_override(self, tmp_project: Path):
+        md = tmp_project / "messy-Name.md"
+        md.write_text("Some instructions\n", encoding="utf-8")
+        from writ.core.scanner import parse_markdown_file
+        cfg = parse_markdown_file(md, name_override="clean-name")
+        assert cfg is not None
+        assert cfg.name == "clean-name"
+
+    def test_parse_mdc_preserves_frontmatter(self, tmp_project: Path):
+        mdc = tmp_project / "project-rule.mdc"
+        mdc.write_text(
+            "---\ndescription: My project rule\nalwaysApply: true\nglobs: \"**/*.py\"\n---\n\n"
+            "# Rule\n\nDo the thing.\n",
+            encoding="utf-8",
+        )
+        from writ.core.scanner import parse_markdown_file
+        cfg = parse_markdown_file(mdc)
+        assert cfg is not None
+        assert cfg.name == "project-rule"
+        assert cfg.task_type == "rule"
+        assert cfg.format_overrides.cursor is not None
+        assert cfg.format_overrides.cursor.always_apply is True
+        assert cfg.format_overrides.cursor.globs == "**/*.py"
+        assert cfg.format_overrides.cursor.description == "My project rule"
+
+    def test_mdc_roundtrip_fidelity(self, tmp_project: Path):
+        """Import .mdc then export as cursor -- frontmatter should be preserved."""
+        original = (
+            "---\ndescription: Code standards\nalwaysApply: true\nglobs: \"src/**\"\n---\n\n"
+            "Write clean code.\n"
+        )
+        mdc = tmp_project / "standards.mdc"
+        mdc.write_text(original, encoding="utf-8")
+
+        from writ.core.scanner import parse_markdown_file
+        from writ.core.formatter import CursorFormatter
+
+        cfg = parse_markdown_file(mdc)
+        assert cfg is not None
+
+        fmt = CursorFormatter()
+        out_path = fmt.write(cfg, cfg.instructions, root=tmp_project)
+        exported = out_path.read_text(encoding="utf-8")
+
+        assert "alwaysApply: true" in exported
+        assert "src/**" in exported
+        assert "Code standards" in exported
+        assert "Write clean code." in exported
+
+    def test_parse_plain_txt(self, tmp_project: Path):
+        txt = tmp_project / "notes.txt"
+        txt.write_text("Just plain text instructions.\n", encoding="utf-8")
+        from writ.core.scanner import parse_markdown_file
+        cfg = parse_markdown_file(txt)
+        assert cfg is not None
+        assert cfg.name == "notes"
+        assert "plain text" in cfg.instructions
+
+    def test_parse_empty_file_returns_none(self, tmp_project: Path):
+        md = tmp_project / "empty.md"
+        md.write_text("", encoding="utf-8")
+        from writ.core.scanner import parse_markdown_file
+        assert parse_markdown_file(md) is None
+
+    def test_parse_content_directly(self):
+        from writ.core.scanner import parse_markdown_content
+        cfg = parse_markdown_content("# My Rule\n\nDo stuff.\n", "test-rule", ".md")
+        assert cfg is not None
+        assert cfg.name == "test-rule"
+        assert cfg.description == "My Rule"
+
+
 class TestProjectAnalysis:
     def test_analyze_generates_markdown(self, tmp_project: Path):
         (tmp_project / "app.py").write_text("print('hello')")

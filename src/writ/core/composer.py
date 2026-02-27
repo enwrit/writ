@@ -14,11 +14,11 @@ Layers (composed in order):
 from __future__ import annotations
 
 from writ.core import store
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 
 
 def compose(
-    agent: AgentConfig,
+    agent: InstructionConfig,
     additional: list[str] | None = None,
     include_project: bool = True,
     include_handoffs: bool = True,
@@ -45,7 +45,7 @@ def compose(
 
     # Layer 2: Inherited context (from other agents)
     for parent_name in agent.composition.inherits_from:
-        parent = store.load_agent(parent_name)
+        parent = store.load_instruction(parent_name)
         if parent and parent.instructions:
             layers.append((f"Inherited from {parent_name}", parent.instructions))
 
@@ -53,7 +53,7 @@ def compose(
     for extra_name in additional:
         if extra_name == agent.name:
             continue  # Skip self
-        extra = store.load_agent(extra_name)
+        extra = store.load_instruction(extra_name)
         if extra and extra.instructions:
             layers.append((f"Context from {extra_name}", extra.instructions))
 

@@ -1,0 +1,51 @@
+name: api-context
+description: "REST API project context for onboarding AI agents"
+version: 1.0.0
+tags: [context, api, rest, backend]
+task_type: context
+instructions: |
+  # Project Context: REST API
+
+  ## Overview
+
+  This is a REST API built with [framework] and [language].
+
+  ## Tech Stack
+
+  - **Framework**: [e.g. FastAPI, Express, Django REST]
+  - **Database**: [e.g. PostgreSQL via SQLAlchemy, MongoDB via Mongoose]
+  - **Auth**: [e.g. Bearer token, JWT, session-based]
+  - **Validation**: [e.g. Pydantic, Zod, Joi]
+  - **Testing**: [e.g. pytest with httpx, supertest, jest]
+
+  ## Directory Structure
+
+  ```
+  app/
+  ├── main.[ext]       # App entry point, middleware, router registration
+  ├── routers/         # One router per domain
+  ├── models.[ext]     # ORM / database models
+  ├── schemas.[ext]    # Request/response validation schemas
+  └── config.[ext]     # Settings from environment variables
+  tests/
+  ├── conftest.[ext]   # Shared fixtures
+  └── test_*.ext       # Test files per router
+  ```
+
+  ## API Conventions
+
+  - All endpoints return JSON.
+  - Error responses use `{"detail": "message"}` format.
+  - Database sessions are injected via dependency injection.
+  - All inputs validated at the boundary layer.
+
+  ## Authentication
+
+  - [How auth works: API key, JWT, OAuth, etc.]
+  - [Where tokens are stored, how they're validated]
+  - [Rate limiting strategy]
+
+composition:
+  inherits_from: []
+  receives_handoff_from: []
+  project_context: false

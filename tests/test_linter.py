@@ -1,7 +1,7 @@
 """Tests for the agent linter."""
 
 from writ.core import linter
-from writ.core.models import AgentConfig, CompositionConfig
+from writ.core.models import InstructionConfig, CompositionConfig
 
 
 class TestLinter:
@@ -12,12 +12,12 @@ class TestLinter:
         assert len(errors) == 0
 
     def test_empty_instructions_warning(self, initialized_project):
-        agent = AgentConfig(name="empty", instructions="")
+        agent = InstructionConfig(name="empty", instructions="")
         results = linter.lint(agent)
         assert any(r.rule == "instructions-empty" for r in results)
 
     def test_very_long_instructions(self, initialized_project):
-        agent = AgentConfig(
+        agent = InstructionConfig(
             name="verbose",
             instructions=" ".join(["word"] * 2500),
         )
@@ -25,27 +25,27 @@ class TestLinter:
         assert any(r.rule == "instructions-long" for r in results)
 
     def test_very_short_instructions(self, initialized_project):
-        agent = AgentConfig(name="short", instructions="Be helpful.")
+        agent = InstructionConfig(name="short", instructions="Be helpful.")
         results = linter.lint(agent)
         assert any(r.rule == "instructions-short" for r in results)
 
     def test_missing_description(self, initialized_project):
-        agent = AgentConfig(name="nodesc", instructions="Do something useful.")
+        agent = InstructionConfig(name="nodesc", instructions="Do something useful.")
         results = linter.lint(agent)
         assert any(r.rule == "description-missing" for r in results)
 
     def test_missing_tags(self, initialized_project):
-        agent = AgentConfig(name="notags", instructions="Instructions here.")
+        agent = InstructionConfig(name="notags", instructions="Instructions here.")
         results = linter.lint(agent)
         assert any(r.rule == "tags-missing" for r in results)
 
     def test_bad_name_format(self, initialized_project):
-        agent = AgentConfig(name="My Agent!", instructions="Test")
+        agent = InstructionConfig(name="My Agent!", instructions="Test")
         results = linter.lint(agent)
         assert any(r.rule == "name-format" for r in results)
 
     def test_contradiction_detection(self, initialized_project):
-        agent = AgentConfig(
+        agent = InstructionConfig(
             name="contradicted",
             description="Test",
             tags=["test"],
@@ -55,7 +55,7 @@ class TestLinter:
         assert any(r.rule == "contradiction" for r in results)
 
     def test_missing_parent_warning(self, initialized_project):
-        agent = AgentConfig(
+        agent = InstructionConfig(
             name="orphan",
             instructions="Test",
             composition=CompositionConfig(inherits_from=["nonexistent"]),

@@ -11,7 +11,7 @@ import logging
 import httpx
 
 from writ.core import auth
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 from writ.utils import yaml_dumps
 
 logger = logging.getLogger(__name__)
@@ -45,14 +45,14 @@ class RegistryClient:
     # -- personal library ----------------------------------------------------
 
     def push_to_library(
-        self, name: str, agent: AgentConfig, *, is_public: bool = False,
+        self, name: str, agent: InstructionConfig, *, is_public: bool = False,
     ) -> bool:
         """Upsert an agent to the remote personal library.
 
         Returns True on success, False on any failure.
         """
         try:
-            payload = {
+            payload: dict = {
                 "name": name,
                 "description": agent.description,
                 "version": agent.version,
@@ -61,6 +61,8 @@ class RegistryClient:
                 "config_yaml": yaml_dumps(agent.model_dump(mode="json")),
                 "is_public": is_public,
             }
+            if agent.task_type:
+                payload["task_type"] = agent.task_type
             resp = httpx.post(
                 f"{self.base_url}/library/agents",
                 json=payload,

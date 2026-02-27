@@ -43,11 +43,11 @@ class FormatOverrides(BaseModel):
     kiro: dict | None = None
 
 
-class AgentConfig(BaseModel):
-    """The canonical agent configuration model.
+class InstructionConfig(BaseModel):
+    """The canonical instruction configuration model.
 
-    This is what gets stored as YAML in .writ/agents/<name>.yaml.
-    All operations read/write this format.
+    Used for all content types: agents, rules, context, and more.
+    Stored as YAML in .writ/{agents,rules,context}/<name>.yaml.
     """
 
     name: str = Field(description="Unique agent name (slug-safe).")
@@ -55,6 +55,10 @@ class AgentConfig(BaseModel):
     version: str = Field(default="1.0.0", description="Semantic version.")
     author: str | None = Field(default=None, description="Author (set when published).")
     tags: list[str] = Field(default_factory=list, description="Searchable tags.")
+    task_type: str | None = Field(
+        default=None,
+        description="Content category for registry filtering (agent, rule, context, template).",
+    )
     created: date = Field(default_factory=date.today)
     updated: date = Field(default_factory=date.today)
     instructions: str = Field(

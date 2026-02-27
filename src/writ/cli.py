@@ -20,6 +20,7 @@ from writ.commands import (
     login,
     memory,
     publish,
+    register,
     search,
 )
 from writ.utils import console
@@ -56,7 +57,8 @@ app.command(name="save")(library.save)
 app.command(name="load")(library.load)
 app.command(name="library")(library.library_list)
 
-# Auth commands (login/logout)
+# Auth commands (register/login/logout)
+app.command(name="register")(register.register)
 app.command(name="login")(login.login)
 app.command(name="logout")(login.logout)
 
@@ -133,7 +135,7 @@ def status_command() -> None:
     table.add_row("Project initialized", init_val)
 
     if initialized:
-        agents = store.list_agents()
+        agents = store.list_instructions()
         table.add_row("Agents in project", str(len(agents)))
         config = store.load_config()
         table.add_row("Active formats", ", ".join(config.formats))

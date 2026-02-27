@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import pathspec
 
 if TYPE_CHECKING:
-    from writ.core.models import AgentConfig
+    from writ.core.models import InstructionConfig
 
 # ---------------------------------------------------------------------------
 # Language detection
@@ -321,11 +321,110 @@ def detect_existing_files(root: Path | None = None) -> list[dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
-# Parse existing agent files into AgentConfig
+# Public markdown parsers (used by `writ add --file` and `writ install`)
 # ---------------------------------------------------------------------------
 
-def parse_existing_file(file_info: dict[str, str]) -> AgentConfig | None:
-    """Parse a detected existing agent file into an AgentConfig.
+_IMPORTABLE_EXTENSIONS = {".md", ".mdc", ".txt", ".windsurfrules", ".cursorrules"}
+
+
+def parse_markdown_content(
+    content: str,
+    name: str,
+    ext_hint: str = ".md",
+) -> InstructionConfig | None:
+    """Parse markdown/text content into an InstructionConfig.
+
+    *ext_hint* guides format-specific parsing (.mdc -> frontmatter, etc.).
+    This is the core string-based parser; parse_markdown_file() wraps it
+    for file I/O, and future stdin support can call this directly.
+    """
+    import re
+
+    import yaml
+
+    from writ.core.models import (
+        CursorOverrides,
+        FormatOverrides,
+        InstructionConfig,
+    )
+
+    content = content.strip()
+    if not content:
+        return None
+
+    description = ""
+    instructions = content
+    format_overrides = FormatOverrides()
+    task_type: str | None = None
+    tags: list[str] = ["imported"]
+
+    if ext_hint == ".mdc":
+        tags = ["imported", "cursor"]
+        task_type = "rule"
+        fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
+        if fm_match:
+            try:
+                fm = yaml.safe_load(fm_match.group(1))
+                if isinstance(fm, dict):
+                    description = fm.get("description", "")
+                    cursor_ov = CursorOverrides(
+                        description=fm.get("description") or None,
+                        always_apply=bool(fm.get("alwaysApply", False)),
+                        globs=fm.get("globs") or None,
+                    )
+                    format_overrides = FormatOverrides(cursor=cursor_ov)
+            except yaml.YAMLError:
+                pass
+            instructions = fm_match.group(2).strip()
+    elif ext_hint == ".md":
+        cleaned = re.sub(r"<!-- writ:.*?-->", "", content).strip()
+        if not cleaned:
+            return None
+        instructions = cleaned
+        heading = re.match(r"^#\s+(.+)", cleaned)
+        if heading:
+            description = heading.group(1).strip()
+
+    if not instructions:
+        return None
+
+    return InstructionConfig(
+        name=name,
+        description=str(description) if description else f"Imported from {name}",
+        instructions=instructions,
+        tags=tags,
+        task_type=task_type,
+        format_overrides=format_overrides,
+    )
+
+
+def parse_markdown_file(
+    path: Path,
+    name_override: str | None = None,
+) -> InstructionConfig | None:
+    """Read a markdown/text file and parse it into an InstructionConfig.
+
+    Infers name from filename (slugified) unless *name_override* is given.
+    Dispatches to format-specific logic based on file extension.
+    """
+    from writ.utils import slugify
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    name = name_override or slugify(path.stem) or "imported"
+    ext = path.suffix.lower()
+    return parse_markdown_content(content, name, ext_hint=ext)
+
+
+# ---------------------------------------------------------------------------
+# Parse existing agent files into InstructionConfig (used by writ init)
+# ---------------------------------------------------------------------------
+
+def parse_existing_file(file_info: dict[str, str]) -> InstructionConfig | None:
+    """Parse a detected existing agent file into an InstructionConfig.
 
     Supports: Cursor .mdc, CLAUDE.md, AGENTS.md, .windsurfrules,
     .cursorrules, copilot-instructions.md.
@@ -360,13 +459,13 @@ def parse_existing_file(file_info: dict[str, str]) -> AgentConfig | None:
     return None
 
 
-def _parse_cursor_mdc(content: str, name: str) -> AgentConfig | None:
+def _parse_cursor_mdc(content: str, name: str) -> InstructionConfig | None:
     """Parse a .cursor/rules/*.mdc file (YAML frontmatter + markdown body)."""
     import re
 
     import yaml
 
-    from writ.core.models import AgentConfig  # runtime import
+    from writ.core.models import InstructionConfig  # runtime import
 
     description = ""
     instructions = content
@@ -385,7 +484,7 @@ def _parse_cursor_mdc(content: str, name: str) -> AgentConfig | None:
     if not instructions:
         return None
 
-    return AgentConfig(
+    return InstructionConfig(
         name=name,
         description=str(description) if description else f"Imported from .cursor/rules/{name}.mdc",
         instructions=instructions,
@@ -395,17 +494,17 @@ def _parse_cursor_mdc(content: str, name: str) -> AgentConfig | None:
 
 def _parse_markdown_sections(
     content: str, name: str, tags: list[str],
-) -> AgentConfig | None:
+) -> InstructionConfig | None:
     """Parse a markdown file (CLAUDE.md, AGENTS.md) as a single agent."""
     import re
 
-    from writ.core.models import AgentConfig  # runtime import
+    from writ.core.models import InstructionConfig  # runtime import
 
     cleaned = re.sub(r"<!-- writ:.*?-->", "", content).strip()
     if not cleaned:
         return None
 
-    return AgentConfig(
+    return InstructionConfig(
         name=name,
         description=f"Imported from {name}",
         instructions=cleaned,
@@ -415,15 +514,15 @@ def _parse_markdown_sections(
 
 def _parse_plain_instructions(
     content: str, name: str, tags: list[str],
-) -> AgentConfig | None:
+) -> InstructionConfig | None:
     """Parse a plain text/markdown file as instructions."""
-    from writ.core.models import AgentConfig  # runtime import
+    from writ.core.models import InstructionConfig  # runtime import
 
     content = content.strip()
     if not content:
         return None
 
-    return AgentConfig(
+    return InstructionConfig(
         name=name,
         description=f"Imported from {name}",
         instructions=content,

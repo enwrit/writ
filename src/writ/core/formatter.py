@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from writ.core.models import AgentConfig
+from writ.core.models import InstructionConfig
 from writ.utils import update_or_create_markdown, yaml_dumps
 
 # ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ class BaseFormatter:
 
     def write(
         self,
-        agent: AgentConfig,
+        agent: InstructionConfig,
         composed_instructions: str,
         root: Path | None = None,
     ) -> Path:
@@ -50,7 +50,7 @@ class CursorFormatter(BaseFormatter):
 
     def write(
         self,
-        agent: AgentConfig,
+        agent: InstructionConfig,
         composed_instructions: str,
         root: Path | None = None,
     ) -> Path:
@@ -96,7 +96,7 @@ class ClaudeFormatter(BaseFormatter):
 
     def write(
         self,
-        agent: AgentConfig,
+        agent: InstructionConfig,
         composed_instructions: str,
         root: Path | None = None,
     ) -> Path:
@@ -116,7 +116,7 @@ class AgentsMdFormatter(BaseFormatter):
 
     def write(
         self,
-        agent: AgentConfig,
+        agent: InstructionConfig,
         composed_instructions: str,
         root: Path | None = None,
     ) -> Path:
@@ -136,7 +136,7 @@ class CopilotFormatter(BaseFormatter):
 
     def write(
         self,
-        agent: AgentConfig,
+        agent: InstructionConfig,
         composed_instructions: str,
         root: Path | None = None,
     ) -> Path:
@@ -156,7 +156,7 @@ class WindsurfFormatter(BaseFormatter):
 
     def write(
         self,
-        agent: AgentConfig,
+        agent: InstructionConfig,
         composed_instructions: str,
         root: Path | None = None,
     ) -> Path:
@@ -197,8 +197,8 @@ class AgentCardFormatter(BaseFormatter):
 
     format_name = "agent-card"
 
-    def format_agent_card(self, agent: AgentConfig) -> dict:
-        """Build the A2A Agent Card dict from an AgentConfig."""
+    def format_agent_card(self, agent: InstructionConfig) -> dict:
+        """Build the A2A Agent Card dict from an InstructionConfig."""
         capabilities = []
         for tag in agent.tags:
             capabilities.append({
@@ -225,7 +225,7 @@ class AgentCardFormatter(BaseFormatter):
 
     def write(
         self,
-        agent: AgentConfig,
+        agent: InstructionConfig,
         composed_instructions: str,
         root: Path | None = None,
     ) -> Path:
@@ -265,7 +265,7 @@ def get_formatter(format_name: str) -> BaseFormatter:
 
 
 def write_agent(
-    agent: AgentConfig,
+    agent: InstructionConfig,
     composed_instructions: str,
     formats: list[str],
     root: Path | None = None,

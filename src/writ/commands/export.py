@@ -30,7 +30,7 @@ def export_command(
         console.print("[red]Not initialized.[/red] Run [cyan]writ init[/cyan] first.")
         raise typer.Exit(1)
 
-    agent = store.load_agent(name)
+    agent = store.load_instruction(name)
     if not agent:
         console.print(
             f"[red]Agent '{name}' not found.[/red] "

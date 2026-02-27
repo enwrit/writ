@@ -19,9 +19,9 @@ def login(
         ),
     ] = None,
 ) -> None:
-    """Authenticate with enwrit.com to enable cross-device agent sync.
+    """Log in with an existing enwrit.com API key.
 
-    Get your API key at https://enwrit.com (or via POST /auth/register).
+    If you don't have an account yet, run [cyan]writ register[/cyan] instead.
 
     \b
     Examples:
@@ -40,8 +40,11 @@ def login(
     store.init_global_store()
     auth.save_token(token)
 
+    from writ.utils import global_writ_dir
+
+    config_path = global_writ_dir() / "config.yaml"
     console.print("[green]Logged in.[/green] Your agents will now sync to enwrit.com.")
-    console.print("[dim]Token saved to ~/.writ/config.yaml[/dim]")
+    console.print(f"[dim]Token saved to {config_path}[/dim]")
 
 
 def logout() -> None:

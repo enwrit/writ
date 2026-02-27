@@ -47,8 +47,8 @@ def init_command(
         )
         raise typer.Exit()
 
-    # 1. Create .writ/ directory structure
-    writ_dir = store.init_project_store()
+    # 1. Create .writ/ directory structure (clean content dirs on --force)
+    writ_dir = store.init_project_store(clean=force)
     console.print(f"[green]Created[/green] {writ_dir.relative_to(Path.cwd())}/")
 
     # 2. Detect active IDE tools for format config
@@ -77,7 +77,7 @@ def init_command(
         load_template(template)
 
     # 6. Summary
-    agent_count = len(store.list_agents())
+    agent_count = len(store.list_instructions())
     console.print()
     console.print(Panel.fit(
         "[bold green]writ initialized![/bold green]\n\n"
@@ -123,12 +123,12 @@ def _import_existing_files(existing: list[dict[str, str]]) -> int:
         agent = scanner.parse_existing_file(item)
         if agent:
             # Avoid overwriting if agent with same name already exists
-            if store.load_agent(agent.name):
+            if store.load_instruction(agent.name):
                 console.print(
                     f"  [dim]Skipped[/dim] '{agent.name}' (already exists)"
                 )
                 continue
-            store.save_agent(agent)
+            store.save_instruction(agent)
             console.print(f"  [green]Imported[/green] '{agent.name}' from {item['format']}")
             count += 1
     if count:
@@ -150,18 +150,18 @@ def load_template(template_name: str) -> int:
             console.print(f"Available templates: {', '.join(available)}")
         raise typer.Exit(1)
 
-    from writ.core.models import AgentConfig
+    from writ.core.models import InstructionConfig
     from writ.utils import yaml_load
 
     count = 0
     for yaml_file in sorted(template_dir.glob("*.yaml")):
         try:
             data = yaml_load(yaml_file)
-            agent = AgentConfig(**data)
-            if store.load_agent(agent.name):
+            agent = InstructionConfig(**data)
+            if store.load_instruction(agent.name):
                 console.print(f"  [dim]Skipped[/dim] '{agent.name}' (already exists)")
                 continue
-            store.save_agent(agent)
+            store.save_instruction(agent)
             console.print(f"  [green]Created[/green] agent: {agent.name}")
             count += 1
         except Exception as e:  # noqa: BLE001

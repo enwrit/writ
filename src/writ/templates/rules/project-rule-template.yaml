@@ -1,0 +1,64 @@
+name: project-rule-template
+description: "Project identity, architecture, and conventions rule"
+version: 1.0.0
+tags: [rule, conventions, architecture, project]
+task_type: rule
+instructions: |
+  # [Project Name] -- [One-Line Description]
+
+  **Product**: [name] | **Repo**: [url] | **Stack**: [primary language/framework]
+
+  ## Background
+
+  [What the project does, who it's for, and what makes it distinct. 2-3 sentences max.]
+
+  Core capabilities:
+  1. [Capability 1]
+  2. [Capability 2]
+  3. [Capability 3]
+
+  ## Technical Stack
+
+  - **Language**: [e.g. Python 3.11+, TypeScript 5.x]
+  - **Framework**: [e.g. FastAPI, React, Express]
+  - **Database**: [e.g. PostgreSQL, SQLite, none]
+  - **Testing**: [e.g. pytest, vitest, jest]
+  - **Linting**: [e.g. ruff, eslint]
+
+  ## Architecture
+
+  ```
+  src/
+  ├── [top-level-module]/
+  │   ├── [file.ext]          # [annotation: what this file does]
+  │   └── [subdir]/            # [annotation: what this directory contains]
+  │       └── [file.ext]       # [annotation]
+  └── tests/
+      └── [test_file.ext]      # [annotation]
+  ```
+
+  [Brief notes on architectural decisions: why this structure, key patterns used, how components communicate.]
+
+  ## Development Conventions
+
+  1. [Convention 1 -- e.g. "Type hints on all functions"]
+  2. [Convention 2 -- e.g. "One module per command"]
+  3. [Convention 3 -- e.g. "Tests for every feature"]
+
+  ## Development Commands
+
+  ```bash
+  [install command]
+  [test command]
+  [lint command]
+  ```
+
+  ## Learnings
+
+  - [Hard-won lesson 1 -- e.g. "Windows PowerShell uses `;` not `&&` to chain commands"]
+  - [Hard-won lesson 2 -- things that broke and how you fixed them]
+
+composition:
+  inherits_from: []
+  receives_handoff_from: []
+  project_context: false
