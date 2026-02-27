@@ -169,8 +169,9 @@ Built-in defaults already ignore `node_modules/`, `venv/`, `.git/`, `__pycache__
 | Command | Description |
 |---------|-------------|
 | `writ init` | Initialize writ in current repo |
-| `writ add <name>` | Create a new agent |
-| `writ list` | List all agents |
+| `writ add <name>` | Create a new instruction (agent, rule, or context) |
+| `writ add --file <path>` | Import markdown file(s) or directory |
+| `writ list` | List all instructions |
 | `writ use <name>` | Activate agent (compose + write) |
 | `writ edit <name>` | Open in $EDITOR |
 | `writ remove <name>` | Remove agent |
@@ -179,7 +180,10 @@ Built-in defaults already ignore `node_modules/`, `venv/`, `.git/`, `__pycache__
 | `writ save <name>` | Save to personal library |
 | `writ load <name>` | Load from library |
 | `writ library` | List personal library |
+| `writ register` | Create enwrit.com account (interactive) |
 | `writ login` / `writ logout` | Authenticate with enwrit.com |
+| `writ publish <name>` | Make publicly discoverable on enwrit.com |
+| `writ unpublish <name>` | Remove from public registry |
 | `writ lint [name]` | Validate quality |
 | `writ status` | Show project diagnostics |
 | `writ version` | Show version and environment |
@@ -188,14 +192,15 @@ Built-in defaults already ignore `node_modules/`, `venv/`, `.git/`, `__pycache__
 | `writ search <query>` | Search registries |
 | `writ install <name>` | Install from registry |
 
-## Agent Config Format
+## Instruction Format
 
-Agents are YAML files in `.writ/agents/`:
+Instructions are YAML files in `.writ/{agents,rules,context}/`, routed by `task_type`:
 
 ```yaml
 name: reviewer
 description: "Code reviewer for TypeScript"
 version: 1.0.0
+task_type: agent    # agent | rule | context | template
 tags: [typescript, review]
 instructions: |
   You are a code reviewer specializing in TypeScript.
@@ -205,6 +210,8 @@ composition:
   receives_handoff_from: [implementer]
   project_context: true
 ```
+
+YAML is the internal storage format. Users interact primarily with markdown -- use `writ add --file` to import `.md`, `.mdc`, or `.txt` files directly.
 
 ## Development
 
