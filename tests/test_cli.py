@@ -13,7 +13,8 @@ class TestVersion:
     def test_version_flag(self):
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        from writ import __version__
+        assert __version__ in result.output
 
 
 class TestInit:
