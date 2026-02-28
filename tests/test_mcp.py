@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from writ.cli import app
@@ -12,6 +13,8 @@ from writ.core.models import InstructionConfig
 from writ.core.store import save_instruction, save_project_context
 
 runner = CliRunner()
+
+mcp_server = pytest.importorskip("writ.integrations.mcp_server", reason="mcp extra not installed")
 
 
 class TestMcpTools:
@@ -24,9 +27,7 @@ class TestMcpTools:
         save_instruction(
             InstructionConfig(name="rule1", task_type="rule", instructions="Standards.")
         )
-        from writ.integrations.mcp_server import writ_list_instructions
-
-        result = writ_list_instructions()
+        result = mcp_server.writ_list_instructions()
         names = {r["name"] for r in result}
         assert "dev" in names
         assert "rule1" in names
@@ -37,30 +38,22 @@ class TestMcpTools:
         save_instruction(
             InstructionConfig(name="reviewer", instructions="Review code carefully.")
         )
-        from writ.integrations.mcp_server import writ_get_instruction
-
-        result = writ_get_instruction("reviewer")
+        result = mcp_server.writ_get_instruction("reviewer")
         assert "reviewer" in result
         assert "Review code carefully" in result
 
     def test_get_instruction_not_found(self, initialized_project: Path):
-        from writ.integrations.mcp_server import writ_get_instruction
-
-        result = writ_get_instruction("nonexistent")
+        result = mcp_server.writ_get_instruction("nonexistent")
         assert "not found" in result.lower()
 
     def test_get_project_context_from_stored(self, initialized_project: Path):
         save_project_context("# My Project\n\nPython + React")
-        from writ.integrations.mcp_server import writ_get_project_context
-
-        result = writ_get_project_context()
+        result = mcp_server.writ_get_project_context()
         assert "My Project" in result
         assert "Python + React" in result
 
     def test_get_project_context_generates_if_missing(self, initialized_project: Path):
-        from writ.integrations.mcp_server import writ_get_project_context
-
-        result = writ_get_project_context()
+        result = mcp_server.writ_get_project_context()
         assert "Project Context" in result or "Directory Structure" in result
 
 
