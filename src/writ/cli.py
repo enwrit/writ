@@ -22,7 +22,9 @@ from writ.commands import (
     publish,
     register,
     search,
+    sync,
 )
+from writ.commands.mcp import mcp_app
 from writ.utils import console
 
 # ---------------------------------------------------------------------------
@@ -62,6 +64,9 @@ app.command(name="register")(register.register)
 app.command(name="login")(login.login)
 app.command(name="logout")(login.logout)
 
+# Sync command (bulk library sync)
+app.command(name="sync")(sync.sync_command)
+
 # Lint command
 app.command(name="lint")(lint.lint_command)
 
@@ -93,6 +98,9 @@ handoff_app = typer.Typer(
 handoff_app.command(name="create")(handoff.create)
 handoff_app.command(name="list")(handoff.list_handoffs)
 app.add_typer(handoff_app, name="handoff")
+
+# MCP sub-group
+app.add_typer(mcp_app, name="mcp")
 
 
 # ---------------------------------------------------------------------------

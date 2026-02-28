@@ -18,7 +18,8 @@ error_console = Console(stderr=True)
 # ---------------------------------------------------------------------------
 
 class _LiteralBlockDumper(yaml.SafeDumper):
-    """SafeDumper that writes multi-line strings as YAML literal blocks (|)."""
+    """SafeDumper that writes multi-line strings as literal blocks (|)
+    and short lists of scalars as flow sequences [a, b, c]."""
 
 
 def _literal_str_representer(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
@@ -27,7 +28,21 @@ def _literal_str_representer(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
 
+def _compact_list_representer(
+    dumper: yaml.Dumper, data: list,  # type: ignore[type-arg]
+) -> yaml.SequenceNode:
+    """Use flow style [a, b, c] for flat lists of scalars (e.g. tags)."""
+    if data and all(isinstance(item, (str, int, float, bool)) for item in data):
+        return dumper.represent_sequence(
+            "tag:yaml.org,2002:seq", data, flow_style=True,
+        )
+    return dumper.represent_sequence(
+        "tag:yaml.org,2002:seq", data, flow_style=False,
+    )
+
+
 _LiteralBlockDumper.add_representer(str, _literal_str_representer)
+_LiteralBlockDumper.add_representer(list, _compact_list_representer)
 
 
 def yaml_load(path: Path) -> dict[str, Any]:
@@ -59,6 +74,15 @@ def yaml_dumps(data: dict[str, Any]) -> str:
         sort_keys=False,
         allow_unicode=True,
     )
+
+
+def yaml_loads_safe(text: str) -> dict[str, Any]:
+    """Parse a YAML string, returning an empty dict on failure."""
+    try:
+        data = yaml.safe_load(text)
+        return data if isinstance(data, dict) else {}
+    except yaml.YAMLError:
+        return {}
 
 
 # ---------------------------------------------------------------------------

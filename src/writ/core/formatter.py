@@ -238,6 +238,42 @@ class AgentCardFormatter(BaseFormatter):
 
 
 # ---------------------------------------------------------------------------
+# Cursor MCP config: .cursor/mcp.json
+# ---------------------------------------------------------------------------
+
+class CursorMcpFormatter(BaseFormatter):
+    """Generate Cursor MCP config JSON for connecting to writ MCP server."""
+
+    format_name = "cursor-mcp"
+
+    def write(
+        self,
+        agent: InstructionConfig,
+        composed_instructions: str,
+        root: Path | None = None,
+    ) -> Path:
+        root = root or Path.cwd()
+        path = root / ".cursor" / "mcp.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        existing: dict = {}
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        servers = existing.get("mcpServers", {})
+        servers["writ"] = {
+            "command": "writ",
+            "args": ["mcp", "serve"],
+        }
+        existing["mcpServers"] = servers
+        path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        return path
+
+
+# ---------------------------------------------------------------------------
 # Formatter registry
 # ---------------------------------------------------------------------------
 
@@ -250,6 +286,7 @@ FORMATTERS: dict[str, type[BaseFormatter]] = {
     "codex": CodexFormatter,
     "kiro": KiroFormatter,
     "agent-card": AgentCardFormatter,
+    "cursor-mcp": CursorMcpFormatter,
 }
 
 ALL_FORMAT_NAMES: list[str] = list(FORMATTERS.keys())

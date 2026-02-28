@@ -1,0 +1,16 @@
+feat: add MCP server, writ sync, templates, and parser improvements
+
+- Add `writ mcp serve` command exposing instructions via MCP protocol
+  (3 tools, 2 resources, stdio transport) for cross-repo agent access
+- Add `cursor-mcp` export format generating .cursor/mcp.json config
+- Add `writ sync` command for bulk bidirectional library sync
+  with --push, --pull, --prefer-local, and --dry-run options
+- Add React template set (developer + reviewer)
+- Add template-as-reference: templates with `includes` field resolve
+  referenced instructions from registry on `writ install`
+- Add `source` tracking on install (e.g. enwrit.com/name@version)
+- Fix markdown parser to properly extract YAML frontmatter metadata
+  (name, description, tags, task_type, includes) for .md and .mdc files
+- Fix YAML output: tags now use flow style [a, b, c] instead of block
+- Add 25 new tests (register: 7, mcp: 9, sync: 9)
+- Total test count: 198, all passing

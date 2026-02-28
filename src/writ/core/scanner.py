@@ -327,6 +327,40 @@ def detect_existing_files(root: Path | None = None) -> list[dict[str, str]]:
 _IMPORTABLE_EXTENSIONS = {".md", ".mdc", ".txt", ".windsurfrules", ".cursorrules"}
 
 
+def _extract_frontmatter(content: str) -> tuple[dict, str]:
+    """Split YAML frontmatter from body. Returns (frontmatter_dict, body)."""
+    import re
+
+    import yaml
+
+    fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
+    if not fm_match:
+        return {}, content
+
+    try:
+        fm = yaml.safe_load(fm_match.group(1))
+        if isinstance(fm, dict):
+            return fm, fm_match.group(2).strip()
+    except yaml.YAMLError:
+        pass
+    return {}, content
+
+
+def _infer_task_type(name: str, frontmatter: dict) -> str:
+    """Infer task_type from name and frontmatter heuristics.
+
+    Rules: if the frontmatter has alwaysApply/globs (Cursor rule fields),
+    or the name contains 'rule', it's a rule. Otherwise it's an agent.
+    """
+    if "alwaysApply" in frontmatter or "globs" in frontmatter:
+        return "rule"
+    if "rule" in name.lower():
+        return "rule"
+    if "context" in name.lower():
+        return "context"
+    return "agent"
+
+
 def parse_markdown_content(
     content: str,
     name: str,
@@ -334,13 +368,13 @@ def parse_markdown_content(
 ) -> InstructionConfig | None:
     """Parse markdown/text content into an InstructionConfig.
 
-    *ext_hint* guides format-specific parsing (.mdc -> frontmatter, etc.).
-    This is the core string-based parser; parse_markdown_file() wraps it
-    for file I/O, and future stdin support can call this directly.
+    Handles YAML frontmatter for both .md and .mdc files:
+    - Extracts name, description, tags from frontmatter
+    - Preserves Cursor-specific fields (alwaysApply, globs) in format_overrides
+    - Infers task_type from name and frontmatter heuristics
+    - Uses the body (after frontmatter) as instructions
     """
     import re
-
-    import yaml
 
     from writ.core.models import (
         CursorOverrides,
@@ -352,48 +386,54 @@ def parse_markdown_content(
     if not content:
         return None
 
-    description = ""
-    instructions = content
-    format_overrides = FormatOverrides()
-    task_type: str | None = None
-    tags: list[str] = ["imported"]
+    content = re.sub(r"<!-- writ:.*?-->", "", content).strip()
+    if not content:
+        return None
 
-    if ext_hint == ".mdc":
-        tags = ["imported", "cursor"]
-        task_type = "rule"
-        fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
-        if fm_match:
-            try:
-                fm = yaml.safe_load(fm_match.group(1))
-                if isinstance(fm, dict):
-                    description = fm.get("description", "")
-                    cursor_ov = CursorOverrides(
-                        description=fm.get("description") or None,
-                        always_apply=bool(fm.get("alwaysApply", False)),
-                        globs=fm.get("globs") or None,
-                    )
-                    format_overrides = FormatOverrides(cursor=cursor_ov)
-            except yaml.YAMLError:
-                pass
-            instructions = fm_match.group(2).strip()
-    elif ext_hint == ".md":
-        cleaned = re.sub(r"<!-- writ:.*?-->", "", content).strip()
-        if not cleaned:
-            return None
-        instructions = cleaned
-        heading = re.match(r"^#\s+(.+)", cleaned)
-        if heading:
-            description = heading.group(1).strip()
+    fm, body = _extract_frontmatter(content)
+    instructions = body.strip()
 
     if not instructions:
         return None
 
+    fm_name = fm.get("name")
+    if fm_name:
+        name = str(fm_name)
+
+    description = str(fm.get("description", ""))
+    if not description:
+        heading = re.match(r"^#\s+(.+)", instructions)
+        if heading:
+            description = heading.group(1).strip()
+
+    fm_tags = fm.get("tags")
+    if isinstance(fm_tags, list):
+        tags = [str(t) for t in fm_tags]
+    else:
+        tags = []
+
+    fm_task_type = fm.get("task_type")
+    task_type = str(fm_task_type) if fm_task_type else _infer_task_type(name, fm)
+
+    fm_includes = fm.get("includes")
+    includes = [str(i) for i in fm_includes] if isinstance(fm_includes, list) else []
+
+    format_overrides = FormatOverrides()
+    if "alwaysApply" in fm or "globs" in fm or ext_hint == ".mdc":
+        cursor_ov = CursorOverrides(
+            description=fm.get("description") or None,
+            always_apply=bool(fm.get("alwaysApply", False)),
+            globs=fm.get("globs") or None,
+        )
+        format_overrides = FormatOverrides(cursor=cursor_ov)
+
     return InstructionConfig(
         name=name,
-        description=str(description) if description else f"Imported from {name}",
+        description=description or f"Imported from {name}",
         instructions=instructions,
         tags=tags,
         task_type=task_type,
+        includes=includes,
         format_overrides=format_overrides,
     )
 
@@ -460,36 +500,8 @@ def parse_existing_file(file_info: dict[str, str]) -> InstructionConfig | None:
 
 
 def _parse_cursor_mdc(content: str, name: str) -> InstructionConfig | None:
-    """Parse a .cursor/rules/*.mdc file (YAML frontmatter + markdown body)."""
-    import re
-
-    import yaml
-
-    from writ.core.models import InstructionConfig  # runtime import
-
-    description = ""
-    instructions = content
-
-    # Extract YAML frontmatter
-    fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
-    if fm_match:
-        try:
-            fm = yaml.safe_load(fm_match.group(1))
-            if isinstance(fm, dict):
-                description = fm.get("description", "")
-        except yaml.YAMLError:
-            pass
-        instructions = fm_match.group(2).strip()
-
-    if not instructions:
-        return None
-
-    return InstructionConfig(
-        name=name,
-        description=str(description) if description else f"Imported from .cursor/rules/{name}.mdc",
-        instructions=instructions,
-        tags=["imported", "cursor"],
-    )
+    """Parse a .cursor/rules/*.mdc file via the shared frontmatter parser."""
+    return parse_markdown_content(content, name, ext_hint=".mdc")
 
 
 def _parse_markdown_sections(

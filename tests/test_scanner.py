@@ -74,7 +74,8 @@ class TestParseExistingFile:
     def test_parse_cursor_mdc_with_frontmatter(self, tmp_project: Path):
         mdc_path = tmp_project / "test.mdc"
         mdc_path.write_text(
-            "---\ndescription: My rule\nalwaysApply: true\n---\n\n"
+            "---\ndescription: My rule\nalwaysApply: true\n"
+            "tags: [testing, cursor]\n---\n\n"
             "# Rule\nYou must write tests for all code."
         )
         result = scanner.parse_existing_file({
@@ -84,8 +85,11 @@ class TestParseExistingFile:
         assert result.name == "test"
         assert result.description == "My rule"
         assert "write tests" in result.instructions
-        assert "imported" in result.tags
+        assert "testing" in result.tags
         assert "cursor" in result.tags
+        assert result.task_type == "rule"
+        assert result.format_overrides.cursor is not None
+        assert result.format_overrides.cursor.always_apply is True
 
     def test_parse_cursor_mdc_no_frontmatter(self, tmp_project: Path):
         mdc_path = tmp_project / "plain.mdc"

@@ -18,6 +18,8 @@ _CONTENT_DIRS = ("agents", "rules", "context")
 
 _EXCLUDE_IF_DEFAULT = {
     "author": None,
+    "source": None,
+    "includes": [],
     "format_overrides": {
         "cursor": None, "claude": None, "codex": None,
         "copilot": None, "windsurf": None, "kiro": None,

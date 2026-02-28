@@ -65,6 +65,14 @@ class InstructionConfig(BaseModel):
         default="",
         description="The actual agent instructions (written to IDE files).",
     )
+    source: str | None = Field(
+        default=None,
+        description="Where this instruction was installed from (e.g. enwrit.com/git-commit@1.0.0).",
+    )
+    includes: list[str] = Field(
+        default_factory=list,
+        description="For templates: list of instruction names to install together.",
+    )
     composition: CompositionConfig = Field(default_factory=CompositionConfig)
     format_overrides: FormatOverrides = Field(default_factory=FormatOverrides)
 

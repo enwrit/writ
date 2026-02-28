@@ -412,6 +412,7 @@ def _show_available_templates() -> None:
         "default": "General-purpose coding assistant",
         "fullstack": "Architect + implementer + reviewer + tester",
         "python": "Python developer + reviewer",
+        "react": "React + TypeScript developer + reviewer",
         "typescript": "TypeScript developer + reviewer",
         "rules": "Project rule template + coding standards",
         "context": "Project context + API context",
