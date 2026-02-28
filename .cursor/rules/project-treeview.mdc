@@ -25,22 +25,25 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── handoff.py              # writ handoff -- create/apply context handoffs between agents
 │       │   ├── memory.py               # writ memory export/import/list -- cross-project memory sharing
 │       │   ├── publish.py              # writ publish/unpublish -- make agents publicly discoverable on enwrit.com
-│       │   └── lint.py                 # writ lint -- validate agent config quality
+│       │   ├── lint.py                 # writ lint -- validate agent config quality
+│       │   ├── sync.py                 # writ sync -- bulk bidirectional library sync with enwrit.com
+│       │   └── mcp.py                  # writ mcp serve -- expose instructions via MCP protocol
 │       ├── core/                       # Core business logic
 │       │   ├── __init__.py
 │       │   ├── scanner.py              # Detect languages, frameworks; parse_markdown_file() for --file import
 │       │   ├── store.py                # Read/write .writ/{agents,rules,context}/ and ~/.writ/ global store
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
-│       │   ├── formatter.py            # 8 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card
+│       │   ├── formatter.py            # 9 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card, cursor-mcp
 │       │   ├── linter.py               # Validate instruction quality (length, contradictions, completeness)
-│       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, etc.
+│       │   ├── models.py               # Pydantic models: InstructionConfig (source, includes), CompositionConfig, ProjectConfig
 │       │   └── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
 │       ├── integrations/               # External registry integrations
 │       │   ├── __init__.py
 │       │   ├── prpm.py                 # PLANNED: full impl. Currently stub that shells out to `prpm` CLI -> 7500+ packages
 │       │   ├── skills.py               # PLANNED: full impl. Currently stub that shells out to `agent-skills` -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
-│       │   └── registry.py             # enwrit platform API client (httpx): push/pull library, search registry
+│       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, search registry
+│       │   └── mcp_server.py           # MCP server (FastMCP): tools + resources for cross-repo agent access
 │       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
 │       └── templates/                  # Built-in templates (bundled in package)
 │           ├── default/                # Single general-purpose agent
@@ -56,21 +59,27 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           ├── typescript/             # TypeScript developer + reviewer
 │           │   ├── developer.yaml
 │           │   └── reviewer.yaml
+│           ├── react/                  # React developer + reviewer
+│           │   ├── developer.yaml
+│           │   └── reviewer.yaml
 │           ├── rules/                  # Rule templates (project-rule, coding-standards)
 │           │   ├── project-rule-template.yaml
 │           │   └── coding-standards.yaml
 │           └── context/               # Context templates (project-context, api-context)
 │               ├── project-context.yaml
 │               └── api-context.yaml
-├── tests/                              # pytest test suite (173 tests)
+├── tests/                              # pytest test suite (198 tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, use, search, templates, import)
 │   ├── test_compose.py                 # Composition engine tests
 │   ├── test_formatter.py               # Formatter output tests (Cursor, Claude, AGENTS.md, etc.)
 │   ├── test_library.py                 # save/load/library tests
 │   ├── test_login.py                   # Login/logout + remote sync tests (mocked RegistryClient)
+│   ├── test_mcp.py                     # MCP server tools + cursor-mcp formatter tests
+│   ├── test_register.py                # Account registration tests (writ register)
 │   ├── test_scanner.py                 # Scanner + file parsing tests (mdc, CLAUDE.md, .windsurfrules)
 │   ├── test_store.py                   # Store read/write tests (.writ/ and ~/.writ/)
+│   ├── test_sync.py                    # Bulk library sync tests (writ sync)
 │   ├── test_models.py                  # Pydantic model tests
 │   └── test_linter.py                  # Lint rule tests
 ├── .cursor/                            # See .cursor-treeview.mdc for full breakdown
