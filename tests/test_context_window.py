@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from writ.core.context_window import (
     build_api_messages,
     compose_system_prompt,
@@ -100,7 +98,8 @@ class TestSlidingWindow:
             {"role": "user", "content": "what do you think?"},
         ]
         result = sliding_window(messages, max_tokens=100_000)
-        first_content = result[0]["content"] if result[0]["role"] != "system" else result[1]["content"]
+        first = result[0] if result[0]["role"] != "system" else result[1]
+        first_content = first["content"]
         if "truncated" in first_content:
             assert len(first_content) < 200_000
 
@@ -117,7 +116,8 @@ class TestComposeSystemPrompt:
     def test_reads_from_writ_dir(self, tmp_path: Path):
         agents_dir = tmp_path / ".writ" / "agents"
         agents_dir.mkdir(parents=True)
-        (agents_dir / "reviewer.yaml").write_text("name: reviewer\ninstructions: Review code carefully.")
+        yaml_content = "name: reviewer\ninstructions: Review code carefully."
+        (agents_dir / "reviewer.yaml").write_text(yaml_content)
         ctx_file = tmp_path / ".writ" / "project-context.md"
         ctx_file.write_text("# My Project\nPython project.")
 

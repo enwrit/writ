@@ -5,19 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from writ.core.invoker import (
     CLIAgent,
-    InvocationResult,
     detect_cli_agents,
     invoke_api,
     invoke_cli_agent,
     invoke_peer,
     preferred_cli_agent,
 )
-from writ.core.models import AutoRespondTier, PeerConfig
-
+from writ.core.models import PeerConfig
 
 # ---------------------------------------------------------------------------
 # CLI agent detection
