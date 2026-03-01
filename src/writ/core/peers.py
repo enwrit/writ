@@ -90,6 +90,22 @@ def get_peer(name: str) -> PeerConfig | None:
     return manifest.peers.get(name)
 
 
+def find_peer(name_or_repo: str) -> PeerConfig | None:
+    """Look up a peer by registered name, or by the repo directory name in its path.
+
+    ``writ peers add demo1 --path /some/path/writ-demo-project`` registers the
+    peer under the name ``demo1``, but conversation participants store the repo
+    directory name ``writ-demo-project``.  This helper tries both.
+    """
+    manifest = load_peers()
+    if name_or_repo in manifest.peers:
+        return manifest.peers[name_or_repo]
+    for peer in manifest.peers.values():
+        if peer.path and Path(peer.path).name == name_or_repo:
+            return peer
+    return None
+
+
 def resolve_peer_conversations_dir(peer: PeerConfig) -> Path | None:
     """Return the .writ/conversations/ path inside a local peer's repo.
 

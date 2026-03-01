@@ -245,7 +245,7 @@ def chat_send(
         if p.repo != repo_name:
             peer_name = p.repo
             break
-    peer = peers.get_peer(peer_name) if peer_name else None
+    peer = peers.find_peer(peer_name) if peer_name else None
 
     if peer:
         reloaded = messaging.load_conversation(path)

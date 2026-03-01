@@ -289,7 +289,7 @@ def _relay_message(
 
 def _invoke_peer_agent(peer_name: str, message: str) -> str | None:
     """Invoke a peer's CLI agent or API, returning the response or None."""
-    peer = peers.get_peer(peer_name)
+    peer = peers.find_peer(peer_name)
     if peer is None or peer.auto_respond == AutoRespondTier.OFF:
         return None
     try:
@@ -451,7 +451,7 @@ async def writ_send_and_wait(
             peer_name = p.repo
             break
 
-    peer = peers.get_peer(peer_name) if peer_name else None
+    peer = peers.find_peer(peer_name) if peer_name else None
     if peer and peer.transport == "remote":
         _relay_message(conv.id, agent, repo, message)
 
