@@ -24,7 +24,9 @@ from writ.commands import (
     search,
     sync,
 )
+from writ.commands.chat import chat_app, inbox_command
 from writ.commands.mcp import mcp_app
+from writ.commands.peers_cmd import peers_app
 from writ.utils import console
 
 # ---------------------------------------------------------------------------
@@ -101,6 +103,13 @@ app.add_typer(handoff_app, name="handoff")
 
 # MCP sub-group
 app.add_typer(mcp_app, name="mcp")
+
+# Chat sub-group (agent-to-agent conversations)
+app.add_typer(chat_app, name="chat")
+app.command(name="inbox")(inbox_command)
+
+# Peers sub-group (connected repositories)
+app.add_typer(peers_app, name="peers")
 
 
 # ---------------------------------------------------------------------------

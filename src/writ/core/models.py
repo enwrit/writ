@@ -1,8 +1,9 @@
-"""Pydantic data models for writ agent configurations."""
+"""Pydantic data models for writ agent configurations and messaging."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -117,3 +118,82 @@ class LintResult(BaseModel):
     level: str = Field(description="Severity: error, warning, info.")
     rule: str = Field(default="", description="Rule identifier.")
     message: str = Field(description="Human-readable description.")
+
+
+# ---------------------------------------------------------------------------
+# Agent-to-agent communication models (V3)
+# ---------------------------------------------------------------------------
+
+class ConversationStatus(StrEnum):
+    """Conversation lifecycle states, aligned with A2A TaskState."""
+
+    ACTIVE = "active"
+    WAITING = "waiting"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PAUSED = "paused"
+
+
+class AutoRespondTier(StrEnum):
+    """How autonomously a peer's messages are handled."""
+
+    OFF = "off"
+    READ_ONLY = "read_only"
+    FULL = "full"
+
+
+class Participant(BaseModel):
+    """A participant in a conversation."""
+
+    agent: str = Field(description="Agent name (e.g. 'coding-agent').")
+    repo: str = Field(description="Repository identifier (e.g. 'writ-cli').")
+    device: str = Field(default="", description="Device identifier for cross-device.")
+
+
+class Message(BaseModel):
+    """A single message within a conversation."""
+
+    id: str = Field(description="Sequential message ID (e.g. 'msg-001').")
+    author_agent: str = Field(description="Name of the sending agent.")
+    author_repo: str = Field(description="Repository the agent belongs to.")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    content: str = Field(default="", description="Markdown message body.")
+    attachments: list[str] = Field(
+        default_factory=list,
+        description="Embedded file content blocks (already rendered as <attached> tags).",
+    )
+
+
+class Conversation(BaseModel):
+    """A two-party conversation between agents in different repos."""
+
+    format_version: int = Field(default=1)
+    id: str = Field(description="Unique conversation ID (e.g. 'conv-abc123').")
+    participants: list[Participant] = Field(default_factory=list)
+    goal: str = Field(default="", description="What this conversation aims to achieve.")
+    status: ConversationStatus = Field(default=ConversationStatus.ACTIVE)
+    created: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    messages: list[Message] = Field(default_factory=list)
+    turn_count: int = Field(default=0, description="Number of messages exchanged.")
+
+
+class PeerConfig(BaseModel):
+    """Configuration for a connected peer repository."""
+
+    name: str = Field(description="Short name for this peer (e.g. 'research-repo').")
+    path: str | None = Field(default=None, description="Local filesystem path.")
+    remote: str | None = Field(default=None, description="Remote API URL.")
+    transport: str = Field(default="local", description="Transport: local or remote.")
+    auto_respond: AutoRespondTier = Field(default=AutoRespondTier.OFF)
+    max_turns: int = Field(default=10, description="Safety limit per conversation.")
+    allowed_context: list[str] = Field(
+        default_factory=lambda: ["writ://instructions/*"],
+        description="Glob patterns for what context can be shared.",
+    )
+
+
+class PeersManifest(BaseModel):
+    """The .writ/peers.yaml file."""
+
+    peers: dict[str, PeerConfig] = Field(default_factory=dict)

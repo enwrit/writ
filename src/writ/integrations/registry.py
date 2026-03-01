@@ -144,3 +144,104 @@ class RegistryClient:
             return None
         except Exception:  # noqa: BLE001
             return None
+
+    # -- conversation relay ---------------------------------------------------
+
+    def relay_message(
+        self,
+        *,
+        conv_id: str,
+        agent_name: str,
+        repo_name: str,
+        content: str,
+        attachments: list[str] | None = None,
+        to_user_id: str | None = None,
+        goal: str = "",
+    ) -> dict | None:
+        """Push a message through the backend relay.
+
+        Returns ``{"message_id": ..., "conv_id": ..., "message_count": ...}``
+        on success, ``None`` on failure.
+        """
+        try:
+            payload: dict = {
+                "conv_id": conv_id,
+                "agent_name": agent_name,
+                "repo_name": repo_name,
+                "content": content,
+                "attachments": attachments or [],
+                "goal": goal,
+            }
+            if to_user_id:
+                payload["to_user_id"] = to_user_id
+            resp = httpx.post(
+                f"{self.base_url}/conversations/relay",
+                json=payload,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.debug("relay_message: HTTP %s", resp.status_code)
+            return None
+        except Exception:  # noqa: BLE001
+            logger.debug("relay_message: network error", exc_info=True)
+            return None
+
+    def pull_conversation(
+        self, conv_id: str, *, after_message: int = 0,
+    ) -> dict | None:
+        """Pull conversation data from the relay.
+
+        Use ``after_message=N`` to only get messages after the Nth one.
+        """
+        try:
+            params: dict = {}
+            if after_message > 0:
+                params["after_message"] = after_message
+            resp = httpx.get(
+                f"{self.base_url}/conversations/{conv_id}",
+                params=params,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception:  # noqa: BLE001
+            logger.debug("pull_conversation: network error", exc_info=True)
+            return None
+
+    def list_conversations(self, *, unread: bool = False) -> list[dict]:
+        """List conversations from the relay."""
+        try:
+            params: dict = {}
+            if unread:
+                params["unread"] = "true"
+            resp = httpx.get(
+                f"{self.base_url}/conversations",
+                params=params,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json().get("conversations", [])
+            return []
+        except Exception:  # noqa: BLE001
+            logger.debug("list_conversations: network error", exc_info=True)
+            return []
+
+    def update_conversation_status(
+        self, conv_id: str, status: str,
+    ) -> bool:
+        """Update conversation status on the relay."""
+        try:
+            resp = httpx.patch(
+                f"{self.base_url}/conversations/{conv_id}",
+                json={"status": status},
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            return resp.status_code == 200
+        except Exception:  # noqa: BLE001
+            return False

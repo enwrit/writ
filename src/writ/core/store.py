@@ -110,6 +110,7 @@ def init_project_store(*, clean: bool = False) -> Path:
         ensure_dir(root / subdir)
     ensure_dir(root / "handoffs")
     ensure_dir(root / "memory")
+    ensure_dir(root / "conversations")
     return root
 
 

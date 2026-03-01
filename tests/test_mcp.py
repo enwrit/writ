@@ -17,6 +17,10 @@ runner = CliRunner()
 mcp_server = pytest.importorskip("writ.integrations.mcp_server", reason="mcp extra not installed")
 
 
+# ---------------------------------------------------------------------------
+# V1 Tools
+# ---------------------------------------------------------------------------
+
 class TestMcpTools:
     """Test MCP tool functions directly (no MCP transport needed)."""
 
@@ -57,6 +61,127 @@ class TestMcpTools:
         assert "Project Context" in result or "Directory Structure" in result
 
 
+# ---------------------------------------------------------------------------
+# V2 Tools
+# ---------------------------------------------------------------------------
+
+class TestMcpV2ComposeContext:
+    """Test writ_compose_context tool."""
+
+    def test_compose_returns_instructions(self, initialized_project: Path):
+        save_instruction(
+            InstructionConfig(name="dev", instructions="You are a Python developer.")
+        )
+        result = mcp_server.writ_compose_context("dev")
+        assert "Python developer" in result
+
+    def test_compose_includes_project_context(self, initialized_project: Path):
+        save_project_context("# My Project\nPython + FastAPI")
+        save_instruction(
+            InstructionConfig(name="dev", instructions="Build features.")
+        )
+        result = mcp_server.writ_compose_context("dev")
+        assert "My Project" in result
+        assert "Build features" in result
+
+    def test_compose_not_found(self, initialized_project: Path):
+        result = mcp_server.writ_compose_context("ghost")
+        assert "not found" in result.lower()
+
+
+class TestMcpV2SearchInstructions:
+    """Test writ_search_instructions tool."""
+
+    def test_search_by_name(self, initialized_project: Path):
+        save_instruction(InstructionConfig(name="react-dev", description="React developer"))
+        save_instruction(InstructionConfig(name="py-lint", description="Python linter"))
+        results = mcp_server.writ_search_instructions("react")
+        assert len(results) == 1
+        assert results[0]["name"] == "react-dev"
+
+    def test_search_by_tag(self, initialized_project: Path):
+        save_instruction(InstructionConfig(name="a1", tags=["security", "review"]))
+        save_instruction(InstructionConfig(name="a2", tags=["typescript"]))
+        results = mcp_server.writ_search_instructions("security")
+        assert len(results) == 1
+        assert results[0]["name"] == "a1"
+
+    def test_search_no_match(self, initialized_project: Path):
+        save_instruction(InstructionConfig(name="dev"))
+        results = mcp_server.writ_search_instructions("zzz_no_match")
+        assert len(results) == 0
+
+
+class TestMcpV2ReadFile:
+    """Test writ_read_file tool."""
+
+    def test_read_existing_file(self, initialized_project: Path):
+        test_file = initialized_project / "hello.txt"
+        test_file.write_text("Hello world!", encoding="utf-8")
+        result = mcp_server.writ_read_file("hello.txt")
+        assert result == "Hello world!"
+
+    def test_read_nested_file(self, initialized_project: Path):
+        nested = initialized_project / "src" / "app.py"
+        nested.parent.mkdir(parents=True, exist_ok=True)
+        nested.write_text("print('hi')", encoding="utf-8")
+        result = mcp_server.writ_read_file("src/app.py")
+        assert "print('hi')" in result
+
+    def test_reject_path_traversal(self, initialized_project: Path):
+        result = mcp_server.writ_read_file("../../etc/passwd")
+        assert "error" in result.lower()
+
+    def test_reject_nonexistent(self, initialized_project: Path):
+        result = mcp_server.writ_read_file("no_such_file.txt")
+        assert "error" in result.lower()
+
+    def test_reject_empty_path(self, initialized_project: Path):
+        result = mcp_server.writ_read_file("")
+        assert "error" in result.lower()
+
+    def test_reject_ignored_file(self, initialized_project: Path):
+        node_mod = initialized_project / "node_modules" / "pkg" / "index.js"
+        node_mod.parent.mkdir(parents=True, exist_ok=True)
+        node_mod.write_text("module.exports = {}", encoding="utf-8")
+        result = mcp_server.writ_read_file("node_modules/pkg/index.js")
+        assert "error" in result.lower()
+
+
+class TestMcpV2ListFiles:
+    """Test writ_list_files tool."""
+
+    def test_list_root(self, initialized_project: Path):
+        (initialized_project / "README.md").write_text("# Hi", encoding="utf-8")
+        (initialized_project / "main.py").write_text("pass", encoding="utf-8")
+        result = mcp_server.writ_list_files(".")
+        filenames = [Path(p).name for p in result]
+        assert "README.md" in filenames
+        assert "main.py" in filenames
+
+    def test_list_with_pattern(self, initialized_project: Path):
+        (initialized_project / "app.py").write_text("pass", encoding="utf-8")
+        (initialized_project / "app.js").write_text("//", encoding="utf-8")
+        result = mcp_server.writ_list_files(".", pattern=".py")
+        assert any(p.endswith(".py") for p in result)
+        assert not any(p.endswith(".js") for p in result)
+
+    def test_list_ignores_node_modules(self, initialized_project: Path):
+        nm = initialized_project / "node_modules" / "pkg" / "index.js"
+        nm.parent.mkdir(parents=True, exist_ok=True)
+        nm.write_text("//", encoding="utf-8")
+        result = mcp_server.writ_list_files(".")
+        assert not any("node_modules" in p for p in result)
+
+    def test_list_invalid_directory(self, initialized_project: Path):
+        result = mcp_server.writ_list_files("no_such_dir")
+        assert any("error" in str(r).lower() for r in result)
+
+
+# ---------------------------------------------------------------------------
+# CLI + Formatter
+# ---------------------------------------------------------------------------
+
 class TestMcpCommand:
     """Test the writ mcp serve CLI command."""
 
@@ -69,6 +194,8 @@ class TestMcpCommand:
         result = runner.invoke(app, ["mcp", "serve", "--help"])
         assert result.exit_code == 0
         assert "writ_list_instructions" in result.output
+        assert "writ_compose_context" in result.output
+        assert "writ_read_file" in result.output
 
 
 class TestCursorMcpFormatter:
