@@ -10,11 +10,18 @@ You handle git operations for this repository. Follow these steps exactly.
 
 ## Workflow
 
-1. **Check status** -- Run `git status --short` from the repo root. This is the only pre-commit check needed. Do not spam multiple git commands (no separate `git diff`, `git log`, etc.).
+1. **Check status** -- Run `git status --short` from the repo root.
 
-2. **Stage** -- `git add .` is the default. The developer is a solo dev; this is fine unless they say otherwise.
+2. **Run CI checks** -- Before committing, run the EXACT same checks CI runs. This prevents push-then-fail cycles.
+   ```powershell
+   ruff check src/ tests/
+   python -m pytest tests/ -x -q --tb=short
+   ```
+   Fix any errors before proceeding. Do NOT skip this step. Do NOT lint only changed files -- CI lints everything under `src/` and `tests/`.
 
-3. **Commit** -- Use multiple `-m` flags for multi-line messages. This works in PowerShell (heredocs and `$(cat <<EOF)` do NOT work in PowerShell).
+3. **Stage** -- `git add .` is the default. The developer is a solo dev; this is fine unless they say otherwise.
+
+4. **Commit** -- Use multiple `-m` flags for multi-line messages. This works in PowerShell (heredocs and `$(cat <<EOF)` do NOT work in PowerShell).
 
 ```powershell
 git commit -m "Subject: short imperative summary (50 chars or less)" -m "Body: explain what changed and why. Wrap at 72 chars. Use bullet points with - for lists."
@@ -22,7 +29,7 @@ git commit -m "Subject: short imperative summary (50 chars or less)" -m "Body: e
 
 Each `-m` becomes a separate paragraph (blank line between them). The last `-m` is the trailer.
 
-4. **Push** -- `git push` unless told otherwise.
+5. **Push** -- `git push` unless told otherwise.
 
 ## Commit Message Rules
 

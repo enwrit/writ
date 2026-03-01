@@ -1,0 +1,31 @@
+---
+description: Pre-commit CI checks -- MUST run before any git commit to prevent CI failures; related to git status
+globs: .github/**
+alwaysApply: false
+---
+
+# Pre-Commit CI Checks
+
+**CRITICAL**: Before every `git commit`, run the EXACT commands CI uses. Do NOT lint only changed files -- CI lints everything.
+
+## Required checks (run both, in order):
+
+```powershell
+ruff check src/ tests/
+python -m pytest tests/ -x -q --tb=short
+```
+
+## Why this matters
+
+CI runs `ruff check src/ tests/` across ALL files. Running ruff on only the files you edited misses:
+- Unused imports in new test files
+- Import sorting violations
+- Line length violations in files you created but didn't re-check
+
+This has caused CI failures 3+ times. Always lint the full scope.
+
+## Checklist before committing
+
+1. `ruff check src/ tests/` -- zero errors (use `--fix` first, then manual fixes for E501)
+2. `pytest tests/ -x -q` -- all tests pass
+3. Only then: `git add . ; git commit ...`
