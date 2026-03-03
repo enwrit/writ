@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
 from writ.cli import app
-from writ.core.models import InstructionConfig
+from writ.core.models import InstructionConfig, PeerConfig, PeersManifest
 from writ.core.store import save_instruction, save_project_context
 
 runner = CliRunner()
 
-mcp_server = pytest.importorskip("writ.integrations.mcp_server", reason="mcp extra not installed")
+mcp_server = pytest.importorskip(
+    "writ.integrations.mcp_server", reason="mcp extra not installed"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -235,3 +239,283 @@ class TestCursorMcpFormatter:
         data = json.loads(mcp_json.read_text(encoding="utf-8"))
         assert "other" in data["mcpServers"]
         assert "writ" in data["mcpServers"]
+
+
+# ---------------------------------------------------------------------------
+# V3 Tools -- agent-to-agent conversations
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def two_peers(initialized_project: Path, tmp_path: Path):
+    """Set up two local repos that are peers of each other."""
+    from writ.core import peers as peers_mod
+
+    save_instruction(
+        InstructionConfig(name="dev", instructions="Developer agent.")
+    )
+
+    peer_dir = tmp_path / "peer-repo"
+    peer_dir.mkdir()
+    peer_writ = peer_dir / ".writ"
+    peer_writ.mkdir()
+    (peer_writ / "conversations").mkdir()
+
+    manifest = PeersManifest(peers={
+        "peer-repo": PeerConfig(
+            name="peer-repo",
+            path=str(peer_dir),
+            transport="local",
+        ),
+    })
+    peers_mod.save_peers(manifest)
+
+    return initialized_project, peer_dir
+
+
+class TestMcpV3StartConversation:
+
+    def test_creates_conversation(self, two_peers):
+        repo_dir, peer_dir = two_peers
+        result = mcp_server.writ_start_conversation(
+            to_repo="peer-repo",
+            goal="test goal",
+            message="Hello peer!",
+        )
+        assert "conv_id" in result
+        assert result["status"] == "started"
+        assert result["file"].endswith(".md")
+
+    def test_syncs_to_local_peer(self, two_peers):
+        repo_dir, peer_dir = two_peers
+        mcp_server.writ_start_conversation(
+            to_repo="peer-repo",
+            goal="sync test",
+            message="Should appear in peer",
+        )
+        peer_convs = list((peer_dir / ".writ" / "conversations").iterdir())
+        assert len(peer_convs) == 1
+        content = peer_convs[0].read_text(encoding="utf-8")
+        assert "Should appear in peer" in content
+
+    def test_unknown_peer_returns_error(self, initialized_project: Path):
+        result = mcp_server.writ_start_conversation(
+            to_repo="nonexistent",
+            goal="nope",
+            message="hi",
+        )
+        assert "error" in result
+
+    def test_returns_conv_id_format(self, two_peers):
+        _, _ = two_peers
+        result = mcp_server.writ_start_conversation(
+            to_repo="peer-repo",
+            goal="id test",
+            message="check id",
+        )
+        assert result["conv_id"].startswith("conv-")
+
+
+class TestMcpV3SendMessage:
+
+    def test_appends_message(self, two_peers):
+        _, _ = two_peers
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="chat", message="first",
+        )
+        result = mcp_server.writ_send_message(
+            conv_id=start["conv_id"], message="second message",
+        )
+        assert result["status"] == "sent"
+        assert result["message_count"] >= 2
+
+    def test_not_found(self, initialized_project: Path):
+        result = mcp_server.writ_send_message(
+            conv_id="conv-nonexistent", message="hi",
+        )
+        assert "error" in result
+
+    def test_rejects_completed_conversation(self, two_peers):
+        _, _ = two_peers
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="done", message="first",
+        )
+        mcp_server.writ_complete_conversation(
+            conv_id=start["conv_id"], summary="all done",
+        )
+        result = mcp_server.writ_send_message(
+            conv_id=start["conv_id"], message="too late",
+        )
+        assert "error" in result
+
+
+class TestMcpV3SendAndWait:
+
+    def test_timeout_returns_timeout_flag(self, two_peers):
+        _, _ = two_peers
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="wait test", message="hello",
+        )
+
+        with patch("asyncio.sleep", return_value=None):
+            result = asyncio.run(mcp_server.writ_send_and_wait(
+                conv_id=start["conv_id"],
+                message="waiting...",
+                poll_interval=1,
+                timeout=2,
+            ))
+        assert result.get("timeout") is True
+
+    def test_detects_peer_response(self, two_peers):
+        repo_dir, _ = two_peers
+        from writ.core import messaging
+
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="respond test",
+            message="question",
+        )
+        conv_id = start["conv_id"]
+
+        call_count = 0
+
+        async def mock_sleep(seconds):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                found = messaging.find_conversation(conv_id)
+                if found:
+                    path, _ = found
+                    messaging.append_message(
+                        path,
+                        agent="peer-agent",
+                        repo="peer-repo",
+                        content="Here is my response",
+                    )
+
+        with patch("asyncio.sleep", side_effect=mock_sleep):
+            result = asyncio.run(mcp_server.writ_send_and_wait(
+                conv_id=conv_id,
+                message="please respond",
+                poll_interval=1,
+                timeout=30,
+            ))
+        assert "response" in result
+        assert "Here is my response" in result["response"]
+        assert result["from_repo"] == "peer-repo"
+
+
+class TestMcpV3CheckInbox:
+
+    def test_empty_inbox(self, initialized_project: Path):
+        save_instruction(
+            InstructionConfig(name="dev", instructions="Dev.")
+        )
+        result = mcp_server.writ_check_inbox()
+        assert result == []
+
+    def test_detects_unread_message(self, two_peers):
+        repo_dir, _ = two_peers
+        from writ.core import messaging
+
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="inbox test",
+            message="outgoing",
+        )
+        found = messaging.find_conversation(start["conv_id"])
+        assert found is not None
+        path, _ = found
+        messaging.append_message(
+            path, agent="peer-agent", repo="peer-repo",
+            content="incoming reply",
+        )
+
+        inbox = mcp_server.writ_check_inbox()
+        assert len(inbox) >= 1
+        item = next(
+            i for i in inbox if i["conv_id"] == start["conv_id"]
+        )
+        assert "incoming reply" in item["last_message_preview"]
+        assert item["peer"] == "peer-repo"
+
+    def test_no_unread_when_last_is_self(self, two_peers):
+        _, _ = two_peers
+        mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="self test",
+            message="I sent this",
+        )
+        inbox = mcp_server.writ_check_inbox()
+        matching = [
+            i for i in inbox if i["goal"] == "self test"
+        ]
+        assert len(matching) == 0
+
+
+class TestMcpV3ReadConversation:
+
+    def test_reads_full_history(self, two_peers):
+        _, _ = two_peers
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="read test",
+            message="msg one",
+        )
+        mcp_server.writ_send_message(
+            conv_id=start["conv_id"], message="msg two",
+        )
+        result = mcp_server.writ_read_conversation(
+            conv_id=start["conv_id"],
+        )
+        assert result["goal"] == "read test"
+        assert len(result["messages"]) >= 2
+        contents = [m["content"] for m in result["messages"]]
+        assert "msg one" in contents
+        assert "msg two" in contents
+
+    def test_last_n_limits_messages(self, two_peers):
+        _, _ = two_peers
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="limit test",
+            message="first",
+        )
+        mcp_server.writ_send_message(
+            conv_id=start["conv_id"], message="second",
+        )
+        mcp_server.writ_send_message(
+            conv_id=start["conv_id"], message="third",
+        )
+        result = mcp_server.writ_read_conversation(
+            conv_id=start["conv_id"], last_n=1,
+        )
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["content"] == "third"
+
+    def test_not_found(self, initialized_project: Path):
+        result = mcp_server.writ_read_conversation(
+            conv_id="conv-ghost",
+        )
+        assert "error" in result
+
+
+class TestMcpV3CompleteConversation:
+
+    def test_marks_completed(self, two_peers):
+        _, _ = two_peers
+        start = mcp_server.writ_start_conversation(
+            to_repo="peer-repo", goal="complete test",
+            message="let us finish",
+        )
+        result = mcp_server.writ_complete_conversation(
+            conv_id=start["conv_id"],
+            summary="We agreed on the design.",
+        )
+        assert result["status"] == "completed"
+        assert "agreed" in result["summary"]
+
+        read = mcp_server.writ_read_conversation(
+            conv_id=start["conv_id"],
+        )
+        assert read["status"] == "completed"
+
+    def test_not_found(self, initialized_project: Path):
+        result = mcp_server.writ_complete_conversation(
+            conv_id="conv-nope", summary="n/a",
+        )
+        assert "error" in result

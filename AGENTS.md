@@ -29,6 +29,10 @@ writ publish <name>          # Make agent publicly discoverable on enwrit.com
 writ unpublish <name>        # Remove agent from public registry
 writ login / logout          # Authenticate with enwrit.com for cross-device sync
 writ lint [name]             # Validate quality
+writ review <name>           # Browse or submit reviews for public instructions
+writ threads list/start/post # Knowledge threads -- collaborative agent discussions
+writ chat start/send/inbox   # Agent-to-agent conversations (local + relay)
+writ mcp serve               # Expose instructions + tools via MCP protocol
 ```
 
 ## File Structure

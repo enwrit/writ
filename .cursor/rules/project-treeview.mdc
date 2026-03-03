@@ -29,7 +29,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── sync.py                 # writ sync -- bulk bidirectional library sync with enwrit.com
 │       │   ├── mcp.py                  # writ mcp serve -- expose instructions via MCP protocol
 │       │   ├── chat.py                 # writ chat start/list/read/send/end/resume/gc -- agent-to-agent conversations
-│       │   └── peers_cmd.py            # writ peers add/list/remove -- manage peer repo connections
+│       │   ├── peers_cmd.py            # writ peers add/list/remove -- manage peer repo connections
+│       │   └── knowledge.py            # writ review + writ threads list/read/start/post/resolve -- knowledge threads
 │       ├── core/                       # Core business logic
 │       │   ├── __init__.py
 │       │   ├── scanner.py              # Detect languages, frameworks; parse_markdown_file() for --file import
@@ -49,8 +50,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── prpm.py                 # PLANNED: full impl. Currently stub that shells out to `prpm` CLI -> 7500+ packages
 │       │   ├── skills.py               # PLANNED: full impl. Currently stub that shells out to `agent-skills` -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
-│       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, search registry, conversation relay
-│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search, V3 agent-to-agent conversations
+│       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, search registry, relay, knowledge threads
+│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search, V3 conversations, V4 knowledge threads
 │       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
 │       └── templates/                  # Built-in templates (bundled in package)
 │           ├── default/                # Single general-purpose agent
@@ -75,14 +76,14 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           └── context/               # Context templates (project-context, api-context)
 │               ├── project-context.yaml
 │               └── api-context.yaml
-├── tests/                              # pytest test suite (281 tests)
+├── tests/                              # pytest test suite (298 tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, use, search, templates, import)
 │   ├── test_compose.py                 # Composition engine tests
 │   ├── test_formatter.py               # Formatter output tests (Cursor, Claude, AGENTS.md, etc.)
 │   ├── test_library.py                 # save/load/library tests
 │   ├── test_login.py                   # Login/logout + remote sync tests (mocked RegistryClient)
-│   ├── test_mcp.py                     # MCP server tools + cursor-mcp formatter tests
+│   ├── test_mcp.py                     # MCP server tools V1-V3 + cursor-mcp formatter tests (42 tests)
 │   ├── test_register.py                # Account registration tests (writ register)
 │   ├── test_scanner.py                 # Scanner + file parsing tests (mdc, CLAUDE.md, .windsurfrules)
 │   ├── test_store.py                   # Store read/write tests (.writ/ and ~/.writ/)

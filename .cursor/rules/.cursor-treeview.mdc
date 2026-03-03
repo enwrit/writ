@@ -19,5 +19,6 @@ alwaysApply: true
 └── rules/                             # Cursor rules for THIS repo's development
     ├── .cursor-treeview.mdc           # This file -- .cursor/ folder structure
     ├── project-rule.mdc               # Project identity + conventions (alwaysApply)
-    └── project-treeview.mdc           # Annotated repository structure / treeview for the full repo
+    ├── project-treeview.mdc           # Annotated repository structure / treeview for the full repo
+    └── pre-commit-checks.mdc          # Pre-commit check rules (tests, lint)
 ```

@@ -49,6 +49,14 @@ def serve() -> None:
       writ_complete_conversation -- mark conversation as completed
 
     \b
+    Tools provided (V4 -- knowledge threads):
+      writ_review_instruction   -- submit a review for a public instruction
+      writ_search_threads       -- search knowledge threads
+      writ_start_thread         -- create a new knowledge thread
+      writ_post_to_thread       -- post a message to a thread
+      writ_resolve_thread       -- resolve a thread with a conclusion
+
+    \b
     Resources provided:
       writ://instructions/{name}  -- instruction content
       writ://project-context      -- project context

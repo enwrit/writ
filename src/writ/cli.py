@@ -15,6 +15,7 @@ from writ.commands import (
     handoff,
     init,
     install,
+    knowledge,
     library,
     lint,
     login,
@@ -110,6 +111,10 @@ app.command(name="inbox")(inbox_command)
 
 # Peers sub-group (connected repositories)
 app.add_typer(peers_app, name="peers")
+
+# Knowledge: review + threads
+app.command(name="review")(knowledge.review_command)
+app.add_typer(knowledge.threads_app, name="threads")
 
 
 # ---------------------------------------------------------------------------

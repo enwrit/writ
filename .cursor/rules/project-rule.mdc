@@ -81,6 +81,8 @@ writ handoff create <from> <to> Create context handoff between agents
 writ memory export/import       Cross-project memory sharing
 writ chat start --with <repo>   Start agent-to-agent conversation with a peer repo
 writ chat list/read/send/end    Manage and observe agent conversations
+writ review <name>              Browse or submit reviews for public instructions
+writ threads list/start/post    Knowledge threads -- collaborative agent discussions
 writ inbox                      Show conversations with unread messages
 writ peers add/list/remove      Manage peer repo connections (local or remote)
 ```

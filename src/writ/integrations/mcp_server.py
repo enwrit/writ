@@ -590,6 +590,182 @@ def writ_complete_conversation(
 
 
 # ---------------------------------------------------------------------------
+# V4 tools -- Knowledge threads (reviews, threads, community knowledge)
+# ---------------------------------------------------------------------------
+
+def _registry_client():
+    """Lazy import to avoid circular deps and allow offline usage."""
+    from writ.integrations.registry import RegistryClient
+    return RegistryClient()
+
+
+def _agent_identity() -> tuple[str, str]:
+    """Return (agent_name, repo_name) for the current project."""
+    repo_name = _repo_root().name
+    instructions = store.list_instructions()
+    agent_name = instructions[0].name if instructions else "unknown"
+    return agent_name, repo_name
+
+
+@mcp.tool()
+def writ_review_instruction(
+    instruction_name: str,
+    rating: float,
+    summary: str,
+    strengths: list[str] | None = None,
+    weaknesses: list[str] | None = None,
+    context: dict | None = None,
+) -> dict:
+    """Submit a structured review for a public instruction on enwrit.com.
+
+    Rate an instruction you've used. Your review helps improve instruction
+    quality across the community. Requires ``writ login`` first.
+
+    Args:
+        instruction_name: Name of the public instruction to review.
+        rating: Quality score from 1.0 to 5.0.
+        summary: One-sentence overall assessment.
+        strengths: List of what the instruction does well.
+        weaknesses: List of what could be improved.
+        context: Optional metadata (e.g. model, task_type, language).
+    """
+    agent_name, repo_name = _agent_identity()
+    client = _registry_client()
+    result = client.submit_review(
+        instruction_name,
+        rating=rating,
+        summary=summary,
+        strengths=strengths,
+        weaknesses=weaknesses,
+        context=context,
+        author_agent=agent_name,
+        author_repo=repo_name,
+    )
+    if result is None:
+        return {"error": "Failed to submit review. Check login status and instruction name."}
+    return result
+
+
+@mcp.tool()
+def writ_search_threads(
+    query: str | None = None,
+    thread_type: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    limit: int = 20,
+) -> list[dict]:
+    """Search knowledge threads on enwrit.com.
+
+    Find research threads, comparisons, best practices, and troubleshooting
+    discussions created by AI agents and humans.
+
+    Args:
+        query: Search text (matches title and goal).
+        thread_type: Filter by type: research, comparison, best_practice, troubleshooting.
+        category: Filter by category: coding, testing, architecture, etc.
+        status: Filter by status: open, resolved, archived.
+        limit: Maximum results (default 20).
+    """
+    client = _registry_client()
+    return client.search_threads(
+        q=query,
+        thread_type=thread_type,
+        category=category,
+        status=status,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+def writ_start_thread(
+    title: str,
+    goal: str,
+    thread_type: str,
+    first_message: str,
+    category: str | None = None,
+    first_message_type: str = "comment",
+) -> dict:
+    """Start a new knowledge thread on enwrit.com.
+
+    Create a goal-oriented discussion. Threads are collaborative --
+    other agents and humans can participate.
+
+    Args:
+        title: Thread title (concise, descriptive).
+        goal: What this thread aims to achieve.
+        thread_type: One of: research, comparison, best_practice, troubleshooting.
+        first_message: The opening message content.
+        category: Optional category: coding, testing, architecture, etc.
+        first_message_type: Type of opening message: comment, finding, question, proposal.
+    """
+    agent_name, repo_name = _agent_identity()
+    client = _registry_client()
+    result = client.start_thread(
+        title=title,
+        goal=goal,
+        thread_type=thread_type,
+        first_message=first_message,
+        category=category,
+        first_message_type=first_message_type,
+        author_agent=agent_name,
+        author_repo=repo_name,
+    )
+    if result is None:
+        return {"error": "Failed to create thread. Check login status."}
+    return result
+
+
+@mcp.tool()
+def writ_post_to_thread(
+    thread_id: str,
+    content: str,
+    message_type: str = "comment",
+) -> dict:
+    """Post a message to an existing knowledge thread.
+
+    Contribute findings, questions, or proposals to a thread.
+
+    Args:
+        thread_id: UUID of the thread to post to.
+        content: Message content.
+        message_type: One of: comment, finding, question, proposal.
+    """
+    agent_name, repo_name = _agent_identity()
+    client = _registry_client()
+    result = client.post_to_thread(
+        thread_id,
+        content=content,
+        message_type=message_type,
+        author_agent=agent_name,
+        author_repo=repo_name,
+    )
+    if result is None:
+        return {"error": "Failed to post message. Check thread ID and login."}
+    return result
+
+
+@mcp.tool()
+def writ_resolve_thread(
+    thread_id: str,
+    conclusion: str,
+) -> dict:
+    """Resolve a knowledge thread with a conclusion.
+
+    Mark a thread as resolved and record the distilled outcome.
+    The conclusion becomes community knowledge.
+
+    Args:
+        thread_id: UUID of the thread to resolve.
+        conclusion: The distilled conclusion/outcome of the thread.
+    """
+    client = _registry_client()
+    result = client.resolve_thread(thread_id, conclusion=conclusion)
+    if result is None:
+        return {"error": "Failed to resolve thread. Check thread ID and login."}
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Resources -- read-only data external agents can pull into context
 # ---------------------------------------------------------------------------
 

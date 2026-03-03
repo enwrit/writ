@@ -245,3 +245,202 @@ class RegistryClient:
             return resp.status_code == 200
         except Exception:  # noqa: BLE001
             return False
+
+    # -- knowledge: reviews ----------------------------------------------------
+
+    def submit_review(
+        self,
+        agent_name: str,
+        *,
+        rating: float,
+        summary: str,
+        strengths: list[str] | None = None,
+        weaknesses: list[str] | None = None,
+        context: dict | None = None,
+        author_agent: str = "",
+        author_repo: str = "",
+    ) -> dict | None:
+        """Submit a review for a public instruction. Returns review dict or None."""
+        try:
+            payload: dict = {
+                "rating": rating,
+                "summary": summary,
+                "strengths": strengths or [],
+                "weaknesses": weaknesses or [],
+                "context": context or {},
+                "author_agent": author_agent,
+                "author_repo": author_repo,
+            }
+            resp = httpx.post(
+                f"{self.base_url}/agents/{agent_name}/reviews",
+                json=payload,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code in (200, 201):
+                return resp.json()
+            logger.debug("submit_review %s: HTTP %s", agent_name, resp.status_code)
+            return None
+        except Exception:  # noqa: BLE001
+            logger.debug("submit_review: network error", exc_info=True)
+            return None
+
+    def list_reviews(self, agent_name: str) -> list[dict]:
+        """List reviews for a public instruction."""
+        try:
+            resp = httpx.get(
+                f"{self.base_url}/agents/{agent_name}/reviews",
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json().get("reviews", [])
+            return []
+        except Exception:  # noqa: BLE001
+            return []
+
+    def review_summary(self, agent_name: str) -> dict | None:
+        """Get aggregated review summary for a public instruction."""
+        try:
+            resp = httpx.get(
+                f"{self.base_url}/agents/{agent_name}/reviews/summary",
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception:  # noqa: BLE001
+            return None
+
+    # -- knowledge: threads ----------------------------------------------------
+
+    def search_threads(
+        self,
+        *,
+        q: str | None = None,
+        thread_type: str | None = None,
+        category: str | None = None,
+        status: str | None = None,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Search knowledge threads."""
+        try:
+            params: dict = {"limit": limit}
+            if q:
+                params["q"] = q
+            if thread_type:
+                params["type"] = thread_type
+            if category:
+                params["category"] = category
+            if status:
+                params["status"] = status
+            resp = httpx.get(
+                f"{self.base_url}/threads",
+                params=params,
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json().get("threads", [])
+            return []
+        except Exception:  # noqa: BLE001
+            return []
+
+    def get_thread(self, thread_id: str) -> dict | None:
+        """Get full thread detail with messages."""
+        try:
+            resp = httpx.get(
+                f"{self.base_url}/threads/{thread_id}",
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception:  # noqa: BLE001
+            return None
+
+    def start_thread(
+        self,
+        *,
+        title: str,
+        goal: str,
+        thread_type: str,
+        first_message: str,
+        category: str | None = None,
+        first_message_type: str = "comment",
+        author_agent: str = "",
+        author_repo: str = "",
+    ) -> dict | None:
+        """Create a new knowledge thread. Returns thread detail or None."""
+        try:
+            payload: dict = {
+                "title": title,
+                "goal": goal,
+                "type": thread_type,
+                "first_message": first_message,
+                "first_message_type": first_message_type,
+                "author_agent": author_agent,
+                "author_repo": author_repo,
+            }
+            if category:
+                payload["category"] = category
+            resp = httpx.post(
+                f"{self.base_url}/threads",
+                json=payload,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code in (200, 201):
+                return resp.json()
+            logger.debug("start_thread: HTTP %s", resp.status_code)
+            return None
+        except Exception:  # noqa: BLE001
+            logger.debug("start_thread: network error", exc_info=True)
+            return None
+
+    def post_to_thread(
+        self,
+        thread_id: str,
+        *,
+        content: str,
+        message_type: str = "comment",
+        author_agent: str = "",
+        author_repo: str = "",
+    ) -> dict | None:
+        """Post a message to an existing thread."""
+        try:
+            payload: dict = {
+                "content": content,
+                "message_type": message_type,
+                "author_agent": author_agent,
+                "author_repo": author_repo,
+            }
+            resp = httpx.post(
+                f"{self.base_url}/threads/{thread_id}/messages",
+                json=payload,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code in (200, 201):
+                return resp.json()
+            logger.debug("post_to_thread: HTTP %s", resp.status_code)
+            return None
+        except Exception:  # noqa: BLE001
+            logger.debug("post_to_thread: network error", exc_info=True)
+            return None
+
+    def resolve_thread(
+        self, thread_id: str, *, conclusion: str,
+    ) -> dict | None:
+        """Set conclusion and mark thread resolved."""
+        try:
+            resp = httpx.put(
+                f"{self.base_url}/threads/{thread_id}/conclusion",
+                json={"conclusion": conclusion},
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception:  # noqa: BLE001
+            logger.debug("resolve_thread: network error", exc_info=True)
+            return None
