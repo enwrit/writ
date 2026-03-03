@@ -13,7 +13,7 @@ from writ.core.invoker import (
     invoke_peer,
     preferred_cli_agent,
 )
-from writ.core.models import PeerConfig
+from writ.core.models import AutoRespondTier, PeerConfig
 
 # ---------------------------------------------------------------------------
 # CLI agent detection
@@ -81,6 +81,34 @@ class TestCLIAgentCommand:
         agent = CLIAgent(name="codex", binary="codex")
         cmd = agent.build_command("hello", "/repo")
         assert cmd == ["codex", "--message", "hello", "--cwd", "/repo"]
+
+    def test_cursor_full_tier(self):
+        agent = CLIAgent(name="cursor", binary="agent")
+        cmd = agent.build_command("hello", "/repo", tier=AutoRespondTier.FULL)
+        assert "--approve-mcps" in cmd
+        assert "--trust" in cmd
+        assert "--force" not in cmd
+        assert cmd[-1] == "hello"
+
+    def test_cursor_read_only_tier(self):
+        agent = CLIAgent(name="cursor", binary="agent")
+        cmd = agent.build_command("hello", "/repo", tier=AutoRespondTier.READ_ONLY)
+        assert "--mode" in cmd
+        assert "ask" in cmd
+        assert "--force" not in cmd
+        assert "--approve-mcps" not in cmd
+
+    def test_cursor_dangerous_full_tier(self):
+        agent = CLIAgent(name="cursor", binary="agent")
+        cmd = agent.build_command("hello", "/repo", tier=AutoRespondTier.DANGEROUS_FULL)
+        assert "--force" in cmd
+        assert "--approve-mcps" not in cmd
+
+    def test_cursor_default_tier_is_full(self):
+        agent = CLIAgent(name="cursor", binary="agent")
+        cmd = agent.build_command("hello", "/repo")
+        assert "--approve-mcps" in cmd
+        assert "--force" not in cmd
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +252,10 @@ class TestAPIInvocation:
 
 class TestInvokePeer:
     def test_local_peer_prefers_cli(self, tmp_path: Path):
-        peer = PeerConfig(name="test", path=str(tmp_path), transport="local")
+        peer = PeerConfig(
+            name="test", path=str(tmp_path), transport="local",
+            auto_respond=AutoRespondTier.FULL,
+        )
         agent = CLIAgent(name="claude", binary="claude")
 
         mock_result = MagicMock()
@@ -239,8 +270,20 @@ class TestInvokePeer:
             assert result.success
             assert result.method == "cli"
 
+    def test_off_tier_refuses_invocation(self, tmp_path: Path):
+        peer = PeerConfig(
+            name="test", path=str(tmp_path), transport="local",
+            auto_respond=AutoRespondTier.OFF,
+        )
+        result = invoke_peer(peer, "hello")
+        assert not result.success
+        assert "auto_respond: off" in result.error
+
     def test_falls_back_to_api(self):
-        peer = PeerConfig(name="test", transport="remote")
+        peer = PeerConfig(
+            name="test", transport="remote",
+            auto_respond=AutoRespondTier.FULL,
+        )
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -256,8 +299,31 @@ class TestInvokePeer:
             assert result.method == "api"
 
     def test_no_method_available(self):
-        peer = PeerConfig(name="test", transport="remote")
+        peer = PeerConfig(
+            name="test", transport="remote",
+            auto_respond=AutoRespondTier.FULL,
+        )
         with patch("writ.core.invoker.preferred_cli_agent", return_value=None):
             result = invoke_peer(peer, "hello")
             assert not result.success
             assert "Cannot reach peer" in result.error
+
+    def test_dangerous_full_passes_tier(self, tmp_path: Path):
+        peer = PeerConfig(
+            name="test", path=str(tmp_path), transport="local",
+            auto_respond=AutoRespondTier.DANGEROUS_FULL,
+        )
+        agent = CLIAgent(name="cursor", binary="agent")
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "response"
+
+        with (
+            patch("writ.core.invoker.preferred_cli_agent", return_value=agent),
+            patch("subprocess.run", return_value=mock_result) as mock_run,
+        ):
+            result = invoke_peer(peer, "hello")
+            assert result.success
+            cmd = mock_run.call_args[0][0]
+            assert "--force" in cmd

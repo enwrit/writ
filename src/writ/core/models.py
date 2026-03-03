@@ -135,11 +135,18 @@ class ConversationStatus(StrEnum):
 
 
 class AutoRespondTier(StrEnum):
-    """How autonomously a peer's messages are handled."""
+    """How autonomously a peer's messages are handled.
+
+    off             -- No auto-invocation; user handles manually.
+    read_only       -- Agent can read/analyze but not write (--mode ask).
+    full            -- Agent can read + respond via MCP tools (no shell).
+    dangerous_full  -- Unrestricted shell access (--force). Opt-in only.
+    """
 
     OFF = "off"
     READ_ONLY = "read_only"
     FULL = "full"
+    DANGEROUS_FULL = "dangerous_full"
 
 
 class Participant(BaseModel):

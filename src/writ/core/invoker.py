@@ -16,7 +16,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from writ.core.models import PeerConfig
+from writ.core.models import AutoRespondTier, PeerConfig
 
 # ---------------------------------------------------------------------------
 # CLI agent detection
@@ -29,8 +29,37 @@ class CLIAgent:
     binary: str
     version_flag: str = "--version"
 
-    def build_command(self, message: str, cwd: str) -> list[str]:
-        """Build the invocation command for this CLI agent."""
+    def build_command(
+        self,
+        message: str,
+        cwd: str,
+        tier: AutoRespondTier = AutoRespondTier.FULL,
+    ) -> list[str]:
+        """Build the invocation command respecting the auto_respond tier.
+
+        Tier mapping for Cursor CLI (``agent``):
+          read_only       -> --mode ask  (read-only, no writes)
+          full            -> --approve-mcps  (MCP tools only, no shell)
+          dangerous_full  -> --force  (unrestricted shell access)
+
+        Other CLI agents don't yet have granular tier support; they receive
+        the message and rely on their own sandbox/approval mechanisms.
+        """
+        if self.name == "cursor":
+            cmd = [
+                self.binary, "-p",
+                "--output-format", "text",
+                "--trust",
+                "--workspace", cwd,
+            ]
+            if tier == AutoRespondTier.READ_ONLY:
+                cmd.extend(["--mode", "ask"])
+            elif tier == AutoRespondTier.DANGEROUS_FULL:
+                cmd.append("--force")
+            else:
+                cmd.append("--approve-mcps")
+            cmd.append(message)
+            return cmd
         if self.name == "claude":
             return [self.binary, "--print", "--message", message, "--cwd", cwd]
         if self.name == "gemini":
@@ -41,6 +70,7 @@ class CLIAgent:
 
 
 _KNOWN_AGENTS = [
+    CLIAgent(name="cursor", binary="agent"),
     CLIAgent(name="claude", binary="claude"),
     CLIAgent(name="gemini", binary="gemini"),
     CLIAgent(name="codex", binary="codex"),
@@ -49,11 +79,20 @@ _KNOWN_AGENTS = [
 
 
 def detect_cli_agents() -> list[CLIAgent]:
-    """Find CLI agents available in PATH."""
+    """Find CLI agents available in PATH.
+
+    Resolves the full binary path so subprocess.run works reliably on
+    Windows where .CMD/.BAT wrappers aren't found without shell=True.
+    """
     found: list[CLIAgent] = []
     for agent in _KNOWN_AGENTS:
-        if shutil.which(agent.binary):
-            found.append(agent)
+        resolved = shutil.which(agent.binary)
+        if resolved:
+            found.append(CLIAgent(
+                name=agent.name,
+                binary=resolved,
+                version_flag=agent.version_flag,
+            ))
     return found
 
 
@@ -82,12 +121,18 @@ def invoke_cli_agent(
     message: str,
     *,
     agent: CLIAgent | None = None,
+    tier: AutoRespondTier = AutoRespondTier.FULL,
     timeout: int = 300,
 ) -> InvocationResult:
     """Invoke a CLI agent in the peer repo's directory.
 
     The CLI agent loads the peer repo's rules, RAG, tools, and memory --
     full context.  This is much richer than a raw API call.
+
+    The *tier* controls how much autonomy the CLI agent gets:
+      read_only       -- read-only analysis (no writes)
+      full            -- respond via MCP tools (no shell)
+      dangerous_full  -- unrestricted shell access
     """
     cli = agent or preferred_cli_agent()
     if cli is None:
@@ -95,7 +140,7 @@ def invoke_cli_agent(
             success=False,
             response="",
             method="cli",
-            error="No CLI agent found in PATH (tried: claude, gemini, codex, aider).",
+            error="No CLI agent found in PATH (tried: cursor/agent, claude, gemini, codex, aider).",
         )
 
     if not peer.path:
@@ -115,7 +160,7 @@ def invoke_cli_agent(
             error=f"Peer directory does not exist: {cwd}",
         )
 
-    cmd = cli.build_command(message, cwd)
+    cmd = cli.build_command(message, cwd, tier=tier)
 
     try:
         result = subprocess.run(
@@ -304,14 +349,33 @@ def invoke_peer(
 ) -> InvocationResult:
     """Invoke a peer's agent using the best available method.
 
-    Priority:
-    1. CLI agent invocation (full context)
-    2. Raw API call (partial context, fallback)
+    Respects the peer's ``auto_respond`` tier:
+      off             -> refuse to invoke (user must handle manually)
+      read_only       -> CLI agent in read-only mode
+      full            -> CLI agent with MCP tools (safe default)
+      dangerous_full  -> CLI agent with unrestricted shell access
+
+    Priority when tier allows invocation:
+      1. CLI agent invocation (full context)
+      2. Raw API call (partial context, fallback)
     """
+    tier = peer.auto_respond
+
+    if tier == AutoRespondTier.OFF:
+        return InvocationResult(
+            success=False, response="", method="none",
+            error=(
+                f"Peer '{peer.name}' has auto_respond: off. "
+                "Set to read_only, full, or dangerous_full in peers.yaml to enable invocation."
+            ),
+        )
+
     if peer.transport == "local" and peer.path:
         cli = preferred_cli_agent()
         if cli is not None:
-            return invoke_cli_agent(peer, message, agent=cli, timeout=timeout)
+            return invoke_cli_agent(
+                peer, message, agent=cli, tier=tier, timeout=timeout,
+            )
 
     cfg = llm_config or {}
     api_key = cfg.get("api_key", "")
@@ -333,6 +397,7 @@ def invoke_peer(
         success=False, response="", method="none",
         error=(
             "Cannot reach peer: no CLI agent in PATH and no LLM API key configured. "
-            "Install a CLI agent (claude, gemini, codex) or set llm.api_key in .writ/config.yaml."
+            "Install a CLI agent (cursor, claude, gemini, codex) or set "
+            "llm.api_key in .writ/config.yaml."
         ),
     )
