@@ -39,6 +39,9 @@ class CLIAgent:
 
         Tier mapping for Cursor CLI (``agent``):
           read_only       -> --mode ask  (read-only, no writes)
+          approval        -> --approve-mcps  (same flags as full; approval
+                             behaviour is enforced in the agent's prompt via
+                             writ_request_approval)
           full            -> --approve-mcps  (MCP tools only, no shell)
           dangerous_full  -> --force  (unrestricted shell access)
 
@@ -131,6 +134,7 @@ def invoke_cli_agent(
 
     The *tier* controls how much autonomy the CLI agent gets:
       read_only       -- read-only analysis (no writes)
+      approval        -- MCP tools with human approval for elevated actions
       full            -- respond via MCP tools (no shell)
       dangerous_full  -- unrestricted shell access
     """
@@ -352,6 +356,7 @@ def invoke_peer(
     Respects the peer's ``auto_respond`` tier:
       off             -> refuse to invoke (user must handle manually)
       read_only       -> CLI agent in read-only mode
+      approval        -> CLI agent with MCP tools (elevated actions need human approval)
       full            -> CLI agent with MCP tools (safe default)
       dangerous_full  -> CLI agent with unrestricted shell access
 
@@ -366,7 +371,8 @@ def invoke_peer(
             success=False, response="", method="none",
             error=(
                 f"Peer '{peer.name}' has auto_respond: off. "
-                "Set to read_only, full, or dangerous_full in peers.yaml to enable invocation."
+                "Set to read_only, approval, full, or dangerous_full "
+                "in peers.yaml to enable invocation."
             ),
         )
 

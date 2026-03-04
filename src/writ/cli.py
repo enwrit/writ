@@ -10,6 +10,7 @@ import typer
 from writ import __version__
 from writ.commands import (
     agent,
+    approvals,
     compose,
     export,
     handoff,
@@ -115,6 +116,9 @@ app.add_typer(peers_app, name="peers")
 # Knowledge: review + threads
 app.command(name="review")(knowledge.review_command)
 app.add_typer(knowledge.threads_app, name="threads")
+
+# Approvals (human-in-the-loop for agent actions)
+app.add_typer(approvals.approvals_app, name="approvals")
 
 
 # ---------------------------------------------------------------------------

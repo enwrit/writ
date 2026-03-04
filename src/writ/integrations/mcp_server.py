@@ -766,6 +766,80 @@ def writ_resolve_thread(
 
 
 # ---------------------------------------------------------------------------
+# V5 tools -- Approval workflow (human-in-the-loop for elevated actions)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def writ_request_approval(
+    action_type: str,
+    description: str,
+    reasoning: str = "",
+    context: str = "{}",
+    urgency: str = "normal",
+    conv_id: str = "",
+    session_id: str = "",
+) -> dict:
+    """Request human approval for an action. The human reviews and approves/denies
+    via the Enwrit Console (enwrit.com/console) or CLI.
+
+    action_type: shell_command, file_write, file_delete, deploy, install, or custom
+    urgency: low (24h), normal (4h), high (1h), critical (15min)
+    reasoning: explain WHY you want to do this (helps the human approve confidently)
+    context: JSON string with action details (e.g. {"command": "npm install express"})
+
+    Returns: {approval_id, status, expires_at, console_url}
+
+    IMPORTANT: Always provide reasoning. Tell the user the approval_url before waiting.
+    There is no writ_resolve_approval tool -- only humans can approve/deny.
+    """
+    import json as _json
+
+    try:
+        ctx = _json.loads(context) if context else {}
+    except Exception:  # noqa: BLE001
+        ctx = {"raw": context}
+
+    from writ.core import auth as _auth
+    if not _auth.is_logged_in():
+        return {"error": "Not logged in. Run `writ login` first."}
+
+    agent_name, repo_name = _agent_identity()
+    client = _registry_client()
+    result = client.create_approval(
+        action_type=action_type,
+        description=description,
+        reasoning=reasoning,
+        context=ctx,
+        urgency=urgency,
+        conv_id=conv_id,
+        session_id=session_id,
+        agent_name=agent_name,
+        repo_name=repo_name,
+    )
+    if "id" in result:
+        result["console_url"] = "https://enwrit.com/console"
+    return result
+
+
+@mcp.tool()
+def writ_check_approval(approval_id: str) -> dict:
+    """Check the status of an approval request.
+
+    Returns: {status, resolved_at, deny_reason}
+    status is one of: pending, approved, denied, expired
+
+    If pending, the human hasn't responded yet. Wait and check again later.
+    If expired, the timeout was reached. Stop the blocked action.
+    """
+    from writ.core import auth as _auth
+    if not _auth.is_logged_in():
+        return {"error": "Not logged in. Run `writ login` first."}
+
+    client = _registry_client()
+    return client.get_approval(approval_id)
+
+
+# ---------------------------------------------------------------------------
 # Resources -- read-only data external agents can pull into context
 # ---------------------------------------------------------------------------
 

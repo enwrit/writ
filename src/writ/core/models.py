@@ -139,12 +139,14 @@ class AutoRespondTier(StrEnum):
 
     off             -- No auto-invocation; user handles manually.
     read_only       -- Agent can read/analyze but not write (--mode ask).
+    approval        -- Can use MCP tools; elevated actions require human approval.
     full            -- Agent can read + respond via MCP tools (no shell).
     dangerous_full  -- Unrestricted shell access (--force). Opt-in only.
     """
 
     OFF = "off"
     READ_ONLY = "read_only"
+    APPROVAL = "approval"
     FULL = "full"
     DANGEROUS_FULL = "dangerous_full"
 

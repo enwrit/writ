@@ -311,6 +311,106 @@ class RegistryClient:
         except Exception:  # noqa: BLE001
             return None
 
+    # -- approvals -------------------------------------------------------------
+
+    def create_approval(
+        self,
+        action_type: str,
+        description: str,
+        reasoning: str = "",
+        context: dict | None = None,
+        urgency: str = "normal",
+        conv_id: str = "",
+        session_id: str = "",
+        agent_name: str = "agent",
+        repo_name: str = "",
+    ) -> dict:
+        """Create an approval request (POST /approvals)."""
+        try:
+            body: dict = {
+                "action_type": action_type,
+                "description": description,
+                "reasoning": reasoning,
+                "context": context or {},
+                "urgency": urgency,
+                "agent_name": agent_name,
+                "repo_name": repo_name,
+            }
+            if conv_id:
+                body["conv_id"] = conv_id
+            if session_id:
+                body["session_id"] = session_id
+            resp = httpx.post(
+                f"{self.base_url}/approvals",
+                json=body,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code in (200, 201):
+                return resp.json()
+            return {"error": resp.text[:300]}
+        except Exception:  # noqa: BLE001
+            logger.debug("create_approval: network error", exc_info=True)
+            return {"error": "Network error creating approval request."}
+
+    def get_approval(self, approval_id: str) -> dict:
+        """Check approval status (GET /approvals/{id})."""
+        try:
+            resp = httpx.get(
+                f"{self.base_url}/approvals/{approval_id}",
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return {"error": resp.text[:300]}
+        except Exception:  # noqa: BLE001
+            logger.debug("get_approval: network error", exc_info=True)
+            return {"error": "Network error checking approval status."}
+
+    def list_approvals(self, status: str = "") -> dict:
+        """List approvals (GET /approvals)."""
+        try:
+            params: dict = {}
+            if status:
+                params["status"] = status
+            resp = httpx.get(
+                f"{self.base_url}/approvals",
+                params=params,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return {"error": resp.text[:300]}
+        except Exception:  # noqa: BLE001
+            logger.debug("list_approvals: network error", exc_info=True)
+            return {"error": "Network error listing approvals."}
+
+    def resolve_approval(
+        self,
+        approval_id: str,
+        decision: str,
+        reason: str = "",
+    ) -> dict:
+        """Approve or deny a request (PATCH /approvals/{id})."""
+        try:
+            body: dict = {"decision": decision}
+            if reason:
+                body["reason"] = reason
+            resp = httpx.patch(
+                f"{self.base_url}/approvals/{approval_id}",
+                json=body,
+                headers=self._headers(),
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return {"error": resp.text[:300]}
+        except Exception:  # noqa: BLE001
+            logger.debug("resolve_approval: network error", exc_info=True)
+            return {"error": "Network error resolving approval."}
+
     # -- knowledge: threads ----------------------------------------------------
 
     def search_threads(

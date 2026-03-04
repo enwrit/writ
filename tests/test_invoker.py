@@ -104,6 +104,15 @@ class TestCLIAgentCommand:
         assert "--force" in cmd
         assert "--approve-mcps" not in cmd
 
+    def test_cursor_approval_tier(self):
+        agent = CLIAgent(name="cursor", binary="agent")
+        cmd = agent.build_command("hello", "/repo", tier=AutoRespondTier.APPROVAL)
+        assert "--approve-mcps" in cmd
+        assert "--trust" in cmd
+        assert "--force" not in cmd
+        assert "--mode" not in cmd
+        assert cmd[-1] == "hello"
+
     def test_cursor_default_tier_is_full(self):
         agent = CLIAgent(name="cursor", binary="agent")
         cmd = agent.build_command("hello", "/repo")
@@ -307,6 +316,28 @@ class TestInvokePeer:
             result = invoke_peer(peer, "hello")
             assert not result.success
             assert "Cannot reach peer" in result.error
+
+    def test_approval_tier_invokes(self, tmp_path: Path):
+        peer = PeerConfig(
+            name="test", path=str(tmp_path), transport="local",
+            auto_respond=AutoRespondTier.APPROVAL,
+        )
+        agent = CLIAgent(name="cursor", binary="agent")
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "approval response"
+
+        with (
+            patch("writ.core.invoker.preferred_cli_agent", return_value=agent),
+            patch("subprocess.run", return_value=mock_result) as mock_run,
+        ):
+            result = invoke_peer(peer, "hello")
+            assert result.success
+            assert result.method == "cli"
+            cmd = mock_run.call_args[0][0]
+            assert "--approve-mcps" in cmd
+            assert "--force" not in cmd
 
     def test_dangerous_full_passes_tier(self, tmp_path: Path):
         peer = PeerConfig(

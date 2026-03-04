@@ -30,7 +30,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── mcp.py                  # writ mcp serve -- expose instructions via MCP protocol
 │       │   ├── chat.py                 # writ chat start/list/read/send/end/resume/gc -- agent-to-agent conversations
 │       │   ├── peers_cmd.py            # writ peers add/list/remove -- manage peer repo connections
-│       │   └── knowledge.py            # writ review + writ threads list/read/start/post/resolve -- knowledge threads
+│       │   ├── knowledge.py            # writ review + writ threads list/read/start/post/resolve -- knowledge threads
+│       │   └── approvals.py            # writ approvals list/approve/deny -- human-in-the-loop approval management
 │       ├── core/                       # Core business logic
 │       │   ├── __init__.py
 │       │   ├── scanner.py              # Detect languages, frameworks; parse_markdown_file() for --file import
@@ -38,11 +39,11 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
 │       │   ├── formatter.py            # 9 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card, cursor-mcp
 │       │   ├── linter.py               # Validate instruction quality (length, contradictions, completeness)
-│       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, Conversation, Message, PeerConfig
+│       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, Conversation, Message, PeerConfig, AutoRespondTier
 │       │   ├── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding
 │       │   ├── peers.py                # Peer repository management -- read/write peers.yaml
-│       │   ├── invoker.py              # CLI agent detection (claude/gemini/codex) + invocation, LLM API fallback
+│       │   ├── invoker.py              # CLI agent detection (claude/gemini/codex/cursor) + invocation with AutoRespondTier, LLM API fallback
 │       │   ├── context_window.py       # Sliding window + token estimation for API invocations
 │       │   └── file_io.py              # Cross-platform file locking + atomic append for conversation files
 │       ├── integrations/               # External registry integrations
@@ -50,8 +51,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── prpm.py                 # PLANNED: full impl. Currently stub that shells out to `prpm` CLI -> 7500+ packages
 │       │   ├── skills.py               # PLANNED: full impl. Currently stub that shells out to `agent-skills` -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
-│       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, search registry, relay, knowledge threads
-│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search, V3 conversations, V4 knowledge threads
+│       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, search registry, relay, knowledge, approvals
+│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search, V3 conversations, V4 knowledge, V5 approvals
 │       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
 │       └── templates/                  # Built-in templates (bundled in package)
 │           ├── default/                # Single general-purpose agent
