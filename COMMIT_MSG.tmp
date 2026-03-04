@@ -1,7 +1,0 @@
-feat: approval system + Console OAuth integration
-
-- Add APPROVAL tier to AutoRespondTier for human-in-the-loop agent oversight
-- Add writ approvals list/approve/deny CLI commands
-- Add MCP V5 tools: writ_request_approval, writ_check_approval
-- Add approval CRUD methods to RegistryClient (create, get, list, resolve)
-- Update treeviews and project rules with new commands
