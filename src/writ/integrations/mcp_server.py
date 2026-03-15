@@ -202,7 +202,11 @@ def writ_search_instructions(
                 })
         except Exception:  # noqa: BLE001
             if scope == "hub":
-                results.append({"name": "", "description": "Hub search failed (offline or not logged in)", "source": "error"})
+                results.append({
+                    "name": "",
+                    "description": "Hub search failed (offline or not logged in)",
+                    "source": "error",
+                })
 
     return results
 
