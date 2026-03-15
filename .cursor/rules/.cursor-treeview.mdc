@@ -10,6 +10,7 @@ alwaysApply: true
 ├── agents/                            # Available agents and subagents
 │   ├── coding-agent.mdc               # Primary implementer -- builds features per plan
 │   ├── git-commit-agent.mdc           # Handles git add, commit, push
+│   ├── instruction-reviewer.mdc       # Evaluates instruction quality against IQR rubric
 │   ├── testing-agent.mdc              # Writes and maintains pytest tests
 │   └── reviewer-agent.mdc             # Code review and quality checks
 ├── insights/                          # Strategic research and thinking (read-only reference)

@@ -116,6 +116,48 @@ class TestMcpV2SearchInstructions:
         assert len(results) == 0
 
 
+class TestMcpV2InstallInstruction:
+    """Test writ_install_instruction tool."""
+
+    def test_install_from_hub(self, initialized_project: Path):
+        mock_data = {
+            "name": "test-rule",
+            "description": "A test rule",
+            "instructions": "Do the thing.",
+            "tags": ["test"],
+            "version": "1.0.0",
+            "task_type": "rule",
+        }
+        with patch.object(
+            mcp_server, "_registry_client"
+        ) as mock_client_fn:
+            mock_client_fn.return_value.pull_public_agent.return_value = mock_data
+            result = mcp_server.writ_install_instruction("test-rule")
+        assert result["status"] == "installed"
+        assert result["name"] == "test-rule"
+        assert result["task_type"] == "rule"
+        from writ.core.store import load_instruction
+        cfg = load_instruction("test-rule")
+        assert cfg is not None
+        assert cfg.instructions == "Do the thing."
+        assert cfg.source == "enwrit.com/test-rule@1.0.0"
+
+    def test_install_not_found(self, initialized_project: Path):
+        with patch.object(
+            mcp_server, "_registry_client"
+        ) as mock_client_fn:
+            mock_client_fn.return_value.pull_public_agent.return_value = None
+            result = mcp_server.writ_install_instruction("nonexistent")
+        assert "error" in result
+        assert "not found" in result["error"]
+
+    def test_install_already_exists(self, initialized_project: Path):
+        save_instruction(InstructionConfig(name="existing", instructions="Hi"))
+        result = mcp_server.writ_install_instruction("existing")
+        assert "error" in result
+        assert "already exists" in result["error"]
+
+
 class TestMcpV2ReadFile:
     """Test writ_read_file tool."""
 

@@ -4,8 +4,10 @@ Allows external AI agents (in Cursor, Claude Desktop, etc.) to discover
 and read this repo's instructions without the human running CLI commands.
 
 V1 tools: list/get instructions, project context
-V2 tools: compose context, search, read files, list files
+V2 tools: compose context, search, install from Hub, read files, list files
 V3 tools: agent-to-agent conversations (start, send, send_and_wait, check_inbox, read, complete)
+V4 tools: knowledge threads (review, search, start, post, resolve)
+V5 tools: approval workflow (request, check)
 
 Install: pip install enwrit[mcp]
 Run:     writ mcp serve
@@ -147,30 +149,110 @@ def writ_compose_context(name: str) -> str:
 
 
 @mcp.tool()
-def writ_search_instructions(query: str) -> list[dict[str, str | None]]:
-    """Search instructions in this project by name, description, or tags.
+def writ_search_instructions(
+    query: str,
+    scope: str = "local",
+) -> list[dict[str, str | None]]:
+    """Search instructions by name, description, or tags.
 
     Returns matching instruction summaries. The query is matched as a
     case-insensitive substring against name, description, and tags.
+
+    Args:
+        query: Search text.
+        scope: Where to search. "local" = this project only (default),
+               "hub" = enwrit.com Hub only, "all" = both local and Hub.
     """
-    query_lower = query.lower()
-    instructions = store.list_instructions()
-    results = []
-    for cfg in instructions:
-        searchable = " ".join([
-            cfg.name,
-            cfg.description or "",
-            " ".join(cfg.tags),
-            cfg.task_type or "",
-        ]).lower()
-        if query_lower in searchable:
-            results.append({
-                "name": cfg.name,
-                "description": cfg.description,
-                "task_type": cfg.task_type,
-                "tags": ", ".join(cfg.tags) if cfg.tags else None,
-            })
+    results: list[dict[str, str | None]] = []
+
+    if scope in ("local", "all"):
+        query_lower = query.lower()
+        instructions = store.list_instructions()
+        for cfg in instructions:
+            searchable = " ".join([
+                cfg.name,
+                cfg.description or "",
+                " ".join(cfg.tags),
+                cfg.task_type or "",
+            ]).lower()
+            if query_lower in searchable:
+                results.append({
+                    "name": cfg.name,
+                    "description": cfg.description,
+                    "task_type": cfg.task_type,
+                    "tags": ", ".join(cfg.tags) if cfg.tags else None,
+                    "source": "local",
+                })
+
+    if scope in ("hub", "all"):
+        try:
+            client = _registry_client()
+            hub_results = client.search(query)
+            for item in hub_results:
+                name = item.get("name", "")
+                if scope == "all" and any(r["name"] == name for r in results):
+                    continue
+                results.append({
+                    "name": name,
+                    "description": item.get("description"),
+                    "task_type": item.get("task_type"),
+                    "tags": ", ".join(item.get("tags", [])) if item.get("tags") else None,
+                    "publisher": item.get("publisher"),
+                    "source": "hub",
+                })
+        except Exception:  # noqa: BLE001
+            if scope == "hub":
+                results.append({"name": "", "description": "Hub search failed (offline or not logged in)", "source": "error"})
+
     return results
+
+
+@mcp.tool()
+def writ_install_instruction(name: str) -> dict:
+    """Install a public instruction from the enwrit Hub into this project.
+
+    Pulls the instruction by name from enwrit.com and saves it to the local
+    .writ/ directory. The instruction is then available for composition,
+    export, and use in any supported IDE format.
+
+    Requires .writ/ to be initialized (run 'writ init' first).
+    No login required -- public instructions are freely installable.
+
+    Args:
+        name: Name of the public instruction to install (e.g. 'verification-loop').
+    """
+    if not store.is_initialized():
+        return {"error": "Not initialized. Run 'writ init' first."}
+
+    existing = store.load_instruction(name)
+    if existing:
+        return {"error": f"'{name}' already exists locally. Remove it first to reinstall."}
+
+    try:
+        client = _registry_client()
+        data = client.pull_public_agent(name)
+        if not data:
+            return {"error": f"'{name}' not found on enwrit.com Hub."}
+
+        from writ.core.models import InstructionConfig
+        cfg = InstructionConfig(
+            name=data.get("name", name),
+            description=data.get("description", ""),
+            instructions=data.get("instructions", ""),
+            tags=data.get("tags", []),
+            version=data.get("version", "1.0.0"),
+            task_type=data.get("task_type"),
+            source=f"enwrit.com/{name}@{data.get('version', '1.0.0')}",
+        )
+        store.save_instruction(cfg)
+        return {
+            "status": "installed",
+            "name": cfg.name,
+            "task_type": cfg.task_type,
+            "description": cfg.description,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"Failed to install '{name}': {exc}"}
 
 
 @mcp.tool()

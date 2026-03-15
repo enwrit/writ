@@ -1,4 +1,6 @@
 ---
+name: reviewer-agent
+model: claude-4.6-opus-high-thinking
 description: Reviewer agent -- reviews code quality, architecture, and plan alignment (enwrit/writ)
 ---
 

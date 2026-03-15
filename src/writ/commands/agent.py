@@ -63,7 +63,7 @@ def add(
     ] = None,
     task_type: Annotated[
         str | None,
-        typer.Option("--task-type", help="Content category (agent, rule, context)."),
+        typer.Option("--task-type", help="Content category (agent, rule, context, program)."),
     ] = None,
     edit_flag: Annotated[
         bool, typer.Option("--edit", "-e", help="Open in $EDITOR after creating.")

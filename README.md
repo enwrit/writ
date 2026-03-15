@@ -1,61 +1,59 @@
 # writ
 
-**The communication layer for AI agents.** Route context between repos, devices, and tools.
+**Your AI instructions are scattered across 8 formats in 5 tools.** writ fixes that.
 
 [![PyPI](https://img.shields.io/pypi/v/enwrit)](https://pypi.org/project/enwrit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/enwrit/writ/actions/workflows/ci.yml/badge.svg)](https://github.com/enwrit/writ/actions)
 
----
-
-## What is writ?
-
-writ manages AI agent instructions across tools, projects, and devices. Write once, use everywhere -- Cursor, Claude Code, Copilot, Windsurf, Codex, Kiro. No copy-paste, no manual conversion.
+Write agent instructions once. Route them to Cursor, Claude Code, Copilot, Windsurf, Codex, Kiro -- automatically. Save your best agents to the cloud. Reuse them anywhere.
 
 ```bash
 pip install enwrit
-writ init --template python
-writ use developer
-# Done. Your IDE now has the agent instructions.
+writ init --template fullstack
+writ use architect
+# Done. Your IDE now has a 4-layer composed instruction set.
 ```
 
-## What Makes It Different
+**[Browse 50+ curated instructions on the Hub](https://enwrit.com/hub)** -- rules, agents, and programs ready to install.
 
-1. **Context composition** -- layer project + team + agent + handoff context into one coherent instruction set
-2. **Personal agent library with cloud sync** -- save agents to [enwrit.com](https://enwrit.com), access from any device
-3. **Cross-project memory** -- export context from Repo A, import into Repo B
+---
 
-## Quick Start
+## 30-Second Quickstart
 
 ```bash
-# Initialize in your repo (auto-detects languages, frameworks, structure)
+# 1. Install
+pip install enwrit
+
+# 2. Initialize in any repo (auto-detects your stack)
 writ init
 
-# Create an agent with instructions
-writ add reviewer --description "Code reviewer" --tags "review,quality"
-writ edit reviewer
+# 3. Install a pre-built instruction from the Hub
+writ install verification-loop
+writ install code-review-agent
 
-# Activate it -- writes to your IDE's native files
-writ use reviewer
-
-# Export to a specific format
-writ export reviewer cursor
-writ export reviewer claude
-
-# Save to your personal library (syncs to enwrit.com if logged in)
-writ save reviewer
-
-# Load in another project
-writ load reviewer
-
-# Check project status
-writ status
+# 4. Activate -- writes to your IDE's native files
+writ use verification-loop
+writ use code-review-agent
 ```
+
+That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manual conversion.
+
+## What Makes writ Different
+
+| Capability | What it means |
+|-----------|--------------|
+| **Context composition** | Layer project + team + agent + handoff context into one coherent instruction set |
+| **9 output formats** | Write once, export to Cursor `.mdc`, `CLAUDE.md`, `AGENTS.md`, Copilot, Windsurf, Codex, Kiro, Agent Cards |
+| **Personal library + cloud sync** | `writ save` → `writ load` on any device. Your agents follow you. |
+| **Cross-project memory** | Export context from Repo A, import into Repo B |
+| **Hub with 50+ instructions** | Rules, agents, and autonomous programs. All peer-reviewed. `writ install <name>` |
+| **MCP server** | One line in your config and any agent can search/install from the Hub |
 
 ## How It Works
 
-writ writes to **native IDE/CLI files** -- it does NOT call LLM APIs.
+writ writes to **native IDE files** -- it does NOT call LLM APIs.
 
 | Tool | writ writes to |
 |------|----------------|
@@ -73,145 +71,134 @@ When you run `writ use reviewer`, the tool composes all relevant context and wri
 The core innovation. Each agent's context is composed from 4 layers:
 
 ```
-Layer 4: Handoff context      <-- Output from another agent
-Layer 3: Agent's instructions  <-- The agent's own role
-Layer 2: Inherited context     <-- From parent agents
-Layer 1: Project context       <-- Auto-detected (languages, frameworks, structure)
+Layer 4: Handoff context      ← Output from another agent
+Layer 3: Agent's instructions  ← The agent's own role
+Layer 2: Inherited context     ← From parent agents
+Layer 1: Project context       ← Auto-detected (languages, frameworks, structure)
 ```
 
 ```bash
-# Compose with additional context from another agent
-writ use implementer --with architect
+writ use implementer --with architect    # Compose with architect's context
+writ compose reviewer --with architect   # Preview before writing
+```
 
-# Preview what would be written
-writ compose reviewer --with architect
+## MCP Server (One-Line Setup)
+
+Give any MCP-compatible agent access to the Hub -- no CLI needed:
+
+```json
+{
+  "mcpServers": {
+    "writ": {
+      "command": "uvx",
+      "args": ["enwrit", "mcp", "serve"]
+    }
+  }
+}
+```
+
+This exposes 22 tools: search the Hub, install instructions, compose context, read files, start agent conversations, and more. Run `writ mcp serve --help` for the full list.
+
+## Hub: Browse & Install
+
+The [enwrit Hub](https://enwrit.com/hub) has 50+ curated instructions across three tiers:
+
+- **Rules** -- passive context that shapes agent behavior (verification loops, commit hygiene, no-secrets)
+- **Agents** -- on-invocation workers (code review, git commit, documentation, security audit)
+- **Programs** -- autonomous metric-driven loops (test coverage optimizer, dependency freshness, dead code eliminator)
+
+```bash
+writ search "code review"          # Search from CLI
+writ install code-review-agent     # Install into your project
+writ use code-review-agent         # Activate in your IDE
 ```
 
 ## Templates
 
-Bootstrap an entire agent team in seconds:
+Bootstrap an agent team in seconds:
 
 ```bash
-writ init --template default       # General-purpose assistant
 writ init --template fullstack     # Architect + implementer + reviewer + tester
 writ init --template python        # Python developer + reviewer
 writ init --template typescript    # TypeScript developer + reviewer
 writ init --template rules         # Project rule + coding standards
-writ init --template context       # Project context + API context
-```
-
-Or add templates to an existing project:
-
-```bash
-writ add --template fullstack
-writ add --template rules
 ```
 
 ## Personal Library & Cloud Sync
 
-Save agents and reuse them across projects and devices:
-
 ```bash
-# Save to library (local + remote if logged in)
-writ save my-reviewer
-
-# Log in for cross-device sync
-writ login
-
-# Load in another project (tries local, falls back to remote)
-writ load my-reviewer
-
-# See your full library (local + remote status)
-writ library
+writ save my-reviewer              # Save to library (local + cloud)
+writ login                         # Authenticate for cross-device sync
+writ load my-reviewer              # Load on any machine
+writ library                       # See everything (local + remote)
 ```
 
 ## Cross-Project Memory
 
-Share context between repositories:
+```bash
+writ memory export research-insights     # Export from current project
+writ memory import research-insights     # Import in another project
+```
+
+## Agent-to-Agent Communication
+
+Agents can have structured conversations across repos:
 
 ```bash
-# Export from current project
-writ memory export research-insights
-
-# Import in another project
-writ memory import research-insights
-
-# Create an agent from memory
-writ memory import research-insights --as-agent research-context
+writ peers add partner-repo --path ../partner-repo
+writ chat start --with partner-repo --goal "Review API design"
+writ chat send <conv-id> "Here's my proposed schema..."
+writ inbox                          # Check for responses
 ```
 
-## A2A Agent Card Export
-
-Export agents as [A2A-compatible Agent Cards](https://google.github.io/A2A/) for machine-readable discovery:
-
-```bash
-writ export reviewer agent-card
-writ export reviewer agent-card --dry-run   # Preview the JSON
-```
-
-## .writignore
-
-Control what the scanner picks up. Create a `.writignore` file in your project root with gitignore-style patterns:
-
-```
-# Ignore generated files
-generated/
-*.min.js
-
-# But keep this one
-!important-generated.js
-```
-
-Built-in defaults already ignore `node_modules/`, `venv/`, `.git/`, `__pycache__/`, `dist/`, `build/`, and more.
-
-## Commands
+## All Commands
 
 | Command | Description |
 |---------|-------------|
-| `writ init` | Initialize writ in current repo |
-| `writ add <name>` | Create a new instruction (agent, rule, or context) |
+| `writ init` | Initialize in current repo |
+| `writ add <name>` | Create instruction (agent, rule, context, program) |
 | `writ add --file <path>` | Import markdown file(s) or directory |
 | `writ list` | List all instructions |
-| `writ use <name>` | Activate agent (compose + write) |
+| `writ use <name>` | Activate (compose + write to IDE files) |
 | `writ edit <name>` | Open in $EDITOR |
-| `writ remove <name>` | Remove agent |
+| `writ remove <name>` | Remove instruction |
 | `writ export <name> <format>` | Export to specific format |
 | `writ compose <name>` | Preview composed context |
-| `writ save <name>` | Save to personal library |
-| `writ load <name>` | Load from library |
+| `writ save / load` | Personal library (local + cloud) |
 | `writ library` | List personal library |
-| `writ register` | Create enwrit.com account (interactive) |
-| `writ login` / `writ logout` | Authenticate with enwrit.com |
-| `writ publish <name>` | Make publicly discoverable on enwrit.com |
-| `writ unpublish <name>` | Remove from public registry |
-| `writ lint [name]` | Validate quality |
-| `writ status` | Show project diagnostics |
-| `writ version` | Show version and environment |
+| `writ search <query>` | Search Hub |
+| `writ install <name>` | Install from Hub |
+| `writ publish / unpublish` | Make publicly discoverable |
+| `writ login / logout` | Authenticate with enwrit.com |
+| `writ register` | Create account |
+| `writ lint [name]` | Validate instruction quality |
+| `writ sync` | Bulk bidirectional library sync |
+| `writ mcp serve` | Start MCP server (22 tools) |
+| `writ chat start/send/inbox` | Agent-to-agent conversations |
 | `writ memory export/import` | Cross-project memory |
-| `writ handoff create <from> <to>` | Create agent handoff |
-| `writ search <query>` | Search registries |
-| `writ install <name>` | Install from registry |
+| `writ handoff create` | Create agent handoff |
+| `writ review <name>` | Browse/submit reviews |
+| `writ threads` | Knowledge threads |
 
 ## Instruction Format
 
-Instructions are YAML files in `.writ/{agents,rules,context}/`, routed by `task_type`:
+Instructions are YAML files in `.writ/`, routed by `task_type`:
 
 ```yaml
 name: reviewer
 description: "Code reviewer for TypeScript"
 version: 1.0.0
-task_type: agent    # agent | rule | context | template
+task_type: agent    # agent | rule | context | program | template
 tags: [typescript, review]
 instructions: |
   You are a code reviewer specializing in TypeScript.
   Focus on: type safety, component composition, performance.
 composition:
   inherits_from: [architect]
-  receives_handoff_from: [implementer]
   project_context: true
 ```
 
-YAML is the internal storage format. Users interact primarily with markdown -- use `writ add --file` to import `.md`, `.mdc`, or `.txt` files directly.
+Users interact primarily with markdown. Use `writ add --file` to import `.md`, `.mdc`, or `.txt` files directly.
 
 ## Development
 
@@ -221,14 +208,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-
-# Or use requirements files directly
-pip install -r requirements-dev.txt
-
-# Run tests
-pytest
-
-# Lint
+pytest                    # 309 tests
 ruff check src/ tests/
 ```
 
@@ -238,6 +218,7 @@ MIT
 
 ## Links
 
+- **Hub**: [enwrit.com/hub](https://enwrit.com/hub) -- Browse and install instructions
 - **Website**: [enwrit.com](https://enwrit.com)
 - **GitHub**: [github.com/enwrit/writ](https://github.com/enwrit/writ)
 - **PyPI**: [pypi.org/project/enwrit](https://pypi.org/project/enwrit/)

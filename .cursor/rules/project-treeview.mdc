@@ -52,7 +52,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── skills.py               # PLANNED: full impl. Currently stub that shells out to `agent-skills` -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
 │       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, search registry, relay, knowledge, approvals
-│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search, V3 conversations, V4 knowledge, V5 approvals
+│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search/install, V3 conversations, V4 knowledge, V5 approvals (22 tools)
 │       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
 │       └── templates/                  # Built-in templates (bundled in package)
 │           ├── default/                # Single general-purpose agent
@@ -77,14 +77,14 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           └── context/               # Context templates (project-context, api-context)
 │               ├── project-context.yaml
 │               └── api-context.yaml
-├── tests/                              # pytest test suite (298 tests)
+├── tests/                              # pytest test suite (309 tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, use, search, templates, import)
 │   ├── test_compose.py                 # Composition engine tests
 │   ├── test_formatter.py               # Formatter output tests (Cursor, Claude, AGENTS.md, etc.)
 │   ├── test_library.py                 # save/load/library tests
 │   ├── test_login.py                   # Login/logout + remote sync tests (mocked RegistryClient)
-│   ├── test_mcp.py                     # MCP server tools V1-V3 + cursor-mcp formatter tests (42 tests)
+│   ├── test_mcp.py                     # MCP server tools V1-V5 + cursor-mcp formatter + install tests (45 tests)
 │   ├── test_register.py                # Account registration tests (writ register)
 │   ├── test_scanner.py                 # Scanner + file parsing tests (mdc, CLAUDE.md, .windsurfrules)
 │   ├── test_store.py                   # Store read/write tests (.writ/ and ~/.writ/)
@@ -118,6 +118,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 ├── rules/                              # Rule definitions (task_type: rule)
 │   └── *.yaml
 ├── context/                            # Context definitions (task_type: context)
+│   └── *.yaml
+├── programs/                           # Program definitions (task_type: program)
 │   └── *.yaml
 ├── handoffs/                           # Context handoff data between agents
 ├── memory/                             # Importable cross-project memory

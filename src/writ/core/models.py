@@ -58,7 +58,7 @@ class InstructionConfig(BaseModel):
     tags: list[str] = Field(default_factory=list, description="Searchable tags.")
     task_type: str | None = Field(
         default=None,
-        description="Content category for registry filtering (agent, rule, context, template).",
+        description="Content category for registry filtering (agent, rule, context, program, template).",
     )
     created: date = Field(default_factory=date.today)
     updated: date = Field(default_factory=date.today)

@@ -14,7 +14,7 @@ from writ.utils import (
     yaml_load,
 )
 
-_CONTENT_DIRS = ("agents", "rules", "context")
+_CONTENT_DIRS = ("agents", "rules", "context", "programs")
 
 _EXCLUDE_IF_DEFAULT = {
     "author": None,
@@ -42,6 +42,7 @@ _TASK_TYPE_TO_DIR: dict[str | None, str] = {
     "agent": "agents",
     "rule": "rules",
     "context": "context",
+    "program": "programs",
 }
 
 

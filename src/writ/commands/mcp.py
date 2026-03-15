@@ -33,11 +33,12 @@ def serve() -> None:
       writ_get_project_context  -- get auto-detected project context
 
     \b
-    Tools provided (V2 -- context + file access):
+    Tools provided (V2 -- Hub access + file access):
       writ_compose_context      -- compose full 4-layer context for an agent
-      writ_search_instructions  -- search instructions by name/tags/description
+      writ_search_instructions  -- search local + Hub (scope: local/hub/all)
+      writ_install_instruction  -- install from Hub into this project
       writ_read_file            -- read a repo file (respects .writignore)
-      writ_list_files           -- list files in a directory (with pattern filter)
+      writ_list_files           -- list files in a directory (with filter)
 
     \b
     Tools provided (V3 -- agent-to-agent communication):
@@ -57,14 +58,23 @@ def serve() -> None:
       writ_resolve_thread       -- resolve a thread with a conclusion
 
     \b
+    Tools provided (V5 -- approval workflow):
+      writ_request_approval     -- request human approval for an action
+      writ_check_approval       -- check approval status
+
+    \b
     Resources provided:
       writ://instructions/{name}  -- instruction content
       writ://project-context      -- project context
       writ://files/{path}         -- repo file content (read-only)
 
     \b
-    Configure your IDE to connect:
-      writ export <name> cursor-mcp   -- generate Cursor mcp.json config
+    Setup (add to .cursor/mcp.json or equivalent):
+      {"mcpServers": {"writ": {"command": "writ", "args": ["mcp", "serve"]}}}
+
+    \b
+    Or with uvx (no pip install needed):
+      {"mcpServers": {"writ": {"command": "uvx", "args": ["enwrit", "mcp", "serve"]}}}
     """
     try:
         from writ.integrations.mcp_server import run_server

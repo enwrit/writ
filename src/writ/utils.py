@@ -24,7 +24,10 @@ class _LiteralBlockDumper(yaml.SafeDumper):
 
 def _literal_str_representer(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
     if "\n" in data:
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+        lines = data.split("\n")
+        clean = "\n".join(line.rstrip() for line in lines)
+        clean = clean.replace("\t", "    ")
+        return dumper.represent_scalar("tag:yaml.org,2002:str", clean, style="|")
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
 

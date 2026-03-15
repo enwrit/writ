@@ -1,4 +1,6 @@
 ---
+name: testing-agent
+model: claude-4.6-opus-high-thinking
 description: Testing agent -- writes and maintains pytest tests for the writ CLI tool (enwrit.com)
 ---
 

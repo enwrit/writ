@@ -358,6 +358,8 @@ def _infer_task_type(name: str, frontmatter: dict) -> str:
         return "rule"
     if "context" in name.lower():
         return "context"
+    if "program" in name.lower():
+        return "program"
     return "agent"
 
 
