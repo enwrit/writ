@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -119,6 +120,69 @@ class LintResult(BaseModel):
     level: str = Field(description="Severity: error, warning, info.")
     rule: str = Field(default="", description="Rule identifier.")
     message: str = Field(description="Human-readable description.")
+    line: int | None = Field(
+        default=None,
+        description="Line number (1-based) if applicable.",
+    )
+    base_penalty: int = Field(
+        default=0,
+        description="Base penalty for scoring (0 = no impact).",
+    )
+
+
+class DimensionScore(BaseModel):
+    """Score for one of the 6 user-facing quality dimensions."""
+
+    name: str = Field(
+        description="Machine name: clarity, structure, coverage, "
+        "brevity, examples, verification.",
+    )
+    label: str = Field(description="Display name: Clarity, Structure, etc.")
+    score: int = Field(description="0-100 score for this dimension.")
+    summary: str = Field(
+        default="",
+        description="One-line explanation of the score.",
+    )
+
+
+class LintScore(BaseModel):
+    """Complete scoring result from writ lint."""
+
+    score: int = Field(
+        description="0-100 headline (weighted average of dimensions).",
+    )
+    dimensions: list[DimensionScore] = Field(
+        default_factory=list,
+        description="6 user-facing dimension scores.",
+    )
+    issues: list[LintResult] = Field(
+        default_factory=list,
+        description="All findings, ranked by impact.",
+    )
+    suggestions: list[str] = Field(
+        default_factory=list,
+        description="Top 3 improvement suggestions.",
+    )
+    badges: dict[str, Any] | None = Field(
+        default=None,
+        description="Portability/Evolution badges.",
+    )
+    raw_signals: dict[str, Any] | None = Field(
+        default=None,
+        description="~30 ML feature measurements.",
+    )
+    iqr_dimensions: dict[str, int] | None = Field(
+        default=None,
+        description="Internal 8-dim IQR 1-5 scores.",
+    )
+    tier: str = Field(
+        default="code",
+        description="Evaluation tier: code or ai.",
+    )
+    eval_metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Tier, model, timestamp, version.",
+    )
 
 
 # ---------------------------------------------------------------------------

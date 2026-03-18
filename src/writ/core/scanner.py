@@ -270,6 +270,7 @@ def get_directory_tree(root: Path | None = None, max_depth: int = 2) -> str:
 EXISTING_AGENT_PATTERNS: dict[str, str] = {
     "AGENTS.md": "agents_md",
     "CLAUDE.md": "claude",
+    "SKILL.md": "skill",
     ".cursorrules": "cursorrules",
     ".windsurfrules": "windsurf",
 }
@@ -497,6 +498,8 @@ def parse_existing_file(file_info: dict[str, str]) -> InstructionConfig | None:
         )
     elif fmt == "windsurf":
         return _parse_plain_instructions(content, "windsurfrules", ["windsurf"])
+    elif fmt == "skill":
+        return parse_markdown_content(content, name, ext_hint=".md")
 
     return None
 

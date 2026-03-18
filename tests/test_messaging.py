@@ -451,3 +451,114 @@ class TestChatCLI:
         result = runner.invoke(app, ["chat", "list"])
         assert result.exit_code == 0
         assert "Test conversation" in result.output
+
+    def test_chat_send_with_diff(self, initialized_project: Path, peer_project: Path):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+        from writ.core.peers import add_peer
+
+        add_peer("peer", path=str(peer_project))
+
+        runner = CliRunner()
+
+        result = runner.invoke(app, [
+            "chat", "start",
+            "--with", "peer",
+            "--goal", "Diff test",
+            "--message", "Initial",
+            "--no-invoke",
+        ])
+        assert result.exit_code == 0
+
+        from writ.core.messaging import list_conversations
+        convs = list_conversations()
+        assert convs
+        _, conv = convs[0]
+
+        result = runner.invoke(app, [
+            "chat", "send", conv.id, "Here are my changes",
+            "--with-diff", "--no-invoke",
+        ])
+        assert result.exit_code == 0
+        assert "Sent" in result.output
+
+
+# ---------------------------------------------------------------------------
+# writ connect (interactive peer setup wizard)
+# ---------------------------------------------------------------------------
+
+class TestConnect:
+    """Tests for the writ connect command."""
+
+    def test_connect_with_path(
+        self, initialized_project: Path, peer_project: Path,
+    ):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+
+        runner = CliRunner()
+        result = runner.invoke(app, [
+            "connect", str(peer_project), "--one-way",
+        ])
+        assert result.exit_code == 0
+        assert "Connected" in result.output
+        assert "peer-repo" in result.output
+
+        from writ.core.peers import get_peer
+        peer = get_peer("peer-repo")
+        assert peer is not None
+        assert peer.path == str(peer_project)
+
+    def test_connect_bidirectional(
+        self, initialized_project: Path, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        peer = tmp_path / "other-repo"
+        peer.mkdir()
+        (peer / ".writ").mkdir()
+        (peer / ".writ" / "conversations").mkdir(parents=True)
+
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+
+        runner = CliRunner()
+        result = runner.invoke(app, [
+            "connect", str(peer), "--bidirectional",
+        ])
+        assert result.exit_code == 0
+        assert "Connected" in result.output
+        assert "reverse peer" in result.output
+
+    def test_connect_custom_name(
+        self, initialized_project: Path, peer_project: Path,
+    ):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+
+        runner = CliRunner()
+        result = runner.invoke(app, [
+            "connect", str(peer_project),
+            "--name", "my-api",
+            "--one-way",
+        ])
+        assert result.exit_code == 0
+        assert "my-api" in result.output
+
+        from writ.core.peers import get_peer
+        assert get_peer("my-api") is not None
+
+    def test_connect_nonexistent_path(self, initialized_project: Path):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+
+        runner = CliRunner()
+        result = runner.invoke(app, [
+            "connect", "/nonexistent/path/does/not/exist",
+        ])
+        assert result.exit_code == 1
+        assert "not found" in result.output

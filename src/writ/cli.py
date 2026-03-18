@@ -27,6 +27,7 @@ from writ.commands import (
     sync,
 )
 from writ.commands.chat import chat_app, inbox_command
+from writ.commands.connect import connect_command
 from writ.commands.mcp import mcp_app
 from writ.commands.peers_cmd import peers_app
 from writ.utils import console
@@ -112,6 +113,9 @@ app.command(name="inbox")(inbox_command)
 
 # Peers sub-group (connected repositories)
 app.add_typer(peers_app, name="peers")
+
+# Connect wizard (interactive peer setup)
+app.command(name="connect")(connect_command)
 
 # Knowledge: review + threads
 app.command(name="review")(knowledge.review_command)

@@ -218,10 +218,40 @@ def chat_read(
 # writ chat send
 # ---------------------------------------------------------------------------
 
+def _get_git_diff(max_chars: int = 8000) -> str | None:
+    """Get git diff output, truncated to max_chars."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--stat", "--patch", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+            cwd=str(Path.cwd()),
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            result = subprocess.run(
+                ["git", "diff", "--stat", "--patch"],
+                capture_output=True, text=True, timeout=10,
+                cwd=str(Path.cwd()),
+            )
+        diff = result.stdout.strip()
+        if not diff:
+            return None
+        if len(diff) > max_chars:
+            diff = diff[:max_chars] + f"\n\n... (truncated, {len(diff)} chars total)"
+        return diff
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
 @chat_app.command(name="send")
 def chat_send(
     conv_id: str = typer.Argument(help="Conversation ID."),
     message: str = typer.Argument(help="Message text."),
+    with_diff: bool = typer.Option(
+        False, "--with-diff",
+        help="Attach git diff to the message (auto-truncated at 8KB).",
+    ),
     invoke: bool = typer.Option(True, "--invoke/--no-invoke", help="Auto-invoke peer agent."),
 ) -> None:
     """Send a message in an existing conversation."""
@@ -235,8 +265,21 @@ def chat_send(
     path, conv = result
     repo_name = Path.cwd().name
 
+    full_message = message
+    if with_diff:
+        diff = _get_git_diff()
+        if diff:
+            full_message = (
+                f"{message}\n\n"
+                "## Recent Changes (git diff)\n\n"
+                f"```diff\n{diff}\n```"
+            )
+            console.print(f"[dim]Attached diff ({len(diff)} chars)[/dim]")
+        else:
+            console.print("[dim]No diff found (clean working tree)[/dim]")
+
     msg = messaging.append_message(
-        path, agent="user", repo=repo_name, content=message,
+        path, agent="user", repo=repo_name, content=full_message,
     )
     console.print(f"[green]Sent[/green] {msg.id} in {conv.id}")
 

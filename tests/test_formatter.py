@@ -7,6 +7,7 @@ from writ.core.formatter import (
     ClaudeFormatter,
     CopilotFormatter,
     CursorFormatter,
+    SkillFormatter,
     WindsurfFormatter,
     get_formatter,
     write_agent,
@@ -92,6 +93,33 @@ class TestWindsurfFormatter:
         fmt = WindsurfFormatter()
         path = fmt.write(sample_agent, "Windsurf instructions", root=tmp_project)
         assert path.name == ".windsurfrules"
+
+
+class TestSkillFormatter:
+    def test_writes_skill_md(self, tmp_project: Path, sample_agent: InstructionConfig):
+        fmt = SkillFormatter()
+        path = fmt.write(sample_agent, "You are a code reviewer...", root=tmp_project)
+        assert path.name == "SKILL.md"
+        assert path.parent == tmp_project
+        content = path.read_text()
+        assert "---" in content
+        assert "name: test-agent" in content
+        assert "description:" in content
+        assert "version: 1.0.0" in content
+        assert "tags:" in content
+        assert "# test-agent" in content
+        assert "You are a code reviewer..." in content
+
+    def test_skill_clean(self, tmp_project: Path, sample_agent: InstructionConfig):
+        fmt = SkillFormatter()
+        fmt.write(sample_agent, "Instructions", root=tmp_project)
+        assert (tmp_project / "SKILL.md").exists()
+        assert fmt.clean("test-agent", root=tmp_project) is True
+        assert not (tmp_project / "SKILL.md").exists()
+
+    def test_in_formatter_registry(self):
+        fmt = get_formatter("skill")
+        assert isinstance(fmt, SkillFormatter)
 
 
 class TestFormatterRegistry:

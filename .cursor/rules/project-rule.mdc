@@ -41,7 +41,7 @@ src/writ/
 
 ## How It Works
 
-The tool writes to native IDE/CLI files. It does NOT call LLM APIs.
+The tool writes to native IDE/CLI files. It does NOT call LLM APIs directly (except `writ lint --deep`, which routes through our backend for AI-powered scoring).
 
 | Tool | We write to |
 |------|------------|
@@ -73,7 +73,9 @@ writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
 writ register                   Interactive account creation + auto-login
 writ login                      Authenticate with enwrit.com (cross-device sync)
 writ logout                     Remove stored API key
-writ lint <name>                Validate quality
+writ lint <name>                Validate quality (code-based, 0-100 score)
+writ lint --deep --file <path>  AI-powered scoring via enwrit.com (requires login)
+writ connect                   Interactive peer setup wizard for real repos
 writ publish <name>             Make instruction publicly discoverable on enwrit.com
 writ sync                       Bulk bidirectional library sync with enwrit.com
 writ mcp serve                  Expose instructions via MCP (22 tools: discovery, Hub search/install, compose, chat, knowledge, approvals)

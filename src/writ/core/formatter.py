@@ -8,6 +8,7 @@ Supported formats:
 - windsurf: .windsurfrules
 - codex: AGENTS.md (same as agents_md, Codex reads AGENTS.md)
 - kiro: AGENTS.md (same as agents_md, Kiro reads AGENTS.md)
+- skill: SKILL.md (Anthropic standard, YAML frontmatter + body)
 """
 
 from __future__ import annotations
@@ -238,6 +239,45 @@ class AgentCardFormatter(BaseFormatter):
 
 
 # ---------------------------------------------------------------------------
+# SKILL.md (Anthropic standard instruction format)
+# ---------------------------------------------------------------------------
+
+class SkillFormatter(BaseFormatter):
+    """Anthropic SKILL.md format -- YAML frontmatter + markdown body."""
+
+    format_name = "skill"
+
+    def write(
+        self,
+        agent: InstructionConfig,
+        composed_instructions: str,
+        root: Path | None = None,
+    ) -> Path:
+        root = root or Path.cwd()
+        path = root / "SKILL.md"
+
+        frontmatter: dict = {
+            "name": agent.name,
+            "description": agent.description or f"Agent: {agent.name}",
+            "version": agent.version,
+            "tags": agent.tags,
+        }
+        fm_str = yaml_dumps(frontmatter).strip()
+        body = f"# {agent.name}\n\n{composed_instructions}"
+        content = f"---\n{fm_str}\n---\n\n{body}\n"
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def clean(self, agent_name: str, root: Path | None = None) -> bool:
+        root = root or Path.cwd()
+        path = root / "SKILL.md"
+        if path.exists():
+            path.unlink()
+            return True
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Cursor MCP config: .cursor/mcp.json
 # ---------------------------------------------------------------------------
 
@@ -285,6 +325,7 @@ FORMATTERS: dict[str, type[BaseFormatter]] = {
     "windsurf": WindsurfFormatter,
     "codex": CodexFormatter,
     "kiro": KiroFormatter,
+    "skill": SkillFormatter,
     "agent-card": AgentCardFormatter,
     "cursor-mcp": CursorMcpFormatter,
 }

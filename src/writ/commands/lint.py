@@ -1,14 +1,32 @@
-"""writ lint -- Validate agent config quality."""
+"""writ lint -- Validate instruction quality and compute scores."""
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from writ.core import linter as lint_engine
 from writ.core import store
+from writ.core.models import InstructionConfig, LintScore
 from writ.utils import console
+
+_CHANGED_PATTERNS = (
+    ".writ/agents/",
+    ".writ/rules/",
+    ".writ/context/",
+    ".writ/programs/",
+    "CLAUDE.md",
+    "AGENTS.md",
+    "SKILL.md",
+    ".windsurfrules",
+    ".cursorrules",
+    ".github/copilot-instructions.md",
+)
 
 LEVEL_STYLES = {
     "error": "[bold red]ERROR[/bold red]",
@@ -17,22 +35,459 @@ LEVEL_STYLES = {
 }
 
 
+def _parse_file_to_config(file_path: Path) -> InstructionConfig:
+    """Parse a raw file into InstructionConfig without writ init.
+
+    Supports YAML files, markdown with YAML frontmatter (via
+    python-frontmatter), and plain markdown/text as instructions.
+    """
+    content = file_path.read_text(encoding="utf-8")
+    name = file_path.stem
+
+    if file_path.suffix in (".yaml", ".yml"):
+        import yaml
+
+        data = yaml.safe_load(content) or {}
+        if isinstance(data, dict):
+            data.setdefault("name", name)
+            return InstructionConfig(**data)
+
+    try:
+        import frontmatter
+
+        post = frontmatter.loads(content)
+        meta = post.metadata or {}
+        meta.setdefault("name", name)
+        meta.setdefault("instructions", post.content)
+        return InstructionConfig(**meta)
+    except ImportError:
+        pass
+    except Exception:  # noqa: BLE001
+        pass
+
+    return InstructionConfig(name=name, instructions=content)
+
+
+def _score_color(score: int) -> str:
+    if score >= 70:
+        return "green"
+    if score >= 50:
+        return "yellow"
+    return "red"
+
+
+def _badge_url(score: int) -> str:
+    """Return shields.io badge URL for writ_lint score."""
+    color = _score_color(score)
+    return f"https://img.shields.io/badge/writ_lint-{score}%2F100-{color}"
+
+
+def _get_changed_instruction_files() -> list[Path]:
+    """Return paths of instruction files modified since last commit."""
+    try:
+        root_out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        root = Path(root_out.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        root = Path.cwd()
+
+    try:
+        out = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+            cwd=root,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return []
+
+    result: list[Path] = []
+    for line in out.stdout.strip().splitlines():
+        if not line.strip():
+            continue
+        p = (root / line.strip()).resolve()
+        if not p.exists():
+            continue
+        if any(line.startswith(pat) for pat in _CHANGED_PATTERNS):
+            result.append(p)
+        elif p.suffix == ".mdc":
+            result.append(p)
+    return result
+
+
+def _print_score(lint_score: LintScore) -> None:
+    """Print the full lint score in rich format."""
+    from rich.table import Table
+
+    color = _score_color(lint_score.score)
+    console.print(
+        f"\n  Score: [{color}][bold]{lint_score.score}"
+        f"[/bold] / 100[/{color}]",
+    )
+
+    table = Table(show_header=True, box=None, padding=(0, 1))
+    table.add_column("Dimension", style="bold", min_width=14)
+    table.add_column("Score", justify="right", min_width=5)
+    table.add_column("Summary", style="dim")
+
+    for dim in lint_score.dimensions:
+        dc = _score_color(dim.score)
+        table.add_row(
+            dim.label,
+            f"[{dc}]{dim.score}[/{dc}]",
+            dim.summary,
+        )
+
+    console.print(table)
+
+    if lint_score.suggestions:
+        console.print("\n  [bold]Suggestions:[/bold]")
+        for i, sug in enumerate(lint_score.suggestions, 1):
+            console.print(f"    {i}. {sug}")
+
+
+def _score_to_json(lint_score: LintScore) -> str:
+    """Serialize LintScore to JSON for --json output."""
+    return lint_score.model_dump_json(indent=2)
+
+
+def _run_deep_lint(
+    name: str | None,
+    file: Path | None,
+    json_output: bool,
+    ci: bool,
+    min_score: int,
+) -> None:
+    """Run AI-powered lint via the enwrit.com backend."""
+    from writ.core import auth
+
+    token = auth.get_token()
+    if not token:
+        console.print(
+            "[red]--deep requires an enwrit account.[/red] "
+            "Run [cyan]writ register[/cyan] or [cyan]writ login[/cyan] first.",
+        )
+        raise typer.Exit(1)
+
+    if file:
+        if not file.exists():
+            console.print(f"[red]File not found:[/red] {file}")
+            raise typer.Exit(1)
+        agent = _parse_file_to_config(file)
+    elif name:
+        if not store.is_initialized():
+            console.print(
+                "[red]Not initialized.[/red] Run "
+                "[cyan]writ init[/cyan] first, or use "
+                "[cyan]--file[/cyan].",
+            )
+            raise typer.Exit(1)
+        agent = store.load_instruction(name)
+        if not agent:
+            console.print(f"[red]Agent '{name}' not found.[/red]")
+            raise typer.Exit(1)
+    else:
+        console.print(
+            "[yellow]--deep requires a target.[/yellow] "
+            "Specify a name or use --file.",
+        )
+        raise typer.Exit(1)
+
+    content = agent.instructions or ""
+    if not content.strip():
+        console.print("[yellow]Instruction content is empty.[/yellow]")
+        raise typer.Exit(1)
+
+    import httpx
+
+    from writ.core.store import load_global_config
+
+    cfg = load_global_config()
+    base_url = cfg.registry_url.rstrip("/")
+
+    console.print("[dim]Requesting AI-powered analysis...[/dim]")
+    try:
+        resp = httpx.post(
+            f"{base_url}/lint",
+            json={"content": content, "tier": "ai", "source": "cli"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+    except httpx.RequestError as exc:
+        console.print(
+            f"[red]Network error:[/red] {exc}. "
+            "Falling back to code-based scoring.",
+        )
+        _fallback_local_lint(agent, file, json_output, ci, min_score)
+        return
+
+    if resp.status_code == 429:
+        console.print(
+            "[yellow]Daily AI limit reached.[/yellow] "
+            "Falling back to code-based scoring.",
+        )
+        _fallback_local_lint(agent, file, json_output, ci, min_score)
+        return
+
+    if resp.status_code != 200:
+        console.print(
+            f"[yellow]AI scoring unavailable (HTTP {resp.status_code}).[/yellow] "
+            "Falling back to code-based scoring.",
+        )
+        _fallback_local_lint(agent, file, json_output, ci, min_score)
+        return
+
+    data = resp.json()
+    tier = data.get("tier", "code")
+    score = data.get("score", 0)
+
+    if json_output:
+        sys.stdout.write(json.dumps(data, indent=2) + "\n")
+    else:
+        color = _score_color(score)
+        tier_label = (
+            "AI Score" if tier == "ai"
+            else "Code-based Score"
+        )
+        console.print(
+            f"\n  {tier_label}: [{color}][bold]{score}"
+            f"[/bold] / 100[/{color}]",
+        )
+        if tier == "ai":
+            console.print("  [dim](powered by Gemini)[/dim]")
+        elif tier == "code":
+            console.print(
+                "  [dim](AI scoring unavailable, "
+                "showing code-based score)[/dim]",
+            )
+
+        dims = data.get("dimensions", [])
+        if dims:
+            from rich.table import Table
+
+            table = Table(show_header=True, box=None, padding=(0, 1))
+            table.add_column("Dimension", style="bold", min_width=14)
+            table.add_column("Score", justify="right", min_width=5)
+            table.add_column("Summary", style="dim")
+            for d in dims:
+                dc = _score_color(d.get("score", 0))
+                table.add_row(
+                    d.get("label", d.get("name", "")),
+                    f"[{dc}]{d.get('score', '?')}[/{dc}]",
+                    d.get("summary", ""),
+                )
+            console.print(table)
+
+        suggestions = data.get("suggestions", [])
+        if suggestions:
+            console.print("\n  [bold]Suggestions:[/bold]")
+            for i, sug in enumerate(suggestions, 1):
+                console.print(f"    {i}. {sug}")
+
+    if ci and score < min_score:
+        raise typer.Exit(1)
+
+
+def _fallback_local_lint(
+    agent: InstructionConfig,
+    file: Path | None,
+    json_output: bool,
+    ci: bool,
+    min_score: int,
+) -> None:
+    """Run local code-based lint as fallback from --deep."""
+    results = lint_engine.lint(agent, source_path=file)
+    lint_score = lint_engine.compute_score(agent, results)
+
+    if json_output:
+        sys.stdout.write(_score_to_json(lint_score) + "\n")
+    else:
+        _print_results(results)
+        _print_score(lint_score)
+
+    if ci and lint_score.score < min_score:
+        raise typer.Exit(1)
+
+
 def lint_command(
     name: Annotated[
-        str | None, typer.Argument(help="Agent name to lint (or omit to lint all).")
+        str | None,
+        typer.Argument(
+            help="Agent name to lint (or omit to lint all).",
+        ),
     ] = None,
+    file: Annotated[
+        Path | None,
+        typer.Option(
+            "--file", "-f",
+            help="Lint a raw file without requiring writ init.",
+        ),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Output full score as JSON (for CI/tooling).",
+        ),
+    ] = False,
+    ci: Annotated[
+        bool,
+        typer.Option(
+            "--ci",
+            help="Exit code 1 if score below threshold.",
+        ),
+    ] = False,
+    min_score: Annotated[
+        int,
+        typer.Option(
+            "--min-score",
+            help="Minimum score for --ci (default: 50).",
+        ),
+    ] = 50,
+    score_only: Annotated[
+        bool,
+        typer.Option(
+            "--score",
+            help="Show only the headline score.",
+        ),
+    ] = False,
+    badge: Annotated[
+        bool,
+        typer.Option(
+            "--badge",
+            help="Print shields.io badge URL for the score.",
+        ),
+    ] = False,
+    changed: Annotated[
+        bool,
+        typer.Option(
+            "--changed",
+            help="Only lint files modified since last commit.",
+        ),
+    ] = False,
+    deep: Annotated[
+        bool,
+        typer.Option(
+            "--deep",
+            help="AI-powered analysis via enwrit.com (requires login).",
+        ),
+    ] = False,
 ) -> None:
-    """Validate agent config quality.
+    """Validate instruction quality and compute scores.
 
-    Checks for: instruction length, contradictions, missing descriptions,
-    broken composition references, and more.
+    Checks for: instruction length, weak language, bloat,
+    missing verification, contradictions, and more. Produces
+    a 0-100 quality score across 6 dimensions.
+
+    Use --deep for AI-powered semantic analysis (requires
+    an enwrit account: run ``writ register`` or ``writ login``).
 
     Example:
-        writ lint              # lint all agents
-        writ lint reviewer     # lint a specific agent
+        writ lint                          # lint all agents
+        writ lint reviewer                 # lint specific
+        writ lint --file CLAUDE.md         # lint any file
+        writ lint --file rules.mdc --json  # JSON output
+        writ lint --ci --min-score 60      # fail CI if < 60
+        writ lint --changed                # only modified files
+        writ lint --badge                  # print badge URL
+        writ lint --deep --file CLAUDE.md  # AI-powered analysis
     """
+    if deep:
+        _run_deep_lint(
+            name=name,
+            file=file,
+            json_output=json_output,
+            ci=ci,
+            min_score=min_score,
+        )
+        return
+    if changed:
+        changed_files = _get_changed_instruction_files()
+        if not changed_files:
+            console.print("[yellow]No instruction files changed.[/yellow]")
+            return
+
+        all_scores_changed: list[LintScore] = []
+        for fp in changed_files:
+            agent = _parse_file_to_config(fp)
+            results = lint_engine.lint(agent, source_path=fp)
+            lint_score = lint_engine.compute_score(agent, results)
+            all_scores_changed.append(lint_score)
+
+            if json_output:
+                data = json.loads(lint_score.model_dump_json())
+                data["name"] = agent.name
+                data["file"] = str(fp)
+                sys.stdout.write(json.dumps(data, indent=2) + "\n")
+            elif badge:
+                pass
+            elif score_only:
+                color = _score_color(lint_score.score)
+                console.print(
+                    f"  {fp.name}: [{color}]{lint_score.score}[/{color}]",
+                )
+            else:
+                console.print(f"\n[bold]{fp.name}[/bold]:")
+                _print_results(results)
+                _print_score(lint_score)
+
+        if badge:
+            avg = sum(s.score for s in all_scores_changed) // len(all_scores_changed)
+            console.print(_badge_url(avg))
+
+        if not json_output and not score_only and not badge:
+            _print_summary(all_scores_changed)
+
+        if ci and all_scores_changed:
+            worst = min(s.score for s in all_scores_changed)
+            if worst < min_score:
+                raise typer.Exit(1)
+        return
+
+    if file:
+        if not file.exists():
+            console.print(f"[red]File not found:[/red] {file}")
+            raise typer.Exit(1)
+
+        agent = _parse_file_to_config(file)
+        results = lint_engine.lint(agent, source_path=file)
+        lint_score = lint_engine.compute_score(agent, results)
+
+        if json_output:
+            sys.stdout.write(_score_to_json(lint_score) + "\n")
+        elif badge:
+            console.print(_badge_url(lint_score.score))
+        elif score_only:
+            color = _score_color(lint_score.score)
+            console.print(
+                f"[{color}]{lint_score.score}[/{color}]",
+            )
+        else:
+            console.print(f"\n[bold]{file.name}[/bold]:")
+            _print_results(results)
+            _print_score(lint_score)
+
+        if ci and lint_score.score < min_score:
+            raise typer.Exit(1)
+
+        return
+
     if not store.is_initialized():
-        console.print("[red]Not initialized.[/red] Run [cyan]writ init[/cyan] first.")
+        console.print(
+            "[red]Not initialized.[/red] Run "
+            "[cyan]writ init[/cyan] first, or use "
+            "[cyan]--file[/cyan] to lint a file directly.",
+        )
         raise typer.Exit(1)
 
     if name:
@@ -40,7 +495,7 @@ def lint_command(
         if not agent:
             console.print(
                 f"[red]Agent '{name}' not found.[/red] "
-                "Run [cyan]writ list[/cyan] to see available agents."
+                "Run [cyan]writ list[/cyan] to see available.",
             )
             raise typer.Exit(1)
         agents = [agent]
@@ -50,30 +505,98 @@ def lint_command(
             console.print("[yellow]No agents to lint.[/yellow]")
             return
 
-    total_errors = 0
-    total_warnings = 0
+    all_scores: list[LintScore] = []
 
     for agent in agents:
-        results = lint_engine.lint(agent)
-        if not results:
-            console.print(f"[green]  {agent.name}[/green] -- all checks passed")
-            continue
+        src_path = store.find_instruction_path(agent.name)
+        results = lint_engine.lint(agent, source_path=src_path)
+        lint_score = lint_engine.compute_score(agent, results)
+        all_scores.append(lint_score)
 
-        console.print(f"\n[bold]{agent.name}[/bold]:")
-        for r in results:
-            style = LEVEL_STYLES.get(r.level, r.level)
-            rule_str = f" [{r.rule}]" if r.rule else ""
-            console.print(f"  {style}{rule_str} {r.message}")
-            if r.level == "error":
-                total_errors += 1
-            elif r.level == "warning":
-                total_warnings += 1
+        if json_output:
+            data = json.loads(lint_score.model_dump_json())
+            data["name"] = agent.name
+            sys.stdout.write(
+                json.dumps(data, indent=2) + "\n",
+            )
+        elif badge:
+            pass
+        elif score_only:
+            color = _score_color(lint_score.score)
+            console.print(
+                f"  {agent.name}: "
+                f"[{color}]{lint_score.score}[/{color}]",
+            )
+        else:
+            if not results:
+                console.print(
+                    f"[green]  {agent.name}[/green] -- "
+                    "all checks passed "
+                    f"(score: {lint_score.score})",
+                )
+            else:
+                console.print(
+                    f"\n[bold]{agent.name}[/bold]:",
+                )
+                _print_results(results)
+                _print_score(lint_score)
 
-    # Summary
+    if badge and all_scores:
+        avg = sum(s.score for s in all_scores) // len(all_scores)
+        console.print(_badge_url(avg))
+    elif not json_output and not score_only and not badge:
+        _print_summary(all_scores)
+
+    if ci:
+        worst = min(
+            s.score for s in all_scores
+        ) if all_scores else 0
+        if worst < min_score:
+            raise typer.Exit(1)
+
+
+def _print_results(results: list) -> None:
+    """Print individual lint results."""
+    for r in results:
+        style = LEVEL_STYLES.get(r.level, r.level)
+        rule_str = f" [{r.rule}]" if r.rule else ""
+        line_str = f" line {r.line}" if r.line else ""
+        console.print(
+            f"  {style}{rule_str}{line_str} {r.message}",
+        )
+
+
+def _print_summary(scores: list[LintScore]) -> None:
+    """Print overall summary."""
     console.print()
+    if not scores:
+        return
+
+    total_errors = sum(
+        1 for s in scores for i in s.issues
+        if i.level == "error"
+    )
+    total_warnings = sum(
+        1 for s in scores for i in s.issues
+        if i.level == "warning"
+    )
+    avg_score = sum(s.score for s in scores) // len(scores)
+
+    color = _score_color(avg_score)
+    console.print(
+        f"  Average score: [{color}][bold]{avg_score}"
+        f"[/bold] / 100[/{color}]",
+    )
+
     if total_errors:
-        console.print(f"[bold red]{total_errors} error(s)[/bold red], {total_warnings} warning(s)")
+        console.print(
+            f"  [bold red]{total_errors} error(s)[/bold red]"
+            f", {total_warnings} warning(s)",
+        )
     elif total_warnings:
-        console.print(f"[yellow]{total_warnings} warning(s)[/yellow], no errors")
+        console.print(
+            f"  [yellow]{total_warnings} warning(s)"
+            "[/yellow], no errors",
+        )
     else:
-        console.print("[green]All checks passed![/green]")
+        console.print("  [green]All checks passed![/green]")

@@ -268,8 +268,21 @@ class TestInitImport:
 
 
 class TestSearch:
-    def test_search_no_results(self, tmp_project: Path):
-        """Search when no registries are available returns no results gracefully."""
+    def test_search_no_results(self, tmp_project: Path, monkeypatch):
+        """Search when no registries return results shows no results gracefully."""
+        # Mock integrations to return empty (avoids network, tests no-results path)
+        monkeypatch.setattr(
+            "writ.commands.search._search_registry",
+            lambda q, l: [],
+        )
+        monkeypatch.setattr(
+            "writ.commands.search._search_prpm",
+            lambda q, l: [],
+        )
+        monkeypatch.setattr(
+            "writ.commands.search._search_skills",
+            lambda q, l: [],
+        )
         result = runner.invoke(app, ["search", "react typescript"])
         assert result.exit_code == 0
         assert "No results" in result.output
@@ -392,6 +405,19 @@ class TestSearchRegistry:
         self, tmp_project: Path, monkeypatch,
     ):
         """Search reports enwrit as a searched source."""
+        # Mock integrations to return empty so we get deterministic output
+        monkeypatch.setattr(
+            "writ.commands.search._search_registry",
+            lambda q, l: [],
+        )
+        monkeypatch.setattr(
+            "writ.commands.search._search_prpm",
+            lambda q, l: [],
+        )
+        monkeypatch.setattr(
+            "writ.commands.search._search_skills",
+            lambda q, l: [],
+        )
         result = runner.invoke(app, ["search", "python"])
         assert result.exit_code == 0
         assert "enwrit" in result.output or "No results" in result.output

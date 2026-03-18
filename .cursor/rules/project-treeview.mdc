@@ -25,7 +25,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── handoff.py              # writ handoff -- create/apply context handoffs between agents
 │       │   ├── memory.py               # writ memory export/import/list -- cross-project memory sharing
 │       │   ├── publish.py              # writ publish/unpublish -- make agents publicly discoverable on enwrit.com
-│       │   ├── lint.py                 # writ lint -- validate agent config quality
+│       │   ├── lint.py                 # writ lint [--deep] -- validate instruction quality (code-based + AI-powered via --deep)
+│       │   ├── connect.py             # writ connect -- interactive peer setup wizard for real repos
 │       │   ├── sync.py                 # writ sync -- bulk bidirectional library sync with enwrit.com
 │       │   ├── mcp.py                  # writ mcp serve -- expose instructions via MCP protocol
 │       │   ├── chat.py                 # writ chat start/list/read/send/end/resume/gc -- agent-to-agent conversations
@@ -38,7 +39,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── store.py                # Read/write .writ/{agents,rules,context}/ and ~/.writ/ global store
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
 │       │   ├── formatter.py            # 9 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card, cursor-mcp
-│       │   ├── linter.py               # Validate instruction quality (length, contradictions, completeness)
+│       │   ├── linter.py               # Validate instruction quality: 6-dimension 0-100 scoring (Clarity, Structure, Coverage, Brevity, Examples, Verification)
 │       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, Conversation, Message, PeerConfig, AutoRespondTier
 │       │   ├── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding
@@ -48,8 +49,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   └── file_io.py              # Cross-platform file locking + atomic append for conversation files
 │       ├── integrations/               # External registry integrations
 │       │   ├── __init__.py
-│       │   ├── prpm.py                 # PLANNED: full impl. Currently stub that shells out to `prpm` CLI -> 7500+ packages
-│       │   ├── skills.py               # PLANNED: full impl. Currently stub that shells out to `agent-skills` -> 175k+ agent skills
+│       │   ├── prpm.py                 # HTTP-first PRPM integration (httpx -> prpm.dev API, CLI fallback) -> 7500+ packages
+│       │   ├── skills.py               # HTTP-first Agent Skills integration (httpx -> agent-skills API, CLI fallback) -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
 │       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, search registry, relay, knowledge, approvals
 │       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search/install, V3 conversations, V4 knowledge, V5 approvals (22 tools)

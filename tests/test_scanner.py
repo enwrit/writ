@@ -69,6 +69,12 @@ class TestExistingFileDetection:
         found = scanner.detect_existing_files(tmp_project)
         assert any(f["format"] == "claude" for f in found)
 
+    def test_detect_skill_md(self, tmp_project: Path):
+        skill_content = "---\nname: my-agent\n---\n\n# my-agent\n\nInstructions."
+        (tmp_project / "SKILL.md").write_text(skill_content)
+        found = scanner.detect_existing_files(tmp_project)
+        assert any(f["format"] == "skill" for f in found)
+
 
 class TestParseExistingFile:
     def test_parse_cursor_mdc_with_frontmatter(self, tmp_project: Path):
@@ -141,6 +147,30 @@ class TestParseExistingFile:
         })
         assert result is not None
         assert "clean code" in result.instructions
+
+    def test_parse_skill_md(self, tmp_project: Path):
+        skill_path = tmp_project / "SKILL.md"
+        skill_path.write_text(
+            "---\n"
+            "name: my-agent\n"
+            "description: A code reviewer\n"
+            "version: 1.0.0\n"
+            "tags:\n  - review\n  - typescript\n"
+            "---\n\n"
+            "# my-agent\n\n"
+            "You are a code reviewer..."
+        )
+        result = scanner.parse_existing_file({
+            "path": str(skill_path),
+            "format": "skill",
+            "name": "skill",
+        })
+        assert result is not None
+        assert result.name == "my-agent"
+        assert result.description == "A code reviewer"
+        assert "code reviewer" in result.instructions
+        assert "review" in result.tags
+        assert "typescript" in result.tags
 
     def test_parse_empty_file_returns_none(self, tmp_project: Path):
         empty = tmp_project / "empty.md"

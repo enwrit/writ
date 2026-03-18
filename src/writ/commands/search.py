@@ -66,13 +66,25 @@ def search_command(
     )
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Source", style="dim")
+    table.add_column("Score", justify="right")
     table.add_column("Description")
     table.add_column("Tags", style="dim")
 
     for item in results[:limit]:
+        score = item.get("writ_score")
+        if score is not None:
+            if score >= 70:
+                score_str = f"[green]{score}[/green]"
+            elif score >= 50:
+                score_str = f"[yellow]{score}[/yellow]"
+            else:
+                score_str = f"[red]{score}[/red]"
+        else:
+            score_str = "[dim]--[/dim]"
         table.add_row(
             item.get("name", "?"),
             item.get("source", "?"),
+            score_str,
             item.get("description", "")[:60],
             ", ".join(item.get("tags", []))[:40],
         )
@@ -97,6 +109,7 @@ def _search_registry(query: str, limit: int) -> list[dict]:
                 "source": "enwrit",
                 "description": r.get("description", ""),
                 "tags": r.get("tags", []),
+                "writ_score": r.get("writ_score"),
             }
             for r in raw[:limit]
         ]
