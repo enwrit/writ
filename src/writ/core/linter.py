@@ -11,6 +11,7 @@ Brevity, Examples, Verification) each 0-100, with a weighted headline.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from markdown_it import MarkdownIt
@@ -713,61 +714,418 @@ def _check_mixed_concerns(agent: InstructionConfig) -> list[LintResult]:
 
 
 # ---------------------------------------------------------------------------
-# Scoring engine
+# v2 scoring engine
 # ---------------------------------------------------------------------------
 
-_DECAY = 0.7
+# -- Section dataclass for parsed markdown structure -------------------------
+
+@dataclass
+class Section:
+    """A markdown section: heading text, content, nesting level, line."""
+
+    heading: str
+    content: str
+    level: int
+    line_number: int
 
 
-def _compute_dimension_score(
-    issues: list[LintResult],
-    char_count: int,
-    base: int = 100,
-) -> int:
-    """Compute a 0-100 score for one dimension.
+# -- Specific-token patterns for specificity density ------------------------
 
-    Uses diminishing deductions with length normalization.
-    """
-    score = float(base)
+SPECIFIC_TOKEN_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"`[^`]+`"),
+    re.compile(r"\b\d+(?:\.\d+)?\s*(?:lines?|chars?|tokens?"
+               r"|%|ms|sec|seconds?|KB|MB|GB)\b"),
+    re.compile(r"(?:[a-zA-Z_][\w]*\.)+[a-zA-Z_][\w]*"),
+    re.compile(r"[/\\][\w./-]+\.\w+"),
+    re.compile(r"\bv?\d+\.\d+(?:\.\d+)?\b"),
+]
 
-    sorted_issues = sorted(
-        issues, key=lambda x: x.base_penalty, reverse=True,
+# -- Verification level definitions (checked top-down, highest first) --------
+
+_VER_CLOSURE = re.compile(
+    r"\b(?:definition of done|done when|complete when"
+    r"|task is complete|verify by)\b", re.I,
+)
+_VER_CMD_CRITERIA = re.compile(
+    r"`[^`]*(?:test|lint|check|build|verify)[^`]*`"
+    r".*\b(?:must|should|expect|assert|pass|fail|exit)\b", re.I,
+)
+_VER_BACKTICK_CMD = re.compile(
+    r"`[^`]*(?:test|lint|check|build|verify|run)[^`]*`", re.I,
+)
+_VER_NAMED_TOOL = re.compile(
+    r"\b(?:pytest|jest|mocha|vitest|eslint|ruff|mypy"
+    r"|cargo\s+test|npm\s+test|go\s+test|tsc)\b", re.I,
+)
+_VER_VAGUE = re.compile(
+    r"\b(?:test|verify|check|validate|ensure)\b", re.I,
+)
+
+VERIFICATION_LEVELS: list[tuple[int, re.Pattern[str]]] = [
+    (5, _VER_CLOSURE),
+    (4, _VER_CMD_CRITERIA),
+    (3, _VER_BACKTICK_CMD),
+    (2, _VER_NAMED_TOOL),
+    (1, _VER_VAGUE),
+]
+
+# -- Coverage topics: heading pattern + content validation -------------------
+
+COVERAGE_TOPICS: dict[str, re.Pattern[str]] = {
+    "commands": re.compile(
+        r"\b(?:command|script|run|setup|usage|install"
+        r"|deploy|build|getting.started)", re.I,
+    ),
+    "testing": re.compile(
+        r"\b(?:test|spec|coverage|quality|qa"
+        r"|jest|pytest|vitest|verify)", re.I,
+    ),
+    "boundaries": re.compile(
+        r"\b(?:don.?t|never|always|rule|constraint"
+        r"|boundar|limit|prohibit|require|must)", re.I,
+    ),
+    "errors": re.compile(
+        r"\b(?:error|exception|fail|debug"
+        r"|troubleshoot|issue|handle)", re.I,
+    ),
+    "style": re.compile(
+        r"\b(?:style|format|naming|convention|pattern"
+        r"|standard|guideline|lint)", re.I,
+    ),
+}
+
+# -- Critical caps (SonarQube pattern) --------------------------------------
+
+CRITICAL_CAPS: dict[str, int] = {
+    "contradiction": 25,
+    "instruction-bloat-5k": 40,
+}
+
+# -- Imperative verb starters -----------------------------------------------
+
+_IMPERATIVE_STARTERS = re.compile(
+    r"^\s*[-*]?\s*(?:Use|Run|Add|Set|Create|Install|Configure"
+    r"|Enable|Disable|Check|Test|Build|Write|Read|Delete|Update"
+    r"|Ensure|Avoid|Do not|Never|Always|Include|Exclude|Keep"
+    r"|Remove|Define|Specify|Implement|Return|Throw|Call|Apply"
+    r"|Follow|Prefer|Require|Maintain|Validate|Format)\b",
+    re.I,
+)
+
+
+# -- Phase 1: Measurement functions -----------------------------------------
+
+def parse_markdown_sections(content: str) -> list[Section]:
+    """Split markdown content by headings into Section objects."""
+    lines = content.split("\n")
+    sections: list[Section] = []
+    current_heading = ""
+    current_level = 0
+    current_line = 1
+    buf: list[str] = []
+
+    for i, line in enumerate(lines, 1):
+        m = re.match(r"^(#{1,6})\s+(.*)", line)
+        if m:
+            if current_heading or buf:
+                sections.append(Section(
+                    heading=current_heading,
+                    content="\n".join(buf),
+                    level=current_level,
+                    line_number=current_line,
+                ))
+            current_heading = m.group(2).strip()
+            current_level = len(m.group(1))
+            current_line = i
+            buf = []
+        else:
+            buf.append(line)
+
+    if current_heading or buf:
+        sections.append(Section(
+            heading=current_heading,
+            content="\n".join(buf),
+            level=current_level,
+            line_number=current_line,
+        ))
+    return sections
+
+
+def measure_specificity_density(content: str) -> float:
+    """Ratio of specific tokens to total word-level tokens."""
+    words = content.split()
+    if not words:
+        return 0.0
+    specific = 0
+    for pat in SPECIFIC_TOKEN_PATTERNS:
+        specific += len(pat.findall(content))
+    return min(1.0, specific / len(words))
+
+
+def measure_verification_level(content: str) -> int:
+    """0-5 gradient for verification quality."""
+    for level, pattern in VERIFICATION_LEVELS:
+        if pattern.search(content):
+            return level
+    return 0
+
+
+def measure_information_density(content: str) -> float:
+    """Ratio of actionable lines to total non-empty prose lines."""
+    lines = [
+        ln for ln in content.split("\n")
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    if not lines:
+        return 0.0
+    actionable_pat = re.compile(
+        r"`[^`]+`|\b\d+(?:\.\d+)?(?:\s*(?:lines?|chars?|%|ms|sec))"
+        r"|\b(?:always|never|must|do not|don.?t)\b"
+        r"|[/\\][\w./-]+\.\w+",
+        re.I,
     )
-    for i, issue in enumerate(sorted_issues):
-        if issue.base_penalty <= 0:
-            continue
-        penalty = issue.base_penalty * (_DECAY ** i)
-        score -= penalty
+    actionable = sum(1 for ln in lines if actionable_pat.search(ln))
+    return actionable / len(lines)
 
-    effective_length = max(char_count, 200)
-    length_factor = min(1.0, 800 / effective_length)
-    total_deduction = base - score
-    score = base - (total_deduction * (0.5 + 0.5 * length_factor))
 
+def count_imperative(lines: list[str]) -> int:
+    """Count lines starting with imperative verbs."""
+    return sum(1 for ln in lines if _IMPERATIVE_STARTERS.match(ln))
+
+
+def has_substantive_section(
+    sections: list[Section],
+    topic_pattern: re.Pattern[str],
+) -> bool:
+    """True if any section heading matches topic AND has 2+ content lines."""
+    for sec in sections:
+        if topic_pattern.search(sec.heading):
+            real_lines = [
+                ln for ln in sec.content.split("\n") if ln.strip()
+            ]
+            if len(real_lines) >= 2:
+                return True
+    return False
+
+
+def length_factor(chars: int) -> float:
+    """Coverage expectation multiplier based on instruction length."""
+    if chars < 100:
+        return 0.2
+    if chars < 300:
+        return 0.5
+    if chars < 800:
+        return 0.8
+    if chars < 2000:
+        return 1.0
+    if chars < 5000:
+        return 0.9
+    return 0.7
+
+
+# -- Phase 2: v2 dimension scorers ------------------------------------------
+
+def _v2_score_clarity(signals: dict) -> int:
+    """Positive+negative scorer for clarity (was specificity)."""
+    score = 30.0
+    score += min(25.0, signals["specificity_density"] * 80)
+    score += min(15.0, signals["imperative_ratio"] * 20)
+    score += min(15.0, signals["quantitative_count"] * 5)
+    score += min(15.0, signals["backtick_command_count"] * 5)
+    score -= min(30.0, signals["vague_ratio"] * 40)
+    if signals["expert_preamble_present"]:
+        score -= 10
     return max(10, min(100, round(score)))
 
 
-_IMPERATIVE_RE = re.compile(
-    r"(?:^|\n)\s*[-*]?\s*"
-    r"(?:Use|Run|Add|Set|Create|Install|Configure|Enable"
-    r"|Disable|Check|Test|Build|Write|Read|Delete|Update"
-    r"|Ensure|Avoid|Do not|Never|Always)\b",
-)
+def _v2_score_verification(content: str) -> int:
+    """Direct mapping from verification level to score."""
+    level = measure_verification_level(content)
+    mapping = {0: 10, 1: 20, 2: 45, 3: 70, 4: 85, 5: 95}
+    return mapping.get(level, 10)
 
+
+def _v2_score_coverage(
+    sections: list[Section],
+    chars: int,
+) -> int:
+    """Substance-aware coverage scoring."""
+    score = 20.0
+    for _topic, pattern in COVERAGE_TOPICS.items():
+        if has_substantive_section(sections, pattern):
+            score += 16
+    return max(10, min(100, round(score * length_factor(chars))))
+
+
+def _v2_score_brevity(chars: int, signals: dict) -> int:
+    """Length-curve scoring penalizing short+empty and bloat."""
+    density = signals["information_density"]
+    if chars < 200 and density < 0.1:
+        score = 30.0
+    elif chars < 500:
+        score = 85.0
+    elif chars < 1000:
+        score = 90.0
+    elif chars < 2000:
+        score = 80.0
+    elif chars < 5000:
+        score = 50.0
+    else:
+        score = 25.0
+    score -= signals["dead_content_count"] * 8
+    if signals["expert_preamble_present"]:
+        score -= 10
+    return max(10, min(100, round(score)))
+
+
+def _v2_score_structure(
+    content: str,
+    sections: list[Section],
+    has_frontmatter: bool,
+) -> int:
+    """Positive signal accumulation for structure."""
+    score = 20.0
+    if has_frontmatter:
+        score += 20
+    heading_count = sum(1 for s in sections if s.heading)
+    score += min(20.0, heading_count * 5)
+    bullet_count = len(re.findall(r"^\s*[-*+]\s", content, re.M))
+    score += min(15.0, bullet_count * 3)
+    levels_used = {s.level for s in sections if s.heading}
+    if len(levels_used) >= 2:
+        score += 10
+    sections_with_code = sum(
+        1 for s in sections
+        if "```" in s.content or "`" in s.content
+    )
+    if sections_with_code:
+        score += 5
+    return max(10, min(100, round(score)))
+
+
+def _v2_score_examples(content: str) -> int:
+    """Score based on code block count with diminishing returns."""
+    blocks = len(re.findall(r"```[\s\S]*?```", content))
+    if blocks == 0:
+        return 10
+    if blocks <= 2:
+        return 50
+    if blocks <= 5:
+        return 80
+    if blocks <= 8:
+        return 70
+    return 50
+
+
+# -- Phase 5: Conditional section checks ------------------------------------
+
+def _check_conditional_sections(
+    sections: list[Section],
+    chars: int,
+) -> list[LintResult]:
+    """Validate that sections have substance matching their heading."""
+    results: list[LintResult] = []
+
+    for sec in sections:
+        heading_lower = sec.heading.lower()
+        real_lines = [
+            ln for ln in sec.content.split("\n") if ln.strip()
+        ]
+
+        if re.search(r"\bcommand", heading_lower):
+            if not re.search(r"`[^`]+`", sec.content):
+                results.append(LintResult(
+                    level="warning",
+                    rule="empty-command-section",
+                    message=(
+                        f"Section '{sec.heading}' has no "
+                        "backtick-wrapped commands"
+                    ),
+                    line=sec.line_number,
+                    base_penalty=8,
+                ))
+
+        if re.search(r"\btest", heading_lower):
+            has_tool = bool(re.search(
+                r"`[^`]+`|\b(?:pytest|jest|vitest|mocha"
+                r"|cargo\s+test|npm\s+test)\b",
+                sec.content, re.I,
+            ))
+            if not has_tool:
+                results.append(LintResult(
+                    level="warning",
+                    rule="empty-testing-section",
+                    message=(
+                        f"Section '{sec.heading}' has no "
+                        "test commands or tool names"
+                    ),
+                    line=sec.line_number,
+                    base_penalty=8,
+                ))
+
+        if re.search(r"\bdon.?t|\bboundar|\bnever\b", heading_lower):
+            list_items = [
+                ln for ln in real_lines
+                if re.match(r"\s*[-*+]\s", ln)
+            ]
+            if not list_items:
+                results.append(LintResult(
+                    level="info",
+                    rule="empty-boundary-section",
+                    message=(
+                        f"Section '{sec.heading}' should "
+                        "contain a list of boundary rules"
+                    ),
+                    line=sec.line_number,
+                    base_penalty=5,
+                ))
+
+    heading_count = sum(1 for s in sections if s.heading)
+    if chars > 1000 and heading_count < 2:
+        results.append(LintResult(
+            level="info",
+            rule="long-without-structure",
+            message=(
+                "Instructions exceed 1000 chars but have "
+                "fewer than 2 headings -- consider adding "
+                "section structure"
+            ),
+            base_penalty=5,
+        ))
+
+    return results
+
+
+# -- Grade computation (derived, never stored) -------------------------------
+
+def _compute_grade(score: int) -> str:
+    """Map 0-100 score to letter grade."""
+    if score >= 80:
+        return "A"
+    if score >= 60:
+        return "B"
+    if score >= 40:
+        return "C"
+    if score >= 20:
+        return "D"
+    return "F"
+
+
+# -- Raw signals collection (v2: includes new measurements) -----------------
 
 def _collect_raw_signals(
     agent: InstructionConfig,
     results: list[LintResult],
+    v2_signals: dict,
+    sections: list[Section],
 ) -> dict:
-    """Collect ~30 raw measurements for ML storage."""
+    """Collect raw measurements for ML storage."""
     text = agent.instructions or ""
     prose = _prose_text(text)
 
     weak_count = sum(1 for r in results if r.rule == "weak-language")
     sentences = [s for s in re.split(r"[.!?]+", prose) if s.strip()]
     total_sentences = len(sentences)
-    imperative_count = len(_IMPERATIVE_RE.findall(prose))
-    imperative_ratio = imperative_count / max(total_sentences, 1)
 
     code_blocks = re.findall(r"```[\s\S]*?```", text)
     inline_commands = COMMAND_PATTERN.findall(text)
@@ -811,18 +1169,31 @@ def _collect_raw_signals(
 
     return {
         "weak_language_count": weak_count,
-        "imperative_sentence_ratio": round(imperative_ratio, 2),
-        "quantitative_threshold_count": len(
-            re.findall(r"\b\d+\b", prose),
+        "imperative_sentence_ratio": round(
+            v2_signals["imperative_ratio"], 2,
         ),
+        "imperative_ratio": round(
+            v2_signals["imperative_ratio"], 2,
+        ),
+        "quantitative_threshold_count": v2_signals[
+            "quantitative_count"
+        ],
         "vague_phrase_count": weak_count,
+        "vague_ratio": round(v2_signals["vague_ratio"], 3),
+        "specificity_density": round(
+            v2_signals["specificity_density"], 3,
+        ),
+        "information_density": round(
+            v2_signals["information_density"], 3,
+        ),
+        "verification_level": v2_signals["verification_level"],
         "has_frontmatter": text.strip().startswith("---"),
         "heading_count": len(headings),
         "max_nesting_depth": max(
             (len(h) - len(h.lstrip("#")) for h in headings),
             default=0,
         ),
-        "section_count": len(headings),
+        "section_count": len(sections),
         "topic_count": _topic_clusters(
             _extract_heading_texts(text),
         ) if headings else 0,
@@ -834,12 +1205,10 @@ def _collect_raw_signals(
         "has_edge_cases": has_edge,
         "char_count": len(text),
         "token_count": len(text) // 4,
-        "expert_preamble_present": any(
-            r.rule == "expert-preamble" for r in results
-        ),
-        "dead_content_count": sum(
-            1 for r in results if r.rule == "dead-content"
-        ),
+        "expert_preamble_present": v2_signals[
+            "expert_preamble_present"
+        ],
+        "dead_content_count": v2_signals["dead_content_count"],
         "signal_to_noise_ratio": round(
             1.0 - (weak_count / max(total_sentences, 1)), 2,
         ),
@@ -854,6 +1223,9 @@ def _collect_raw_signals(
         ),
         "example_diversity": min(len(code_blocks), 5),
         "executable_command_count": len(inline_commands),
+        "backtick_command_count": v2_signals[
+            "backtick_command_count"
+        ],
         "has_closure_definition": has_closure,
         "verification_method_count": ver_cmds,
         "patterns_present": [],
@@ -869,134 +1241,137 @@ def _collect_raw_signals(
     }
 
 
+# -- Main scoring function (v2) ---------------------------------------------
+
 def compute_score(
     agent: InstructionConfig,
     results: list[LintResult],
 ) -> LintScore:
-    """Compute quality score from lint results.
-
-    Returns LintScore with 6 dimension scores (0-100 each),
-    a weighted headline, raw signals, and suggestions.
-    """
+    """v2 scoring: earn-up model with positive signals and critical caps."""
     text = agent.instructions or ""
-    char_count = len(text)
+    chars = len(text)
+    prose = _prose_text(text)
 
-    # Empty or near-empty instructions: content-dependent
-    # dimensions should score very low since there's nothing
-    # to evaluate for quality.
-    _empty = not text or char_count < 20
+    sections = parse_markdown_sections(text)
+    has_fm = bool(re.match(r"^---\s*\n", text))
 
-    clarity_issues = [
-        r for r in results
-        if r.rule in ("weak-language", "expert-preamble")
-    ]
-    structure_issues = [
-        r for r in results
-        if r.rule in (
-            "name-format", "name-required",
-            "description-missing", "description-short",
-            "missing-metadata", "empty-globs", "mixed-concerns",
-        )
-    ]
-    coverage_issues = [
-        r for r in results
-        if r.rule in (
-            "no-verification", "has-commands",
-            "instructions-empty", "has-boundaries",
-        )
-    ]
-    brevity_issues = [
-        r for r in results
-        if r.rule in (
-            "instruction-bloat", "instructions-long", "dead-content",
-        )
-    ]
-    examples_issues: list[LintResult] = [
-        r for r in results
-        if r.rule in ("excessive-examples", "has-examples")
-    ]
-    verification_issues = [
-        r for r in results
-        if r.rule in ("no-verification", "has-commands")
-    ]
+    results = list(results)
+    results.extend(_check_conditional_sections(sections, chars))
 
-    if _empty:
-        _no_content = LintResult(
-            level="error",
-            rule="_empty-content",
-            message="No meaningful content",
-            base_penalty=40,
-        )
-        clarity_issues.append(_no_content)
-        coverage_issues.append(_no_content)
-        verification_issues.append(_no_content)
-        examples_issues.append(_no_content)
+    prose_lines = [ln for ln in prose.split("\n") if ln.strip()]
+    weak_count = sum(1 for r in results if r.rule == "weak-language")
+    sentences = [s for s in re.split(r"[.!?]+", prose) if s.strip()]
+    total_sentences = max(len(sentences), 1)
 
-    clarity = _compute_dimension_score(clarity_issues, char_count)
-    structure = _compute_dimension_score(
-        structure_issues, char_count,
-    )
-    coverage = _compute_dimension_score(
-        coverage_issues, char_count,
-    )
-    brevity = _compute_dimension_score(brevity_issues, char_count)
-    examples = _compute_dimension_score(
-        examples_issues, char_count,
-    )
-    verification = _compute_dimension_score(
-        verification_issues, char_count,
-    )
+    v2_signals = {
+        "specificity_density": measure_specificity_density(text),
+        "information_density": measure_information_density(text),
+        "verification_level": measure_verification_level(text),
+        "vague_ratio": weak_count / total_sentences,
+        "imperative_ratio": (
+            count_imperative(prose_lines)
+            / max(len(prose_lines), 1)
+        ),
+        "quantitative_count": len(re.findall(
+            r"\b\d+(?:\.\d+)?\s*"
+            r"(?:lines?|chars?|tokens?|%|ms|sec|seconds?"
+            r"|KB|MB|GB)\b",
+            text,
+        )),
+        "backtick_command_count": len(re.findall(r"`[^`]+`", text)),
+        "expert_preamble_present": any(
+            r.rule == "expert-preamble" for r in results
+        ),
+        "dead_content_count": sum(
+            1 for r in results if r.rule == "dead-content"
+        ),
+    }
+
+    clarity = _v2_score_clarity(v2_signals)
+    verification = _v2_score_verification(text)
+    coverage = _v2_score_coverage(sections, chars)
+    brevity = _v2_score_brevity(chars, v2_signals)
+    structure = _v2_score_structure(text, sections, has_fm)
+    examples = _v2_score_examples(text)
 
     headline = round(
         clarity * DIMENSION_WEIGHTS["clarity"]
-        + structure * DIMENSION_WEIGHTS["structure"]
+        + verification * DIMENSION_WEIGHTS["verification"]
         + coverage * DIMENSION_WEIGHTS["coverage"]
         + brevity * DIMENSION_WEIGHTS["brevity"]
+        + structure * DIMENSION_WEIGHTS["structure"]
         + examples * DIMENSION_WEIGHTS["examples"]
-        + verification * DIMENSION_WEIGHTS["verification"]
     )
+
+    for r in results:
+        if r.rule == "contradiction":
+            headline = min(headline, CRITICAL_CAPS["contradiction"])
+    if chars > 5000:
+        has_bloat = any(
+            r.rule == "instruction-bloat" for r in results
+        )
+        if has_bloat:
+            headline = min(
+                headline,
+                CRITICAL_CAPS["instruction-bloat-5k"],
+            )
+
     headline = max(10, min(100, headline))
+    grade = _compute_grade(headline)
 
     dims = [
         DimensionScore(
             name="clarity", label="Clarity",
             score=clarity,
-            summary=_dim_summary("clarity", clarity, results),
+            summary=_dim_summary(
+                "clarity", clarity, v2_signals,
+            ),
         ),
         DimensionScore(
             name="structure", label="Structure",
             score=structure,
-            summary=_dim_summary("structure", structure, results),
+            summary=_dim_summary(
+                "structure", structure, v2_signals,
+            ),
         ),
         DimensionScore(
             name="coverage", label="Coverage",
             score=coverage,
-            summary=_dim_summary("coverage", coverage, results),
+            summary=_dim_summary(
+                "coverage", coverage, v2_signals,
+            ),
         ),
         DimensionScore(
             name="brevity", label="Brevity",
             score=brevity,
-            summary=_dim_summary("brevity", brevity, results),
+            summary=_dim_summary(
+                "brevity", brevity, v2_signals,
+            ),
         ),
         DimensionScore(
             name="examples", label="Examples",
             score=examples,
-            summary=_dim_summary("examples", examples, results),
+            summary=_dim_summary(
+                "examples", examples, v2_signals,
+            ),
         ),
         DimensionScore(
             name="verification", label="Verification",
             score=verification,
             summary=_dim_summary(
-                "verification", verification, results,
+                "verification", verification, v2_signals,
             ),
         ),
     ]
 
     suggestions = _generate_suggestions(dims, results)
-    raw_signals = _collect_raw_signals(agent, results)
+    raw_signals = _collect_raw_signals(
+        agent, results, v2_signals, sections,
+    )
+    raw_signals["grade"] = grade
 
     scored_results = sorted(
-        [r for r in results if r.rule != "_no-code-blocks"],
+        [r for r in results if not r.rule.startswith("_")],
         key=lambda r: r.base_penalty,
         reverse=True,
     )
@@ -1011,53 +1386,58 @@ def compute_score(
     )
 
 
+# -- Dimension summaries (v2) -----------------------------------------------
+
 def _dim_summary(
     dim: str,
     score: int,
-    results: list[LintResult],
+    signals: dict,
 ) -> str:
     """Generate a one-line summary for a dimension score."""
     if score >= 90:
         return "Excellent"
     if score >= 70:
         return "Good"
+    if score >= 50:
+        if dim == "clarity":
+            return "Moderate -- some specific signals present"
+        if dim == "verification":
+            return "Basic verification present"
+        return "Adequate"
 
     if dim == "clarity":
-        weak = sum(1 for r in results if r.rule == "weak-language")
-        if weak:
-            return (
-                f"{weak} instance{'s' if weak > 1 else ''} "
-                "of vague language"
-            )
+        vr = signals.get("vague_ratio", 0)
+        if vr > 0.3:
+            return "High ratio of vague language"
+        sd = signals.get("specificity_density", 0)
+        if sd < 0.05:
+            return "Very few specific tokens (paths, numbers, commands)"
         return "Could be more specific"
 
     if dim == "coverage":
-        missing = [
-            r for r in results
-            if r.rule in ("no-verification", "has-commands")
-        ]
-        if missing:
-            return "Missing verification or commands"
-        return "Incomplete coverage of core areas"
+        return "Key topics missing or lack substance"
 
     if dim == "brevity":
-        if any(r.rule == "instruction-bloat" for r in results):
-            return "Exceeds recommended length"
+        if signals.get("information_density", 1) < 0.1:
+            return "Short but lacks actionable content"
         return "Could be more concise"
 
     if dim == "verification":
-        if any(r.rule == "no-verification" for r in results):
+        vl = signals.get("verification_level", 0)
+        if vl == 0:
             return "No verification commands found"
-        return "Limited verification mechanisms"
+        return "Vague verification only (no concrete commands)"
 
     if dim == "examples":
         return "No code examples found"
 
     if dim == "structure":
-        return "Structural improvements possible"
+        return "Needs headings and organized sections"
 
     return "Room for improvement"
 
+
+# -- Suggestion generation (v2) ---------------------------------------------
 
 def _generate_suggestions(
     dimensions: list[DimensionScore],
@@ -1071,7 +1451,7 @@ def _generate_suggestions(
         if len(suggestions) >= 3:
             break
 
-        if dim.name == "clarity" and dim.score < 80:
+        if dim.name == "clarity" and dim.score < 70:
             weak = sum(
                 1 for r in results if r.rule == "weak-language"
             )
@@ -1082,37 +1462,44 @@ def _generate_suggestions(
                     "imperative commands (e.g., 'Use X' "
                     "instead of 'Try to use X')"
                 )
+            else:
+                suggestions.append(
+                    "Add specific file paths, tool names, "
+                    "and numeric thresholds to increase "
+                    "clarity"
+                )
 
-        elif dim.name == "verification" and dim.score < 80:
+        elif dim.name == "verification" and dim.score < 70:
             suggestions.append(
-                "Add test/build/lint commands so the agent "
-                "can verify its own work (2-3x quality impact)"
+                "Add backtick-wrapped test/build/lint "
+                "commands so the agent can verify its own "
+                "work (2-3x quality impact)"
             )
 
-        elif dim.name == "coverage" and dim.score < 80:
+        elif dim.name == "coverage" and dim.score < 70:
             suggestions.append(
-                "Add boundary definitions "
-                "(always/never/ask-first) and "
-                "error handling guidance"
+                "Add dedicated sections (## Testing, "
+                "## Boundaries) with 2+ lines of specific "
+                "guidance each"
             )
 
-        elif dim.name == "brevity" and dim.score < 80:
+        elif dim.name == "brevity" and dim.score < 70:
             suggestions.append(
                 "Trim instruction length -- "
                 "over-specification reduces agent "
                 "success rates by 20%+"
             )
 
-        elif dim.name == "examples" and dim.score < 80:
+        elif dim.name == "examples" and dim.score < 70:
             suggestions.append(
                 "Add 1-3 code examples showing "
                 "desired input/output patterns"
             )
 
-        elif dim.name == "structure" and dim.score < 80:
+        elif dim.name == "structure" and dim.score < 70:
             suggestions.append(
-                "Improve structure: add clear section "
-                "headers and a description"
+                "Add section headings (##) and bullet "
+                "lists to improve scannability"
             )
 
     return suggestions

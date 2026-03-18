@@ -10,7 +10,6 @@ from writ.core.models import (
     CursorOverrides,
     FormatOverrides,
     InstructionConfig,
-    LintResult,
 )
 
 # ===================================================================
@@ -317,11 +316,12 @@ class TestCodeFenceAwareness:
 
 
 class TestScoring:
-    def test_perfect_instruction_high_score(self):
+    def test_good_instruction_decent_score(self):
         agent = InstructionConfig(
             name="good-agent",
             description="TypeScript code reviewer",
             tags=["typescript", "review"],
+            task_type="agent",
             instructions=(
                 "# Code Review\n\n"
                 "## Commands\n"
@@ -341,7 +341,7 @@ class TestScoring:
         )
         results = linter.lint(agent)
         score = linter.compute_score(agent, results)
-        assert score.score >= 70
+        assert score.score >= 30
         assert len(score.dimensions) == 6
         assert all(d.score >= 10 for d in score.dimensions)
         assert all(d.score <= 100 for d in score.dimensions)
@@ -375,6 +375,7 @@ class TestScoring:
             name="test",
             description="A test agent",
             tags=["test"],
+            task_type="agent",
             instructions="Run `pytest` to verify. Always test.",
         )
         results = linter.lint(agent)
@@ -414,41 +415,45 @@ class TestScoring:
         assert len(score.suggestions) > 0
         assert len(score.suggestions) <= 3
 
-    def test_dimension_score_bounds(self):
-        from writ.core.linter import _compute_dimension_score
+    def test_v2_scorer_bounds(self):
+        from writ.core.linter import _v2_score_clarity
 
-        issues = [
-            LintResult(
-                level="error", message="bad",
-                base_penalty=25,
-            ),
-            LintResult(
-                level="error", message="bad2",
-                base_penalty=25,
-            ),
-            LintResult(
-                level="error", message="bad3",
-                base_penalty=25,
-            ),
-        ]
-        score = _compute_dimension_score(issues, 500)
-        assert 10 <= score <= 100
+        low = _v2_score_clarity({
+            "specificity_density": 0.0,
+            "imperative_ratio": 0.0,
+            "quantitative_count": 0,
+            "backtick_command_count": 0,
+            "vague_ratio": 1.0,
+            "expert_preamble_present": True,
+        })
+        assert 10 <= low <= 30
 
-    def test_dimension_score_no_issues_is_100(self):
-        from writ.core.linter import _compute_dimension_score
+        high = _v2_score_clarity({
+            "specificity_density": 0.5,
+            "imperative_ratio": 1.0,
+            "quantitative_count": 5,
+            "backtick_command_count": 5,
+            "vague_ratio": 0.0,
+            "expert_preamble_present": False,
+        })
+        assert 80 <= high <= 100
 
-        score = _compute_dimension_score([], 500)
-        assert score == 100
+    def test_v2_verification_level_mapping(self):
+        from writ.core.linter import _v2_score_verification
 
-    def test_length_normalization(self):
-        from writ.core.linter import _compute_dimension_score
+        assert _v2_score_verification("") == 10
+        assert _v2_score_verification("test it") == 20
+        assert _v2_score_verification("Run `pytest`") >= 70
+        assert _v2_score_verification(
+            "Done when `pytest` passes with 0 failures"
+        ) >= 85
 
-        issue = [LintResult(
-            level="warning", message="bad", base_penalty=15,
-        )]
-        short_score = _compute_dimension_score(issue, 200)
-        long_score = _compute_dimension_score(issue, 4000)
-        assert long_score >= short_score
+    def test_v2_length_factor(self):
+        from writ.core.linter import length_factor
+
+        assert length_factor(50) < length_factor(500)
+        assert length_factor(1000) > length_factor(8000)
+        assert length_factor(1500) == 1.0
 
 
 # ===================================================================
@@ -745,3 +750,219 @@ class TestMixedConcerns:
         )
         results = linter.lint(agent)
         assert any(r.rule == "mixed-concerns" for r in results)
+
+
+# ===================================================================
+# v2 anchor calibration tests
+# ===================================================================
+
+
+class TestV2Anchors:
+    """Anchor instructions with expected score ranges.
+
+    Any scoring change that breaks these is a regression.
+    """
+
+    def test_anchor_terrible(self):
+        agent = InstructionConfig(
+            name="terrible",
+            task_type="agent",
+            instructions="You are an expert. Write clean code.",
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert score.score <= 25, (
+            f"Terrible instruction scored {score.score}, expected <= 25"
+        )
+        assert score.grade == "F" or score.grade == "D"
+
+    def test_anchor_mediocre(self):
+        agent = InstructionConfig(
+            name="mediocre",
+            description="Generic coding helper",
+            task_type="agent",
+            instructions=(
+                "You are a helpful coding assistant.\n"
+                "Try to write good code.\n"
+                "Consider testing your changes.\n"
+                "Handle errors properly.\n"
+                "If possible, follow best practices.\n"
+                "Maybe add some documentation."
+            ),
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert 14 <= score.score <= 30, (
+            f"Mediocre scored {score.score}, expected 14-30"
+        )
+
+    def test_anchor_good(self):
+        agent = InstructionConfig(
+            name="good-agent",
+            description="Python code reviewer",
+            task_type="agent",
+            tags=["python", "review"],
+            instructions=(
+                "# Python Code Review\n\n"
+                "## Commands\n"
+                "Run `pytest -v` before approving.\n"
+                "Run `ruff check src/` for linting.\n\n"
+                "## Rules\n"
+                "- Always use type hints on function signatures\n"
+                "- Never use `print()` for logging; "
+                "use the `logging` module\n"
+                "- Keep functions under 40 lines\n"
+                "- Require docstrings on all public functions\n\n"
+                "## Don't\n"
+                "- Do not approve PRs without passing tests\n"
+                "- Never merge directly to main\n\n"
+                "## Style\n"
+                "- Follow PEP 8 naming conventions\n"
+                "- Use `pathlib.Path` instead of `os.path`\n\n"
+                "## Example\n"
+                "```python\n"
+                "def calculate_total("
+                "items: list[float]) -> float:\n"
+                '    """Sum all item prices."""\n'
+                "    return sum(items)\n"
+                "```\n"
+            ),
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert 55 <= score.score <= 80, (
+            f"Good instruction scored {score.score}, "
+            f"expected 55-80"
+        )
+
+    def test_anchor_excellent(self):
+        agent = InstructionConfig(
+            name="excellent-agent",
+            description="Production deployment reviewer",
+            task_type="agent",
+            tags=["devops", "review", "production"],
+            instructions=(
+                "---\n"
+                "description: Production deployment reviewer\n"
+                "---\n\n"
+                "# Production Deployment Review\n\n"
+                "## Commands\n"
+                "Run `pytest --cov=src/ --cov-fail-under=80` "
+                "to verify test coverage.\n"
+                "Run `docker build -t app:test .` to verify "
+                "the build succeeds.\n"
+                "Run `trivy image app:test` for security "
+                "scanning.\n\n"
+                "## Testing\n"
+                "- All tests must pass with 0 failures\n"
+                "- Coverage must exceed 80%\n"
+                "- Integration tests must include database "
+                "migrations\n\n"
+                "## Boundaries\n"
+                "- Never deploy on Fridays after 3pm\n"
+                "- Always require 2 approvals for production\n"
+                "- Do not bypass CI checks\n"
+                "- Must not expose internal APIs publicly\n\n"
+                "## Error Handling\n"
+                "- All API endpoints must return structured "
+                "error responses\n"
+                "- Use circuit breakers for external service "
+                "calls\n"
+                "- Log all errors with correlation IDs\n\n"
+                "## Style\n"
+                "- Follow the ADR template for architecture "
+                "decisions\n"
+                "- Use conventional commits format\n"
+                "- Document all environment variables in "
+                "`.env.example`\n\n"
+                "## Example\n"
+                "```yaml\n"
+                "# Good: structured error response\n"
+                "status: 422\n"
+                "body:\n"
+                '  error: "validation_failed"\n'
+                '  message: "Email format invalid"\n'
+                "  field: email\n"
+                "```\n\n"
+                "```yaml\n"
+                "# Bad: unstructured error\n"
+                "status: 500\n"
+                'body: "Something went wrong"\n'
+                "```\n\n"
+                "## Definition of Done\n"
+                "Task is complete when `pytest` passes with "
+                "80%+ coverage, `docker build` succeeds, "
+                "and `trivy` reports no critical "
+                "vulnerabilities.\n"
+            ),
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert 80 <= score.score <= 100, (
+            f"Excellent instruction scored {score.score}, "
+            f"expected 80-100"
+        )
+
+    # -- Edge cases --
+
+    def test_edge_empty_string(self):
+        agent = InstructionConfig(
+            name="empty", task_type="agent",
+            instructions="",
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert score.grade == "F"
+
+    def test_edge_tech_list_only(self):
+        agent = InstructionConfig(
+            name="tech-list", task_type="agent",
+            instructions="Python, TypeScript, React, Docker.",
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert score.grade in ("D", "F")
+
+    def test_edge_expert_preamble_bloat(self):
+        agent = InstructionConfig(
+            name="bloat", task_type="agent",
+            instructions=(
+                "You are a world-class senior principal "
+                "staff engineer with 20 years of experience "
+                "in distributed systems, machine learning, "
+                "and cloud architecture.\n"
+                "Try to write clean code.\n"
+                "Consider best practices.\n"
+                "Maybe add tests if possible.\n"
+                "You should perhaps use linting.\n"
+                "If you can, handle errors."
+            ),
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert score.grade in ("F", "D")
+
+    def test_edge_single_command(self):
+        agent = InstructionConfig(
+            name="cmd", task_type="agent",
+            instructions="Run `pytest`.",
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert score.grade in ("C", "D", "F")
+
+    def test_edge_concise_3_commands(self):
+        agent = InstructionConfig(
+            name="concise", task_type="agent",
+            description="Build verifier",
+            instructions=(
+                "Run `pytest -v` to verify tests.\n"
+                "Run `ruff check src/` for linting.\n"
+                "Run `mypy src/` for type checking.\n"
+                "Never commit with failing tests.\n"
+                "Always use type hints."
+            ),
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        assert score.grade in ("B", "C")

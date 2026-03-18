@@ -184,6 +184,19 @@ class LintScore(BaseModel):
         description="Tier, model, timestamp, version.",
     )
 
+    @property
+    def grade(self) -> str:
+        """Letter grade derived from headline score (never stored)."""
+        if self.score >= 80:
+            return "A"
+        if self.score >= 60:
+            return "B"
+        if self.score >= 40:
+            return "C"
+        if self.score >= 20:
+            return "D"
+        return "F"
+
 
 # ---------------------------------------------------------------------------
 # Agent-to-agent communication models (V3)
