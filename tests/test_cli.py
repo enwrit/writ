@@ -273,15 +273,15 @@ class TestSearch:
         # Mock integrations to return empty (avoids network, tests no-results path)
         monkeypatch.setattr(
             "writ.commands.search._search_registry",
-            lambda q, l: [],
+            lambda q, lim: [],
         )
         monkeypatch.setattr(
             "writ.commands.search._search_prpm",
-            lambda q, l: [],
+            lambda q, lim: [],
         )
         monkeypatch.setattr(
             "writ.commands.search._search_skills",
-            lambda q, l: [],
+            lambda q, lim: [],
         )
         result = runner.invoke(app, ["search", "react typescript"])
         assert result.exit_code == 0
@@ -408,15 +408,15 @@ class TestSearchRegistry:
         # Mock integrations to return empty so we get deterministic output
         monkeypatch.setattr(
             "writ.commands.search._search_registry",
-            lambda q, l: [],
+            lambda q, lim: [],
         )
         monkeypatch.setattr(
             "writ.commands.search._search_prpm",
-            lambda q, l: [],
+            lambda q, lim: [],
         )
         monkeypatch.setattr(
             "writ.commands.search._search_skills",
-            lambda q, l: [],
+            lambda q, lim: [],
         )
         result = runner.invoke(app, ["search", "python"])
         assert result.exit_code == 0
