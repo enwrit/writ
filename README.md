@@ -1,22 +1,52 @@
 # writ
 
-**Your AI instructions are scattered across 8 formats in 5 tools.** writ fixes that.
+**Better instructions. Connected agents.**
 
 [![PyPI](https://img.shields.io/pypi/v/enwrit)](https://pypi.org/project/enwrit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/enwrit/writ/actions/workflows/ci.yml/badge.svg)](https://github.com/enwrit/writ/actions)
 
-Write agent instructions once. Route them to Cursor, Claude Code, Copilot, Windsurf, Codex, Kiro -- automatically. Save your best agents to the cloud. Reuse them anywhere.
+The quality and communication layer for AI coding agents. Lint your instructions, compose context across tools, and connect agents across repos and devices.
 
 ```bash
 pip install enwrit
-writ init --template fullstack
-writ use architect
-# Done. Your IDE now has a 4-layer composed instruction set.
+writ lint --file CLAUDE.md        # Instant quality score (0-100) for any instruction
+writ init --template fullstack    # Bootstrap agent team in your repo
+writ use architect                # Compose + write to your IDE's native files
 ```
 
-**[Browse 50+ curated instructions on the Hub](https://enwrit.com/hub)** -- rules, agents, and programs ready to install.
+**[Try the live lint demo](https://enwrit.com)** -- paste any instruction, get an instant quality score. Or **[browse 50+ instructions on the Hub](https://enwrit.com/hub)**.
+
+---
+
+## Lint Your Instructions
+
+97% of AI instructions have quality defects. `writ lint` catches them.
+
+```bash
+writ lint --file .cursor/rules/my-rule.mdc
+# Score: 34 / 100 (D)
+# - 6 instances of vague language ("try to", "consider", "if possible")
+# - No verification commands (agents can't check their own work)
+# - No code examples
+# Suggestions:
+#   Replace vague phrases with imperative commands
+#   Add backtick-wrapped test/build/lint commands (2-3x quality impact)
+#   Add 1-3 code examples showing desired patterns
+```
+
+Scores 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Brevity**, **Structure**, **Examples**. Works on any `.md`, `.mdc`, `.txt`, or YAML instruction file -- no `writ init` required.
+
+```bash
+writ lint --file CLAUDE.md              # Score any file
+writ lint my-agent                      # Score a managed instruction
+writ lint --deep --file AGENTS.md       # AI-powered analysis (Gemini, via enwrit.com)
+writ lint --json --file rules.mdc       # Machine-readable output for CI
+writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
+```
+
+**[Try it in your browser](https://enwrit.com)** -- paste any instruction, get an instant score.
 
 ---
 
@@ -44,11 +74,12 @@ That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manu
 
 | Capability | What it means |
 |-----------|--------------|
+| **Instruction linting** | 6-dimension quality scoring (0-100) for any AI instruction file. Code-based + AI-powered. |
 | **Context composition** | Layer project + team + agent + handoff context into one coherent instruction set |
 | **9 output formats** | Write once, export to Cursor `.mdc`, `CLAUDE.md`, `AGENTS.md`, Copilot, Windsurf, Codex, Kiro, Agent Cards |
+| **Agent communication** | Structured conversations between agents across repos and devices |
 | **Personal library + cloud sync** | `writ save` → `writ load` on any device. Your agents follow you. |
-| **Cross-project memory** | Export context from Repo A, import into Repo B |
-| **Hub with 50+ instructions** | Rules, agents, and autonomous programs. All peer-reviewed. `writ install <name>` |
+| **Hub with 50+ instructions** | Rules, agents, and autonomous programs. `writ install <name>` |
 | **MCP server** | One line in your config and any agent can search/install from the Hub |
 
 ## How It Works
@@ -171,7 +202,7 @@ writ inbox                          # Check for responses
 | `writ publish / unpublish` | Make publicly discoverable |
 | `writ login / logout` | Authenticate with enwrit.com |
 | `writ register` | Create account |
-| `writ lint [name]` | Validate instruction quality |
+| `writ lint [name] [--file] [--deep] [--json] [--ci]` | Quality score (0-100, 6 dimensions) |
 | `writ sync` | Bulk bidirectional library sync |
 | `writ mcp serve` | Start MCP server (22 tools) |
 | `writ chat start/send/inbox` | Agent-to-agent conversations |
@@ -208,7 +239,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                    # 309 tests
+pytest                    # 378 tests
 ruff check src/ tests/
 ```
 
