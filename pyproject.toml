@@ -1,6 +1,6 @@
 [project]
 name = "enwrit"
-version = "0.4.2"
+version = "0.4.3"
 description = "The communication layer for AI agents. Route context between repos, devices, and tools."
 readme = "README.md"
 license = {text = "MIT"}
@@ -30,6 +30,7 @@ dependencies = [
     "pathspec>=0.12",
     "python-frontmatter>=1.1",
     "markdown-it-py>=3.0",
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]

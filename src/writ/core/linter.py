@@ -107,19 +107,28 @@ def _prose_text(instructions: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _is_writ_managed(
+    agent: InstructionConfig,
+    source_path: Path | None,
+) -> bool:
+    """True when the instruction comes from a writ project (.writ/ YAML)."""
+    if agent.task_type and str(agent.task_type).strip():
+        return True
+    if source_path and ".writ" in source_path.parts:
+        return True
+    return False
+
+
 def lint(
     agent: InstructionConfig,
     source_path: Path | None = None,
 ) -> list[LintResult]:
     """Run all lint checks. Returns list of findings."""
     results: list[LintResult] = []
+    writ_managed = _is_writ_managed(agent, source_path)
 
     results.extend(_check_name(agent))
     results.extend(_check_instructions_length(agent))
-    results.extend(_check_description(agent))
-    results.extend(_check_tags(agent))
-    results.extend(_check_project_context(agent))
-    results.extend(_check_composition_references(agent))
     results.extend(_check_contradictions(agent))
     results.extend(_check_weak_language(agent))
     results.extend(_check_expert_preamble(agent))
@@ -127,12 +136,19 @@ def lint(
     results.extend(_check_no_verification(agent))
     results.extend(_check_has_commands(agent))
     results.extend(_check_excessive_examples(agent))
-    results.extend(_check_missing_metadata(agent, source_path))
-    results.extend(_check_empty_globs(agent))
     results.extend(_check_dead_content(agent))
     results.extend(_check_has_boundaries(agent))
     results.extend(_check_has_examples(agent))
     results.extend(_check_mixed_concerns(agent))
+
+    results.extend(_check_missing_metadata(agent, source_path, writ_managed))
+    results.extend(_check_empty_globs(agent))
+
+    if writ_managed:
+        results.extend(_check_description(agent))
+        results.extend(_check_tags(agent))
+        results.extend(_check_project_context(agent))
+        results.extend(_check_composition_references(agent))
 
     return results
 
@@ -511,8 +527,9 @@ def _check_excessive_examples(
 def _check_missing_metadata(
     agent: InstructionConfig,
     source_path: Path | None,
+    writ_managed: bool = False,
 ) -> list[LintResult]:
-    """Check YAML frontmatter in .mdc, task_type/description in YAML configs."""
+    """Check YAML frontmatter in .mdc, task_type/description in writ YAML."""
     results: list[LintResult] = []
 
     if source_path and source_path.suffix == ".mdc":
@@ -530,7 +547,7 @@ def _check_missing_metadata(
                 ))
         except OSError:
             pass
-    else:
+    elif writ_managed:
         if not agent.task_type or not str(agent.task_type).strip():
             results.append(LintResult(
                 level="info",
@@ -816,15 +833,30 @@ _IMPERATIVE_STARTERS = re.compile(
 # -- Phase 1: Measurement functions -----------------------------------------
 
 def parse_markdown_sections(content: str) -> list[Section]:
-    """Split markdown content by headings into Section objects."""
+    """Split markdown content by headings into Section objects.
+
+    Skips lines inside fenced code blocks (``` ... ```) so that
+    shell comments like ``# comment`` aren't mistaken for headings.
+    """
     lines = content.split("\n")
     sections: list[Section] = []
     current_heading = ""
     current_level = 0
     current_line = 1
     buf: list[str] = []
+    in_fence = False
 
     for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            buf.append(line)
+            continue
+
+        if in_fence:
+            buf.append(line)
+            continue
+
         m = re.match(r"^(#{1,6})\s+(.*)", line)
         if m:
             if current_heading or buf:
@@ -1033,7 +1065,11 @@ def _check_conditional_sections(
         ]
 
         if re.search(r"\bcommand", heading_lower):
-            if not re.search(r"`[^`]+`", sec.content):
+            has_inline = bool(re.search(r"`[^`]+`", sec.content))
+            has_fenced = bool(re.search(
+                r"```[^\n]*\n.+?```", sec.content, re.DOTALL,
+            ))
+            if not has_inline and not has_fenced:
                 results.append(LintResult(
                     level="warning",
                     rule="empty-command-section",

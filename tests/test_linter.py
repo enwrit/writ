@@ -45,17 +45,35 @@ class TestLinter:
 
     def test_missing_description(self, initialized_project):
         agent = InstructionConfig(
-            name="nodesc", instructions="Do something useful.",
+            name="nodesc", task_type="agent",
+            instructions="Do something useful.",
         )
         results = linter.lint(agent)
         assert any(r.rule == "description-missing" for r in results)
 
     def test_missing_tags(self, initialized_project):
         agent = InstructionConfig(
-            name="notags", instructions="Instructions here.",
+            name="notags", task_type="agent",
+            instructions="Instructions here.",
         )
         results = linter.lint(agent)
         assert any(r.rule == "tags-missing" for r in results)
+
+    def test_no_writ_rules_for_generic_instructions(self):
+        """Writ-specific rules should NOT fire for generic instructions."""
+        agent = InstructionConfig(
+            name="generic", instructions="Be helpful.",
+        )
+        results = linter.lint(agent)
+        writ_rules = {
+            "description-missing", "tags-missing",
+            "project-context-missing", "inherit-missing",
+        }
+        for r in results:
+            assert r.rule not in writ_rules, (
+                f"Writ-specific rule '{r.rule}' should not fire "
+                "for generic (non-writ) instructions"
+            )
 
     def test_bad_name_format(self, initialized_project):
         agent = InstructionConfig(
@@ -80,6 +98,7 @@ class TestLinter:
     def test_missing_parent_warning(self, initialized_project):
         agent = InstructionConfig(
             name="orphan",
+            task_type="agent",
             instructions="Test",
             composition=CompositionConfig(
                 inherits_from=["nonexistent"],
@@ -637,14 +656,32 @@ class TestMissingMetadata:
         results = linter.lint(agent, source_path=mdc)
         assert any(r.rule == "missing-metadata" for r in results)
 
-    def test_yaml_missing_task_type(self):
+    def test_yaml_missing_task_type(self, tmp_path):
+        writ_dir = tmp_path / ".writ" / "agents"
+        writ_dir.mkdir(parents=True)
+        src = writ_dir / "test.yaml"
+        src.write_text("name: test\n", encoding="utf-8")
         agent = InstructionConfig(
             name="test",
             description="A good description here",
             instructions="Use Python.",
         )
-        results = linter.lint(agent, source_path=None)
+        results = linter.lint(agent, source_path=src)
         assert any(r.rule == "missing-metadata" for r in results)
+
+    def test_no_metadata_warning_for_generic_files(self):
+        """Non-writ instructions should NOT get task_type/description warnings."""
+        agent = InstructionConfig(
+            name="test",
+            instructions="Use Python.",
+        )
+        results = linter.lint(agent, source_path=None)
+        metadata_msgs = [
+            r for r in results
+            if r.rule == "missing-metadata"
+            and "task_type" in r.message
+        ]
+        assert not metadata_msgs
 
 
 class TestEmptyGlobs:
