@@ -177,7 +177,7 @@ class LintScore(BaseModel):
     )
     tier: str = Field(
         default="code",
-        description="Evaluation tier: code or ai.",
+        description="Evaluation tier: code, ml, or ai.",
     )
     eval_metadata: dict[str, Any] | None = Field(
         default=None,

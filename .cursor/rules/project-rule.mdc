@@ -28,7 +28,8 @@ Core capabilities:
 src/writ/
 ├── cli.py              # Typer CLI entry point
 ├── commands/           # One file per command group (init, agent, library, export, compose, etc.)
-├── core/               # Core logic (scanner, store, composer, formatter, linter, models)
+├── core/               # Core logic (scanner, store, composer, formatter, linter, ml_scorer, models)
+├── models/tier2/       # Bundled ML models for Tier 2 lint (m2cgen scorers + kNN index)
 ├── integrations/       # External registry integrations (PRPM, Agent Skills CLI, URL)
 └── utils.py            # Helpers
 ```
@@ -41,7 +42,7 @@ src/writ/
 
 ## How It Works
 
-The tool writes to native IDE/CLI files. It does NOT call LLM APIs directly (except `writ lint --deep`, which routes through our backend for AI-powered scoring).
+The tool writes to native IDE/CLI files. It does NOT call LLM APIs directly (except `writ lint --deep`, which routes through our backend for AI-powered scoring). Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
 
 | Tool | We write to |
 |------|------------|
@@ -73,8 +74,9 @@ writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
 writ register                   Interactive account creation + auto-login
 writ login                      Authenticate with enwrit.com (cross-device sync)
 writ logout                     Remove stored API key
-writ lint <name>                Validate quality (code-based, 0-100 score)
-writ lint --deep --file <path>  AI-powered scoring via enwrit.com (requires login)
+writ lint <name>                Validate quality (ML-predicted when models available, else code-based)
+writ lint --code                Force Tier 1 code-only scoring (deterministic)
+writ lint --deep --file <path>  AI-powered Tier 3 scoring via enwrit.com (requires login)
 writ connect                   Interactive peer setup wizard for real repos
 writ publish <name>             Make instruction publicly discoverable on enwrit.com
 writ sync                       Bulk bidirectional library sync with enwrit.com

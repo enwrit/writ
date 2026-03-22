@@ -1,6 +1,6 @@
 [project]
 name = "enwrit"
-version = "0.4.1"
+version = "0.4.2"
 description = "The communication layer for AI agents. Route context between repos, devices, and tools."
 readme = "README.md"
 license = {text = "MIT"}
@@ -61,6 +61,7 @@ packages = ["src/writ"]
 target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
+extend-exclude = ["src/writ/models/tier2/scorer_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B"]

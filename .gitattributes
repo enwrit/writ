@@ -1,0 +1,6 @@
+# Mark m2cgen-generated ML models as generated so they don't pollute
+# language stats, PRs, or diffs on GitHub.
+src/writ/models/tier2/scorer_*.py linguist-generated=true -diff
+
+# Binary model artifacts
+src/writ/models/tier2/*.pkl binary

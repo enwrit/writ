@@ -15,6 +15,28 @@ from writ.core import store
 from writ.core.models import InstructionConfig, LintScore
 from writ.utils import console
 
+
+def _maybe_ml_score(
+    agent: InstructionConfig,
+    results: list,
+    force_code: bool = False,
+) -> LintScore:
+    """Compute lint score, upgrading to Tier 2 ML when models are available.
+
+    Returns Tier 2 (ML) by default, Tier 1 (code) if --code or models missing.
+    """
+    tier1 = lint_engine.compute_score(agent, results)
+    if force_code:
+        return tier1
+    try:
+        from writ.models.tier2 import models_available
+        if models_available():
+            from writ.core.ml_scorer import compute_score_ml
+            return compute_score_ml(tier1)
+    except Exception:
+        pass
+    return tier1
+
 _CHANGED_PATTERNS = (
     ".writ/agents/",
     ".writ/rules/",
@@ -305,9 +327,9 @@ def _fallback_local_lint(
     ci: bool,
     min_score: int,
 ) -> None:
-    """Run local code-based lint as fallback from --deep."""
+    """Run local lint as fallback from --deep (uses ML when available)."""
     results = lint_engine.lint(agent, source_path=file)
-    lint_score = lint_engine.compute_score(agent, results)
+    lint_score = _maybe_ml_score(agent, results)
 
     if json_output:
         sys.stdout.write(_score_to_json(lint_score) + "\n")
@@ -382,6 +404,13 @@ def lint_command(
             help="AI-powered analysis via enwrit.com (requires login).",
         ),
     ] = False,
+    code: Annotated[
+        bool,
+        typer.Option(
+            "--code",
+            help="Force code-based Tier 1 scoring (skip ML models).",
+        ),
+    ] = False,
 ) -> None:
     """Validate instruction quality and compute scores.
 
@@ -389,13 +418,15 @@ def lint_command(
     missing verification, contradictions, and more. Produces
     a 0-100 quality score across 6 dimensions.
 
-    Use --deep for AI-powered semantic analysis (requires
-    an enwrit account: run ``writ register`` or ``writ login``).
+    By default uses ML-predicted scores (Tier 2) when models
+    are available. Use --code for deterministic code-only scoring,
+    or --deep for AI-powered analysis via enwrit.com.
 
     Example:
-        writ lint                          # lint all agents
+        writ lint                          # lint all (ML or code)
         writ lint reviewer                 # lint specific
         writ lint --file CLAUDE.md         # lint any file
+        writ lint --code                   # force Tier 1 only
         writ lint --file rules.mdc --json  # JSON output
         writ lint --ci --min-score 60      # fail CI if < 60
         writ lint --changed                # only modified files
@@ -421,7 +452,7 @@ def lint_command(
         for fp in changed_files:
             agent = _parse_file_to_config(fp)
             results = lint_engine.lint(agent, source_path=fp)
-            lint_score = lint_engine.compute_score(agent, results)
+            lint_score = _maybe_ml_score(agent, results, force_code=code)
             all_scores_changed.append(lint_score)
 
             if json_output:
@@ -461,7 +492,7 @@ def lint_command(
 
         agent = _parse_file_to_config(file)
         results = lint_engine.lint(agent, source_path=file)
-        lint_score = lint_engine.compute_score(agent, results)
+        lint_score = _maybe_ml_score(agent, results, force_code=code)
 
         if json_output:
             sys.stdout.write(_score_to_json(lint_score) + "\n")
@@ -510,7 +541,7 @@ def lint_command(
     for agent in agents:
         src_path = store.find_instruction_path(agent.name)
         results = lint_engine.lint(agent, source_path=src_path)
-        lint_score = lint_engine.compute_score(agent, results)
+        lint_score = _maybe_ml_score(agent, results, force_code=code)
         all_scores.append(lint_score)
 
         if json_output:
