@@ -32,7 +32,7 @@ def _maybe_ml_score(
         from writ.models.tier2 import models_available
         if models_available():
             from writ.core.ml_scorer import compute_score_ml
-            return compute_score_ml(tier1)
+            return compute_score_ml(tier1, instruction_text=agent.instructions or "")
     except Exception:
         pass
     return tier1

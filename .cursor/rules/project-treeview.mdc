@@ -40,7 +40,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
 │       │   ├── formatter.py            # 9 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card, cursor-mcp
 │       │   ├── linter.py               # v2 earn-up scoring engine (Tier 1): 6-dimension 0-100, specificity density, verification gradient, critical caps
-│       │   ├── ml_scorer.py            # Tier 2 ML scoring: compute_score_ml(), m2cgen model loading, SHAP-weighted kNN suggestion retrieval
+│       │   ├── ml_scorer.py            # Tier 2 ML scoring: compute_score_ml(), m2cgen model loading, v2 hybrid retrieval (IDF relevance + template fallback)
 │       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, LintScore (tier: code|ml|ai), Conversation, Message, PeerConfig
 │       │   ├── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding
@@ -61,7 +61,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │       ├── __init__.py         # models_available() check
 │       │       ├── scorer_headline.py  # Auto-generated: headline score prediction (m2cgen)
 │       │       ├── scorer_*.py         # Auto-generated: 6 dimension score predictions
-│       │       ├── suggestion_index.pkl # SHAP-weighted kNN index with tagged suggestions
+│       │       ├── suggestion_index.pkl # SHAP-weighted kNN index with tagged suggestions + IDF vocabulary
+│       │       ├── suggestion_templates.json # Auto-mined suggestion templates for slot-filling fallback
 │       │       ├── shap_weights.json   # Feature importance weights for kNN distance
 │       │       └── feature_config.json # Feature names + min/max normalization bounds
 │       └── templates/                  # Built-in templates (bundled in package)
@@ -87,7 +88,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           └── context/               # Context templates (project-context, api-context)
 │               ├── project-context.yaml
 │               └── api-context.yaml
-├── tests/                              # pytest test suite (378 tests)
+├── tests/                              # pytest test suite (380 tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, use, search, templates, import)
 │   ├── test_compose.py                 # Composition engine tests

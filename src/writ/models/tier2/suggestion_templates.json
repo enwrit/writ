@@ -1,0 +1,1087 @@
+{
+  "clarity": [
+    {
+      "template": "Add a 'Verification' section with specific commands like `{command}` and `{command}`.",
+      "dimension": "clarity",
+      "slots": [
+        "command"
+      ],
+      "frequency": 719,
+      "examples": [
+        "Add a 'Verification' section with specific CLI commands for schema linting and testing.",
+        "Add a 'Verification' section with specific CLI commands to validate type safety and linting."
+      ]
+    },
+    {
+      "template": "Define a clear 'Definition of Done' that requires passing tests and linting before completion.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 228,
+      "examples": [
+        "Define a clear 'Definition of Done' or closure criteria, specifying what constitutes a completed and verified task.",
+        "Define a clear 'Definition of Done' section with specific CLI commands for linting, testing, and performance checks."
+      ]
+    },
+    {
+      "template": "Add a 'Definition of Done' section that mandates specific verification steps before the agent considers a task complete.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 162,
+      "examples": [
+        "Add a 'Definition of Done' section that requires specific command outputs (e.g., 'Task is complete when `terraform validate` returns 0 and `tflint` reports no errors').",
+        "Add a 'Definition of Done' section with specific metrics (e.g., 'All tests pass, 0 lint errors, coverage > 80%')."
+      ]
+    },
+    {
+      "template": "Add a 'Verification' section that mandates specific CLI commands for testing and linting.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 110,
+      "examples": [
+        "Add a 'Verification' section that mandates specific CLI commands for testing and linting.",
+        "Add a 'Verification' section that mandates running specific project commands (e.g., 'Run `npm run lint` and `npm test` before finalizing')."
+      ]
+    },
+    {
+      "template": "Include a 'Verification' section with specific CLI commands the agent must run before finalizing.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 92,
+      "examples": [
+        "Include a 'Verification' section with specific commands the agent should run to confirm connection.",
+        "Include a 'Verification' section with specific CLI commands for testing and linting the codebase."
+      ]
+    },
+    {
+      "template": "Add a 'Verification' section requiring the agent to provide a Mermaid diagram, a risk assessment, and a specific test plan for every architecture proposed.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 66,
+      "examples": [
+        "Add a 'Verification' section requiring the agent to provide a Mermaid diagram, a risk assessment, and a specific test plan for every architecture proposed.",
+        "Add a 'Verification' section requiring the agent to run specific commands like 'npm run lint' or 'pytest'."
+      ]
+    },
+    {
+      "template": "Add a 'Verification' section containing specific CLI commands the agent must run before completing a task.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 57,
+      "examples": [
+        "Add a 'Verification' section containing specific CLI commands for linting, testing, and type-checking.",
+        "Add a 'Verification' section containing specific commands (e.g., `pytest -v`, `mypy .`, `ruff check .`) to allow the agent to self-validate."
+      ]
+    },
+    {
+      "template": "Add a 'Commands' section with specific terminal commands for linting, testing, and type checking.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 51,
+      "examples": [
+        "Add a 'Commands' section with specific terminal commands for linting, testing, and type checking.",
+        "Add a 'Commands' section with specific terminal commands for linting, testing, and type checking."
+      ]
+    },
+    {
+      "template": "Add a 'Verification' section requiring specific tools like `yamllint`, `trivy`, or `kubectl dry-run`.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 47,
+      "examples": [
+        "Add a 'Verification' section requiring specific tools like `yamllint`, `trivy`, or `kubectl dry-run`.",
+        "Add a 'Verification' section requiring specific CLI commands to validate code before completion."
+      ]
+    },
+    {
+      "template": "Include specific CLI commands for verification, such as 'dotnet test' and 'dotnet run -c Release' for benchmarks.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 35,
+      "examples": [
+        "Include specific CLI commands for verification, such as 'dotnet test' and 'dotnet run -c Release' for benchmarks.",
+        "Include specific CLI commands for verification, such as 'markdownlint . --fix' or 'npm version patch'."
+      ]
+    },
+    {
+      "template": "Add a 'Coding Standards' section with specific CLI commands for linting and formatting (e.g., `{command}`, `{tool}`).",
+      "dimension": "clarity",
+      "slots": [
+        "tool",
+        "command"
+      ],
+      "frequency": 35,
+      "examples": [
+        "Add a 'Coding Standards' section with specific CLI commands for linting and formatting (e.g., `go fmt`, `eslint`).",
+        "Add a 'Coding Standards' section with specific, testable rules (e.g., 'No any types', 'Use explicit return types')."
+      ]
+    },
+    {
+      "template": "Convert descriptive sections into imperative rules (e.g., 'Always validate context integrity using X before proceeding').",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 34,
+      "examples": [
+        "Convert descriptive sections into imperative rules (e.g., 'Always validate context integrity using X before proceeding').",
+        "Convert descriptive sections into imperative rules (e.g., 'Always use PascalCase for components')."
+      ]
+    },
+    {
+      "template": "Include a 'Definition of Done' section that requires the agent to confirm service health via specific endpoints or logs.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 34,
+      "examples": [
+        "Include a 'Definition of Done' section that requires the agent to confirm service health via specific endpoints or logs.",
+        "Include a 'Definition of Done' section with specific thresholds (e.g., 'Minimum 80% test coverage')."
+      ]
+    },
+    {
+      "template": "Include a concrete example of a well-formed skill file to serve as a template.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 33,
+      "examples": [
+        "Include a concrete example of a well-formed skill file to serve as a template.",
+        "Include a concrete example of a before-and-after rule modification to guide the agent's output style."
+      ]
+    },
+    {
+      "template": "Add a 'Rules' section with specific, imperative constraints for code generation.",
+      "dimension": "clarity",
+      "slots": [],
+      "frequency": 32,
+      "examples": [
+        "Add a 'Rules' section with specific, testable constraints like 'Always include resource requests/limits in all YAML'.",
+        "Add a 'Rules' section with specific coding constraints (e.g., no 'unwrap()', type hint requirements)."
+      ]
+    }
+  ],
+  "structure": [
+    {
+      "template": "Add a 'Definition of Done' section to define when a task is considered complete.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 449,
+      "examples": [
+        "Add a 'Definition of Done' section specifying criteria for audit completion and self-verification (e.g., 'Audit is complete when all OWASP A01-A10 items have been checked and reported on, and all dependency audit tools have been run').",
+        "Add a 'Definition of Done' section specifying that tests must pass with `vitest run` and coverage thresholds."
+      ]
+    },
+    {
+      "template": "Include a 'Definition of Done' section to clarify when a task is complete.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 100,
+      "examples": [
+        "Include a 'Definition of Done' section to clarify when the agent should stop processing.",
+        "Include a 'Definition of Done' section that forces the agent to self-audit against the rules before finalizing output."
+      ]
+    },
+    {
+      "template": "Add a 'Code Patterns' section with side-by-side 'Bad' vs 'Good' code snippets.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 68,
+      "examples": [
+        "Add a 'Code Patterns' section with side-by-side 'Bad' (Bash-ism) vs 'Good' (POSIX) code blocks.",
+        "Add a 'Code Patterns' section with concrete examples of compliant vs. non-compliant code (e.g., how to implement a legal disclaimer)."
+      ]
+    },
+    {
+      "template": "Include a 'Code Examples' section showing side-by-side 'Bad' vs 'Good' implementations.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 57,
+      "examples": [
+        "Include a 'Code Examples' section showing 'Bad' vs 'Good' implementations for key patterns like Server Actions and Zod validation.",
+        "Include a 'Code Examples' section showing 'Bad' vs 'Good' implementations for key patterns."
+      ]
+    },
+    {
+      "template": "Add a 'Verification' section with mandatory commands like `{command}` and `{command}`.",
+      "dimension": "structure",
+      "slots": [
+        "command"
+      ],
+      "frequency": 54,
+      "examples": [
+        "Add a 'Verification' section with mandatory CLI commands the agent must run to validate its output.",
+        "Add a 'Verification' section with mandatory CLI commands to validate code before completion."
+      ]
+    },
+    {
+      "template": "Add a 'Code Examples' section showing a before/after transformation for a standard component.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 52,
+      "examples": [
+        "Add a 'Code Examples' section showing a before/after transformation for a standard component.",
+        "Add a 'Code Examples' section showing a 'Before/After' for common Go anti-patterns like manual error wrapping or context misuse."
+      ]
+    },
+    {
+      "template": "Include a 'Code Patterns' section with 'Do this' vs 'Avoid this' code snippets.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 51,
+      "examples": [
+        "Include a 'Code Patterns' section with good/bad examples for common Django pitfalls like N+1 queries.",
+        "Include a 'Code Patterns' section with minimal, high-quality examples for Server Actions and directory-specific component structures."
+      ]
+    },
+    {
+      "template": "Add a 'Code Examples' section demonstrating a standard test file structure vs a prohibited anti-pattern.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 48,
+      "examples": [
+        "Add a 'Code Examples' section demonstrating a standard test file structure vs a prohibited anti-pattern.",
+        "Add a 'Code Examples' section demonstrating a correct vs. incorrect implementation of a test-driven cycle."
+      ]
+    },
+    {
+      "template": "Add a 'Verification Checklist' section that the AI must run against its own designs before finalizing.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 37,
+      "examples": [
+        "Add a 'Verification Checklist' section that the AI must run against its own designs before finalizing.",
+        "Add a 'Verification Checklist' section that requires the agent to check its output against the 'Value Equation' before finalizing."
+      ]
+    },
+    {
+      "template": "Define a clear 'Definition of Done' and specific output format constraints.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 35,
+      "examples": [
+        "Define a clear 'Definition of Done' and specific output format constraints.",
+        "Define a clear 'Definition of Done' section with specific CLI commands for linting, testing, and performance checks."
+      ]
+    },
+    {
+      "template": "Include a 'Code Examples' section demonstrating preferred patterns versus common anti-patterns.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 31,
+      "examples": [
+        "Include a 'Code Examples' section demonstrating preferred patterns versus common anti-patterns.",
+        "Include a 'Code Examples' section demonstrating the required structure for a PDF component and the download button."
+      ]
+    },
+    {
+      "template": "Add a 'Code Style' section with a 'Bad vs. Good' code snippet comparison.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 27,
+      "examples": [
+        "Add a 'Code Style' section with a 'Bad vs. Good' code snippet comparison.",
+        "Add a 'Code Style' section with specific, testable constraints like max line length or function complexity."
+      ]
+    },
+    {
+      "template": "Add an 'Error Handling' section defining behavior for missing tests or failed dependency resolution.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 26,
+      "examples": [
+        "Add an 'Error Handling' section defining behavior for missing tests or failed dependency resolution.",
+        "Add an 'Error Handling' section defining how to proceed if transcripts lack timestamps or speaker labels."
+      ]
+    },
+    {
+      "template": "Add a 'Closure' section defining the exact state that signals task completion.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 25,
+      "examples": [
+        "Add a 'Closure' section defining the exact output format expected upon completion.",
+        "Add a 'Closure' section defining the exact state the agent should reach before signaling completion."
+      ]
+    },
+    {
+      "template": "Add a 'Coding Standards' section defining component structure and state management patterns.",
+      "dimension": "structure",
+      "slots": [],
+      "frequency": 24,
+      "examples": [
+        "Add a 'Coding Standards' section defining strict requirements for type safety, error handling, and testing.",
+        "Add a 'Coding Standards' section defining specific linting and testing requirements."
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "template": "Add a 'Verification' section with specific CLI commands for linting, testing, and security scanning.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 15,
+      "examples": [
+        "Add a 'Verification' section with specific CLI commands for security linting and static analysis.",
+        "Add a 'Verification' section with specific commands to validate security posture."
+      ]
+    },
+    {
+      "template": "Include a 'Bad vs. Good' code block demonstrating safe memory allocation and error handling.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 8,
+      "examples": [
+        "Include a 'Bad vs. Good' code block demonstrating safe memory allocation and error handling.",
+        "Include a 'Bad vs. Good' code comparison to clarify expectations for error handling and typing."
+      ]
+    },
+    {
+      "template": "Include 'Good vs. Bad' code snippets for high-impact areas like selector usage and error handling.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 8,
+      "examples": [
+        "Include 'Good vs. Bad' code snippets for high-impact areas like selector usage and error handling.",
+        "Include 'Good vs. Bad' code snippets to demonstrate the preferred guard clause and error handling patterns."
+      ]
+    },
+    {
+      "template": "Add a 'Definition of Done' section specifying exactly when the agent should consider a security audit complete.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 7,
+      "examples": [
+        "Add a 'Definition of Done' section specifying exactly when the agent should consider a security audit complete.",
+        "Add a 'Definition of Done' section requiring the agent to verify code against security, size, and best-practice constraints."
+      ]
+    },
+    {
+      "template": "Add a 'Rules' section with specific constraints for tool definition, error handling, and logging.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 6,
+      "examples": [
+        "Add a 'Rules' section with specific constraints for tool definition, error handling, and logging.",
+        "Add a 'Rules' section with specific coding constraints (e.g., error handling, type safety)."
+      ]
+    },
+    {
+      "template": "Include a 'Code Patterns' section with good/bad examples for logging, API responses, and error handling.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 6,
+      "examples": [
+        "Include a 'Code Patterns' section with good/bad examples for logging, API responses, and error handling.",
+        "Include a 'Code Patterns' section with a side-by-side 'Bad vs. Good' example for error handling or service-layer implementation."
+      ]
+    },
+    {
+      "template": "Add a 'Code Examples' section showing preferred patterns for error handling, type hinting, and component structure.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 6,
+      "examples": [
+        "Add a 'Code Examples' section showing preferred patterns for error handling, type hinting, and component structure.",
+        "Add a 'Code Examples' section showing a 'Bad' vs 'Good' implementation for error handling and table-driven tests."
+      ]
+    },
+    {
+      "template": "Define a standard error handling pattern for all HTTP endpoints.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 5,
+      "examples": [
+        "Define a standard error handling pattern for all HTTP endpoints.",
+        "Define a standard error handling pattern for Server Actions to ensure consistent UI feedback."
+      ]
+    },
+    {
+      "template": "Define a clear 'Definition of Done' checklist that includes error handling, logging, and cost tracking verification.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 5,
+      "examples": [
+        "Define a clear 'Definition of Done' checklist that includes error handling, logging, and cost tracking verification.",
+        "Define a clear 'Definition of Done' for error handling, such as requiring unit tests for all network failure states."
+      ]
+    },
+    {
+      "template": "Add a 'Coding Standards' section defining strict requirements for type safety, error handling, and testing.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 5,
+      "examples": [
+        "Add a 'Coding Standards' section defining strict requirements for type safety, error handling, and testing.",
+        "Add a 'Coding Standards' section defining preferred patterns, variable naming, and error handling."
+      ]
+    },
+    {
+      "template": "Include specific CLI commands for linting, testing, and security scanning that the agent must run before completion.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 4,
+      "examples": [
+        "Include specific CLI commands for linting, testing, and security scanning that the agent must run before completion.",
+        "Include specific CLI commands for linting, testing, and security scanning (e.g., 'Run `npm run test:coverage` and ensure 80% threshold')."
+      ]
+    },
+    {
+      "template": "Add a 'Commands' section with specific, mandatory CLI scripts for linting, testing, and security checks.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 4,
+      "examples": [
+        "Add a 'Commands' section with specific, mandatory CLI scripts for linting, testing, and security checks.",
+        "Add a 'Commands' section with specific shell commands for linting (e.g., ruff), testing (e.g., pytest), and security (e.g., bandit)."
+      ]
+    },
+    {
+      "template": "Add concrete code examples (good/bad pairs) for key {tool} concepts like concurrency, error handling, or testing patterns.",
+      "dimension": "coverage",
+      "slots": [
+        "tool"
+      ],
+      "frequency": 3,
+      "examples": [
+        "Add concrete code examples (good/bad pairs) for key Go concepts like concurrency, error handling, or testing patterns.",
+        "Add concrete code examples (good/bad pairs) to illustrate desired coding practices, architectural patterns, and error handling."
+      ]
+    },
+    {
+      "template": "Add explicit error handling instructions for critical commands, e.g., 'If `rm` fails, report the error and stop.'",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 3,
+      "examples": [
+        "Add explicit error handling instructions for critical commands, e.g., 'If `rm` fails, report the error and stop.'",
+        "Add explicit error handling instructions for command failures and missing data."
+      ]
+    },
+    {
+      "template": "Add a 'Bad vs. Good' code comparison for common pitfalls like error handling or schema definitions.",
+      "dimension": "coverage",
+      "slots": [],
+      "frequency": 3,
+      "examples": [
+        "Add a 'Bad vs. Good' code comparison for common pitfalls like error handling or schema definitions.",
+        "Add a 'Bad vs. Good' code block example for critical patterns like error handling and React component structure."
+      ]
+    }
+  ],
+  "brevity": [
+    {
+      "template": "Consolidate redundant sections to reduce token count and improve readability.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 75,
+      "examples": [
+        "Consolidate redundant sections to reduce token count by 30-40%.",
+        "Consolidate redundant sections to reduce token bloat and improve focus."
+      ]
+    },
+    {
+      "template": "Consolidate redundant sections to improve brevity and focus.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 24,
+      "examples": [
+        "Consolidate redundant sections to improve brevity and focus on core execution logic.",
+        "Consolidate redundant sections to improve brevity and impact."
+      ]
+    },
+    {
+      "template": "Consolidate all redundant sections into a single 'Deployment & Path Management' chapter.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 15,
+      "examples": [
+        "Consolidate all redundant sections into a single 'Deployment & Path Management' chapter.",
+        "Consolidate all redundant sections into a single 'Core Principles' and 'Security/Compliance' section."
+      ]
+    },
+    {
+      "template": "Condense the document by removing redundant workflow sections and moving static project documentation to a separate file.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 9,
+      "examples": [
+        "Condense the document by removing redundant workflow sections and moving static project documentation to a separate file.",
+        "Condense the document by removing redundant explanations and focusing on imperative rules."
+      ]
+    },
+    {
+      "template": "Consolidate all rules into a single, non-redundant schema to improve brevity.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 6,
+      "examples": [
+        "Consolidate all rules into a single, non-redundant schema to improve brevity.",
+        "Consolidate all rules into a single, non-redundant source of truth to reduce token bloat."
+      ]
+    },
+    {
+      "template": "Consolidate repetitive sections to improve brevity and focus.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 5,
+      "examples": [
+        "Consolidate repetitive sections to improve brevity and information density.",
+        "Consolidate repetitive sections to improve brevity and focus."
+      ]
+    },
+    {
+      "template": "Split the content into a concise 'Rules' file (constraints/patterns) and a separate 'Reference' file (full documentation).",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 5,
+      "examples": [
+        "Split the content into a concise 'Rules' file (constraints/patterns) and a separate 'Reference' file (full documentation).",
+        "Split the content into a concise 'System Rules' file (for the agent) and a 'Project Documentation' file (for human developers)."
+      ]
+    },
+    {
+      "template": "Split this into a concise '{file_path}' (rules only) and a separate '{file_path}' (reference manual).",
+      "dimension": "brevity",
+      "slots": [
+        "file_path"
+      ],
+      "frequency": 5,
+      "examples": [
+        "Split this into a concise '.cursor/rules/python.md' (rules only) and a separate 'docs/standards.md' (reference manual).",
+        "Split this into a concise 'rules.md' (imperative constraints) and a 'reference.md' (documentation)."
+      ]
+    },
+    {
+      "template": "Consolidate all command references into a single 'Command Reference' appendix to remove repetitive inline syntax.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 5,
+      "examples": [
+        "Consolidate all command references into a single 'Command Reference' appendix to remove repetitive inline syntax.",
+        "Consolidate all command references into a single 'Command Reference' section and remove duplicates."
+      ]
+    },
+    {
+      "template": "Trim the document by 50% by removing explanatory text and keeping only the core patterns and constraints.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 5,
+      "examples": [
+        "Trim the document by 50% by removing explanatory text and keeping only the core patterns and constraints.",
+        "Trim the document by 50% by removing project management fluff and focusing strictly on actionable developer constraints."
+      ]
+    },
+    {
+      "template": "Condense the guide into a concise 'Rules' section and a separate 'Reference' section.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 4,
+      "examples": [
+        "Condense the guide into a concise 'Rules' section and a separate 'Reference' section.",
+        "Condense the guide into a concise reference sheet for the agent."
+      ]
+    },
+    {
+      "template": "Split the document into a concise 'System Prompt' (rules/constraints) and a separate 'Knowledge Base' (scripts/techniques).",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 4,
+      "examples": [
+        "Split the document into a concise 'System Prompt' (rules/constraints) and a separate 'Knowledge Base' (scripts/techniques).",
+        "Split the document into a concise 'Rules' section (imperative commands) and a 'Reference' section (the current manual)."
+      ]
+    },
+    {
+      "template": "Consolidate repetitive sections to reduce token count and improve readability.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 4,
+      "examples": [
+        "Consolidate repetitive sections to reduce token count and improve readability.",
+        "Consolidate repetitive sections to reduce token count and improve readability."
+      ]
+    },
+    {
+      "template": "Trim redundant prose to reduce token count while maintaining the core design constraints.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 4,
+      "examples": [
+        "Trim redundant prose to reduce token count while maintaining the core design constraints.",
+        "Trim redundant prose to reduce token count while maintaining the imperative tone."
+      ]
+    },
+    {
+      "template": "Consolidate redundant sections to reduce length by 30-40% without losing technical depth.",
+      "dimension": "brevity",
+      "slots": [],
+      "frequency": 4,
+      "examples": [
+        "Consolidate redundant sections to reduce length by 30-40% without losing technical depth.",
+        "Consolidate redundant sections to reduce length by 30-40%."
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "template": "Include a 'Good vs. Bad' example pair to demonstrate the expected depth and tone of the analysis.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 31,
+      "examples": [
+        "Include a 'Good vs. Bad' example pair to demonstrate the expected depth and tone of the analysis.",
+        "Include a 'Good vs. Bad' example for requirement documentation to set output expectations."
+      ]
+    },
+    {
+      "template": "Include a 'Good vs. Bad' code example pair to demonstrate preferred styling and readability.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 26,
+      "examples": [
+        "Include a 'Good vs. Bad' code example pair to demonstrate preferred styling and readability.",
+        "Include a 'Good vs. Bad' code example section to clarify expectations for readability and error handling."
+      ]
+    },
+    {
+      "template": "Include a 'Bad vs. Good' example pair to better illustrate the desired tone and citation style.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 26,
+      "examples": [
+        "Include a 'Bad vs. Good' example pair to better illustrate the desired tone and citation style.",
+        "Include a 'bad vs. good' example comparison to clarify common mistakes."
+      ]
+    },
+    {
+      "template": "Include a 'Bad vs Good' code example to demonstrate expected implementation quality.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 24,
+      "examples": [
+        "Include a 'Bad vs Good' code example to demonstrate expected implementation quality.",
+        "Include a 'Bad vs Good' code example section to clarify the 'no mutex' and 'streaming' constraints."
+      ]
+    },
+    {
+      "template": "Include a 'Good vs Bad' code example demonstrating vectorized operations vs. iterative loops.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 22,
+      "examples": [
+        "Include a 'Good vs Bad' code example demonstrating vectorized operations vs. iterative loops.",
+        "Include a 'Good vs Bad' code example for the Repository/Service pattern to clarify expectations."
+      ]
+    },
+    {
+      "template": "Include a 'Code Style' section with a 'Bad vs. Good' code example for common patterns.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 20,
+      "examples": [
+        "Include a 'Code Style' section with a 'Bad vs. Good' code example for common patterns.",
+        "Include a 'Code Style' section with a 'Bad' vs 'Good' code snippet to define expected patterns."
+      ]
+    },
+    {
+      "template": "Include a code snippet demonstrating the AAA pattern to ensure the agent follows your specific style.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 19,
+      "examples": [
+        "Include a code snippet demonstrating the AAA pattern to ensure the agent follows your specific style.",
+        "Include a code snippet demonstrating the preferred testing pattern for a component or utility."
+      ]
+    },
+    {
+      "template": "Add a 'Bad vs. Good' code block for common accessibility violations like div-buttons.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 19,
+      "examples": [
+        "Add a 'Bad vs. Good' code block for common accessibility violations like div-buttons.",
+        "Add a 'Bad vs. Good' code block example for critical patterns like error handling and React component structure."
+      ]
+    },
+    {
+      "template": "Add a 'Code Patterns' section with a 'Good vs. Bad' example of a UI component.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 16,
+      "examples": [
+        "Add a 'Code Patterns' section with a 'Good vs. Bad' example of a UI component.",
+        "Add a 'Code Patterns' section with a canonical example of a PydanticAI agent implementation and a tool definition."
+      ]
+    },
+    {
+      "template": "Provide a 'Good vs. Bad' example of a documented module to set quality standards.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 15,
+      "examples": [
+        "Provide a 'Good vs. Bad' example of a documented module to set quality standards.",
+        "Provide a 'Good vs. Bad' example of a metric commentary to guide the agent's analytical tone."
+      ]
+    },
+    {
+      "template": "Include code snippets demonstrating preferred patterns, such as an optimized ORM query vs. an N+1 query.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 12,
+      "examples": [
+        "Include code snippets demonstrating preferred patterns, such as an optimized ORM query vs. an N+1 query.",
+        "Include code snippets demonstrating preferred patterns (e.g., context module structure, LiveView state management)."
+      ]
+    },
+    {
+      "template": "Include a 'Good vs Bad' example pair to define expectations.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 12,
+      "examples": [
+        "Include a 'Good vs Bad' example pair to define expectations.",
+        "Include a 'Good vs Bad' example section to demonstrate expected quality."
+      ]
+    },
+    {
+      "template": "Provide a 'Good vs Bad' code example for RSpec test generation to align the AI's output style.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 11,
+      "examples": [
+        "Provide a 'Good vs Bad' code example for RSpec test generation to align the AI's output style.",
+        "Provide a 'Good vs Bad' code example for the most complex or frequently violated rules."
+      ]
+    },
+    {
+      "template": "Add a 'Bad vs Good' code block comparing a poor commit message to a compliant one.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 10,
+      "examples": [
+        "Add a 'Bad vs Good' code block comparing a poor commit message to a compliant one.",
+        "Add a 'Bad vs Good' code example section for the most critical rules like naming and function length."
+      ]
+    },
+    {
+      "template": "Provide a 'Good vs. Bad' code example for a test case to establish a clear quality baseline.",
+      "dimension": "examples",
+      "slots": [],
+      "frequency": 9,
+      "examples": [
+        "Provide a 'Good vs. Bad' code example for a test case to establish a clear quality baseline.",
+        "Provide a 'Good vs. Bad' code example to illustrate how to refactor a function to meet the 50-line and 10-complexity limits."
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "template": "Include a 'Definition of Done' section that mandates specific verification steps before completion.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 38,
+      "examples": [
+        "Include a 'Definition of Done' section that mandates specific verification steps before completion.",
+        "Include a 'Definition of Done' section with specific thresholds (e.g., 'Minimum 80% test coverage')."
+      ]
+    },
+    {
+      "template": "Add a 'Commands' section with specific CLI tool usage (e.g., `grep -r 'password' .`, `{command}`).",
+      "dimension": "verification",
+      "slots": [
+        "command"
+      ],
+      "frequency": 19,
+      "examples": [
+        "Add a 'Commands' section with specific CLI tool usage (e.g., `grep -r 'password' .`, `npm audit`).",
+        "Add a 'Commands' section with specific CLI tools like `k6`, `lighthouse`, or `otel-cli` for verification."
+      ]
+    },
+    {
+      "template": "Define explicit success criteria, such as requiring an exit code of 0 for all test and linting commands.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 16,
+      "examples": [
+        "Define explicit success criteria, such as requiring an exit code of 0 for all test and linting commands.",
+        "Define explicit success criteria, such as 'Tests must pass with 0 warnings and meet 80% coverage'."
+      ]
+    },
+    {
+      "template": "Add a 'Definition of Done' checklist for manual code and design reviews to standardize verification.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 14,
+      "examples": [
+        "Add a 'Definition of Done' checklist for manual code and design reviews to standardize verification.",
+        "Add a 'Definition of Done' checklist at the end of the guide to provide a final, quick verification step for users."
+      ]
+    },
+    {
+      "template": "Add a verification step, such as 'After suggesting pruning, run `ollama list` again to confirm the remaining models and present this list to the user.'",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 13,
+      "examples": [
+        "Add a verification step, such as 'After suggesting pruning, run `ollama list` again to confirm the remaining models and present this list to the user.'",
+        "Add a verification step, such as 'Verify the summary is <= 50 chars and body is wrapped at 72 chars'."
+      ]
+    },
+    {
+      "template": "Include a verification step, such as 'After organizing, run `tree -L 2` and confirm all repositories are in a subfolder or the `misc` folder.'",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 10,
+      "examples": [
+        "Include a verification step, such as 'After organizing, run `tree -L 2` and confirm all repositories are in a subfolder or the `misc` folder.'",
+        "Include a verification step, such as checking for missing docstrings or validating against a schema."
+      ]
+    },
+    {
+      "template": "Include a 'Definition of Done' checklist that the agent must verify before finalizing any code output.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 10,
+      "examples": [
+        "Include a 'Definition of Done' checklist that the agent must verify before finalizing any code output.",
+        "Include a 'Definition of Done' checklist at the end to ensure all steps (PRD, Tools, Agents, Agency, Tests) are verified before completion."
+      ]
+    },
+    {
+      "template": "Include a verification step requiring the agent to cross-reference the implementation against the identified 'Variation points'.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 10,
+      "examples": [
+        "Include a verification step requiring the agent to cross-reference the implementation against the identified 'Variation points'.",
+        "Include a verification step requiring the agent to cross-reference output against a specific legal checklist."
+      ]
+    },
+    {
+      "template": "Define explicit success criteria for the output (e.g., 'The response must include a table with at least 5 rows for competitive analysis').",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 9,
+      "examples": [
+        "Define explicit success criteria for the output (e.g., 'The response must include a table with at least 5 rows for competitive analysis').",
+        "Define explicit success criteria for the validation step, such as 'exit 1 if any critical issues are found'."
+      ]
+    },
+    {
+      "template": "Define a verification step, such as 'Verify the top 3 competitors by checking the first 3 search results for relevance'.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 8,
+      "examples": [
+        "Define a verification step, such as 'Verify the top 3 competitors by checking the first 3 search results for relevance'.",
+        "Define a verification step, such as 'Run existing test suite after UI modifications'."
+      ]
+    },
+    {
+      "template": "Add a mandatory verification step requiring evaluation against a small test set of inputs.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 8,
+      "examples": [
+        "Add a mandatory verification step requiring evaluation against a small test set of inputs.",
+        "Add a mandatory verification step requiring the agent to run a test suite before completing tasks."
+      ]
+    },
+    {
+      "template": "Define explicit verification steps, such as checking for expected column headers or row counts, before finalizing the answer.",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 8,
+      "examples": [
+        "Define explicit verification steps, such as checking for expected column headers or row counts, before finalizing the answer.",
+        "Define explicit verification steps, such as 'Run `npm test` and ensure 100% pass rate before finalizing'."
+      ]
+    },
+    {
+      "template": "Include mandatory verification commands like '{tool} run lint' or '{tool}' to ensure objective validation.",
+      "dimension": "verification",
+      "slots": [
+        "tool"
+      ],
+      "frequency": 7,
+      "examples": [
+        "Include mandatory verification commands like 'npm run lint' or 'pytest' to ensure objective validation.",
+        "Include mandatory verification commands like 'cargo test --all-features' and 'cargo clippy' in the testing section."
+      ]
+    },
+    {
+      "template": "Include specific shell commands for running tests and generating coverage reports (e.g., '{tool} test -- --coverage').",
+      "dimension": "verification",
+      "slots": [
+        "tool"
+      ],
+      "frequency": 7,
+      "examples": [
+        "Include specific shell commands for running tests and generating coverage reports (e.g., 'npm test -- --coverage').",
+        "Include specific shell commands for running tests and verifying coverage."
+      ]
+    },
+    {
+      "template": "Add a 'Workflow' section that mandates specific CLI commands for testing, linting, and formatting (e.g., sbt scalafmtCheck, sbt test).",
+      "dimension": "verification",
+      "slots": [],
+      "frequency": 7,
+      "examples": [
+        "Add a 'Workflow' section that mandates specific CLI commands for testing, linting, and formatting (e.g., sbt scalafmtCheck, sbt test).",
+        "Add a 'Workflow' section that mandates specific verification steps (e.g., 'Always run `twine check` before suggesting a release')."
+      ]
+    }
+  ],
+  "general": [
+    {
+      "template": "Include 'Good vs. Bad' code snippets for schema design and resolver patterns.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 27,
+      "examples": [
+        "Include 'Good vs. Bad' code snippets for schema design and resolver patterns.",
+        "Include 'Good vs. Bad' code snippets for critical patterns like API response typing."
+      ]
+    },
+    {
+      "template": "Add a 'Quick Start' summary at the top to provide immediate value without reading the full guide.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 23,
+      "examples": [
+        "Add a 'Quick Start' summary at the top to provide immediate value without reading the full guide.",
+        "Add a 'Quick Start' summary at the top to allow the agent to quickly grasp the core constraints."
+      ]
+    },
+    {
+      "template": "Define a 'Definition of Done' that requires benchmarking results or performance delta metrics before finishing a task.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 21,
+      "examples": [
+        "Define a 'Definition of Done' that requires benchmarking results or performance delta metrics before finishing a task.",
+        "Define a 'Definition of Done' that requires passing local tests before deployment."
+      ]
+    },
+    {
+      "template": "Define a 'Definition of Done' checklist that the agent must confirm before considering a hook complete.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 20,
+      "examples": [
+        "Define a 'Definition of Done' checklist that the agent must confirm before considering a hook complete.",
+        "Define a 'Definition of Done' checklist that includes linting, testing, and type-checking requirements."
+      ]
+    },
+    {
+      "template": "Include 'Good vs Bad' code snippets for key {file_path} patterns like data fetching and server actions.",
+      "dimension": "general",
+      "slots": [
+        "file_path"
+      ],
+      "frequency": 16,
+      "examples": [
+        "Include 'Good vs Bad' code snippets for key Next.js patterns like data fetching and server actions.",
+        "Include 'Good vs Bad' code snippets for critical patterns like RSC usage and state management."
+      ]
+    },
+    {
+      "template": "Add a 'Definition of Done' checklist at the end to ensure all accessibility and testing requirements are met before completion.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 15,
+      "examples": [
+        "Add a 'Definition of Done' checklist at the end to ensure all accessibility and testing requirements are met before completion.",
+        "Add a 'Definition of Done' checklist that the agent must confirm before finalizing a task."
+      ]
+    },
+    {
+      "template": "Include code snippets showing the expected structure for Knative services and htmx integration.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 12,
+      "examples": [
+        "Include code snippets showing the expected structure for Knative services and htmx integration.",
+        "Include code snippets showing the expected structure for model serving or feature pipelines."
+      ]
+    },
+    {
+      "template": "Include 'Good' vs 'Bad' code snippets for the most critical architectural and style rules.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 11,
+      "examples": [
+        "Include 'Good' vs 'Bad' code snippets for the most critical architectural and style rules.",
+        "Include 'Good' vs 'Bad' code snippets to clarify the pragmatic philosophy."
+      ]
+    },
+    {
+      "template": "Define a strict JSON schema for the final report to ensure machine-readability.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 10,
+      "examples": [
+        "Define a strict JSON schema for the final report to ensure machine-readability.",
+        "Define a strict JSON schema for the estimation report to ensure consistent downstream integration."
+      ]
+    },
+    {
+      "template": "Define a 'Definition of Done' for each agent type to standardize expected outputs.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 10,
+      "examples": [
+        "Define a 'Definition of Done' for each agent type to standardize expected outputs.",
+        "Define a 'Definition of Done' for migrations, such as requiring a successful run against a sanitized production dump."
+      ]
+    },
+    {
+      "template": "Include 'Bad vs. Good' code blocks for common pitfalls like SQL injection or inefficient joins.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 8,
+      "examples": [
+        "Include 'Bad vs. Good' code blocks for common pitfalls like SQL injection or inefficient joins.",
+        "Include 'Bad vs. Good' code blocks to clarify common pitfalls like global client instances."
+      ]
+    },
+    {
+      "template": "Define a fallback procedure for when the 'code-reviewer' subagent is not available or fails to execute.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 8,
+      "examples": [
+        "Define a fallback procedure for when the 'code-reviewer' subagent is not available or fails to execute.",
+        "Define a fallback procedure for when 'git push' fails (e.g., 'git pull --rebase')."
+      ]
+    },
+    {
+      "template": "Define a strict JSON output schema to ensure the generated plans are machine-readable.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 7,
+      "examples": [
+        "Define a strict JSON output schema to ensure the generated plans are machine-readable.",
+        "Define a strict JSON output schema for findings to ensure machine-readability and consistent reporting."
+      ]
+    },
+    {
+      "template": "Include code snippets showing 'bad' vs 'good' patterns for {tool} components.",
+      "dimension": "general",
+      "slots": [
+        "tool"
+      ],
+      "frequency": 7,
+      "examples": [
+        "Include code snippets showing 'bad' vs 'good' patterns for TypeScript and React components.",
+        "Include code snippets showing 'Bad' vs 'Good' implementations for each rule."
+      ]
+    },
+    {
+      "template": "Add a 'Quick Reference' table at the top summarizing architecture selection by problem type.",
+      "dimension": "general",
+      "slots": [],
+      "frequency": 7,
+      "examples": [
+        "Add a 'Quick Reference' table at the top summarizing architecture selection by problem type.",
+        "Add a 'Quick Reference' table at the top summarizing the core patterns."
+      ]
+    }
+  ]
+}
