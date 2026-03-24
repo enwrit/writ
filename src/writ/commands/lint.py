@@ -417,11 +417,11 @@ def _looks_like_file(value: str) -> bool:
     p = Path(value)
     if p.exists() and p.is_file():
         return True
-    _FILE_EXTENSIONS = {
+    _file_extensions = {
         ".md", ".mdc", ".yaml", ".yml", ".txt",
         ".windsurfrules", ".cursorrules",
     }
-    if p.suffix.lower() in _FILE_EXTENSIONS:
+    if p.suffix.lower() in _file_extensions:
         return True
     if "/" in value or "\\" in value:
         return True
