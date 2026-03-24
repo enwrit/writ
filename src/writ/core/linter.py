@@ -69,6 +69,46 @@ EXPERT_PREAMBLE_PATTERN = re.compile(
     re.I,
 )
 
+# ---------------------------------------------------------------------------
+# General knowledge restatement patterns (from ETH Zurich + cursor-doctor)
+#
+# Rules that restate what every LLM already knows.  These waste tokens and
+# ETH Zurich (Feb 2026) found they actually *reduce* task success rates.
+# ---------------------------------------------------------------------------
+
+GENERAL_KNOWLEDGE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\buse meaningful (?:variable|function|method) names?\b", re.I),
+     "use meaningful variable names"),
+    (re.compile(r"\bavoid magic numbers?\b", re.I),
+     "avoid magic numbers"),
+    (re.compile(r"\bkeep (?:functions?|methods?) (?:small|short|focused)\b", re.I),
+     "keep functions small"),
+    (re.compile(r"\bkeep imports? organized\b", re.I),
+     "keep imports organized"),
+    (re.compile(r"\bdon.?t repeat yourself\b", re.I),
+     "don't repeat yourself (DRY)"),
+    (re.compile(r"\bfollow (?:the )?(?:PEP\s*8|PEP8)\b(?!\s+\w)", re.I),
+     "follow PEP 8"),
+    (re.compile(r"\bfollow (?:the )?(?:SOLID|solid) principles?\b", re.I),
+     "follow SOLID principles"),
+    (re.compile(r"\bprefer composition over inheritance\b", re.I),
+     "prefer composition over inheritance"),
+    (re.compile(r"\buse proper error handling\b", re.I),
+     "use proper error handling"),
+    (re.compile(r"\bhandle errors? gracefully\b", re.I),
+     "handle errors gracefully"),
+    (re.compile(r"\buse (?:2|4)[- ]space indent(?:ation|s)?\b", re.I),
+     "use N-space indentation"),
+    (re.compile(r"\buse constants? for (?:config|configuration) values?\b", re.I),
+     "use constants for configuration"),
+    (re.compile(r"\bwrite (?:unit )?tests?\b(?!.*`)", re.I),
+     "write tests"),
+    (re.compile(r"\buse type hints?\b(?!.*\bstrict\b)", re.I),
+     "use type hints"),
+    (re.compile(r"\bwrite docstrings?\b", re.I),
+     "write docstrings"),
+]
+
 VERIFICATION_KEYWORDS = re.compile(
     r"\b(?:test|check|verify|lint|build|run|execute"
     r"|pytest|npm test|ruff|eslint|mypy|cargo test)\b",
@@ -127,19 +167,20 @@ def lint(
     results: list[LintResult] = []
     writ_managed = _is_writ_managed(agent, source_path)
 
-    results.extend(_check_name(agent))
+    results.extend(_check_name(agent, writ_managed))
     results.extend(_check_instructions_length(agent))
     results.extend(_check_contradictions(agent))
     results.extend(_check_weak_language(agent))
     results.extend(_check_expert_preamble(agent))
     results.extend(_check_instruction_bloat(agent))
     results.extend(_check_no_verification(agent))
-    results.extend(_check_has_commands(agent))
+    results.extend(_check_has_commands(agent, results))
     results.extend(_check_excessive_examples(agent))
     results.extend(_check_dead_content(agent))
     results.extend(_check_has_boundaries(agent))
     results.extend(_check_has_examples(agent))
-    results.extend(_check_mixed_concerns(agent))
+    results.extend(_check_general_knowledge(agent))
+    results.extend(_check_wall_of_text(agent))
 
     results.extend(_check_missing_metadata(agent, source_path, writ_managed))
     results.extend(_check_empty_globs(agent))
@@ -153,7 +194,10 @@ def lint(
     return results
 
 
-def _check_name(agent: InstructionConfig) -> list[LintResult]:
+def _check_name(
+    agent: InstructionConfig,
+    writ_managed: bool = False,
+) -> list[LintResult]:
     results: list[LintResult] = []
     if not agent.name:
         results.append(LintResult(
@@ -162,7 +206,7 @@ def _check_name(agent: InstructionConfig) -> list[LintResult]:
             message="Agent name is required.",
             base_penalty=10,
         ))
-    elif not re.match(r"^[a-z0-9][a-z0-9-]*$", agent.name):
+    elif writ_managed and not re.match(r"^[a-z0-9][a-z0-9-]*$", agent.name):
         results.append(LintResult(
             level="warning",
             rule="name-format",
@@ -388,14 +432,112 @@ def _check_expert_preamble(
             level="info",
             rule="expert-preamble",
             message=(
-                "'You are an expert...' preamble wastes "
-                "10-15 tokens with no measurable impact. "
-                "Consider removing."
+                "'You are an expert...' preamble -- the "
+                "model already has this knowledge. Replace "
+                "with specific behavioral constraints."
             ),
             line=1,
             base_penalty=5,
         )]
     return []
+
+
+def _check_general_knowledge(
+    agent: InstructionConfig,
+) -> list[LintResult]:
+    """Flag rules that restate common programming knowledge.
+
+    ETH Zurich (Feb 2026) found that generic context files actually
+    reduce task success rates by 20%+ because they crowd out useful,
+    project-specific instructions.  cursor-doctor flagged this in
+    27 of 50 analyzed repos.
+    """
+    if not agent.instructions:
+        return []
+
+    prose = _prose_text(agent.instructions)
+    matches: list[str] = []
+    for pattern, label in GENERAL_KNOWLEDGE_PATTERNS:
+        if pattern.search(prose):
+            matches.append(label)
+
+    if len(matches) >= 3:
+        examples = ", ".join(f"'{m}'" for m in matches[:3])
+        return [LintResult(
+            level="warning",
+            rule="general-knowledge",
+            message=(
+                f"Found {len(matches)} rules restating general "
+                f"knowledge ({examples}). Models already know "
+                "these -- replace with project-specific "
+                "constraints that the model can't infer."
+            ),
+            base_penalty=12,
+        )]
+    return []
+
+
+def _check_wall_of_text(
+    agent: InstructionConfig,
+) -> list[LintResult]:
+    """Flag long prose paragraphs with no structural elements.
+
+    Blake Crosley's behavioral testing (2026) confirmed that prose
+    paragraphs without commands reliably get ignored by agents.
+    Long unstructured blocks are the textual equivalent of a wall
+    of text -- agents skim or skip them.
+    """
+    if not agent.instructions:
+        return []
+
+    lines = agent.instructions.split("\n")
+    results: list[LintResult] = []
+    prose_run = 0
+    run_start = 0
+    in_fence = False
+
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            prose_run = 0
+            continue
+        if in_fence:
+            continue
+
+        is_structural = (
+            stripped.startswith("#")
+            or stripped.startswith("- ")
+            or stripped.startswith("* ")
+            or stripped.startswith("| ")
+            or re.match(r"^\d+\.\s", stripped)
+            or "`" in stripped
+            or not stripped
+        )
+
+        if is_structural:
+            prose_run = 0
+        else:
+            if prose_run == 0:
+                run_start = i
+            prose_run += 1
+
+        if prose_run >= 6:
+            results.append(LintResult(
+                level="info",
+                rule="wall-of-text",
+                message=(
+                    f"Lines {run_start}-{i}: long prose block "
+                    "with no structure. Agents skip dense "
+                    "paragraphs -- use bullet points, "
+                    "commands, or code examples instead."
+                ),
+                line=run_start,
+                base_penalty=5,
+            ))
+            prose_run = 0
+
+    return results
 
 
 def _check_instruction_bloat(
@@ -466,9 +608,16 @@ def _check_no_verification(
 
 def _check_has_commands(
     agent: InstructionConfig,
+    prior_results: list[LintResult] | None = None,
 ) -> list[LintResult]:
-    """Positive check: flag when no executable commands present."""
+    """Positive check: flag when no executable commands present.
+
+    Suppressed when no-verification already fired (avoids redundant output).
+    """
     if not agent.instructions:
+        return []
+
+    if prior_results and any(r.rule == "no-verification" for r in prior_results):
         return []
 
     if not COMMAND_PATTERN.search(agent.instructions):
@@ -708,24 +857,33 @@ def _topic_clusters(headings: list[str]) -> int:
 
 
 def _check_mixed_concerns(agent: InstructionConfig) -> list[LintResult]:
-    """Detect >2 topic clusters via heading keyword analysis."""
+    """Detect truly unrelated topic clusters via heading keyword analysis.
+
+    Multiple sections about different aspects of the same role (e.g. "Code
+    Style", "API Design", "Database" for a backend developer) are fine.
+    Only flag when the instruction mixes clearly unrelated domains AND the
+    cluster-to-heading ratio is high (most headings are isolated topics).
+    """
     if not agent.instructions:
         return []
 
     headings = _extract_heading_texts(agent.instructions)
-    if len(headings) < 3:
+    if len(headings) < 4:
         return []
 
     n = _topic_clusters(headings)
-    if n > 2:
+    isolation_ratio = n / len(headings)
+    if n > 5 and isolation_ratio > 0.7:
         return [LintResult(
-            level="warning",
+            level="info",
             rule="mixed-concerns",
             message=(
-                f"Detected {n} distinct topic clusters in headings. "
-                "Consider splitting into focused instructions."
+                f"Detected {n} distinct topic areas across "
+                f"{len(headings)} headings. If these cover "
+                "multiple unrelated roles, consider splitting "
+                "into separate instructions."
             ),
-            base_penalty=10,
+            base_penalty=5,
         )]
     return []
 

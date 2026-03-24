@@ -74,9 +74,9 @@ writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
 writ register                   Interactive account creation + auto-login
 writ login                      Authenticate with enwrit.com (cross-device sync)
 writ logout                     Remove stored API key
-writ lint <name>                Validate quality (ML-predicted when models available, else code-based)
+writ lint <name|file>           Validate quality (auto-detects file vs store name)
 writ lint --code                Force Tier 1 code-only scoring (deterministic)
-writ lint --deep --file <path>  AI-powered Tier 3 scoring via enwrit.com (requires login)
+writ lint <file> --deep         AI-powered Tier 3 scoring via enwrit.com (requires login)
 writ connect                   Interactive peer setup wizard for real repos
 writ publish <name>             Make instruction publicly discoverable on enwrit.com
 writ sync                       Bulk bidirectional library sync with enwrit.com

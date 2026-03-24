@@ -207,8 +207,7 @@ def _run_deep_lint(
         if not store.is_initialized():
             console.print(
                 "[red]Not initialized.[/red] Run "
-                "[cyan]writ init[/cyan] first, or use "
-                "[cyan]--file[/cyan].",
+                "[cyan]writ init[/cyan] first, or pass a file path.",
             )
             raise typer.Exit(1)
         agent = store.load_instruction(name)
@@ -218,7 +217,7 @@ def _run_deep_lint(
     else:
         console.print(
             "[yellow]--deep requires a target.[/yellow] "
-            "Specify a name or use --file.",
+            "Specify a file path or agent name.",
         )
         raise typer.Exit(1)
 
@@ -320,6 +319,78 @@ def _run_deep_lint(
         raise typer.Exit(1)
 
 
+def _run_deep_local_lint(
+    name: str | None,
+    file: Path | None,
+    json_output: bool,
+    ci: bool,
+    min_score: int,
+) -> None:
+    """Run local AI-powered lint via fine-tuned Qwen model."""
+    if file:
+        if not file.exists():
+            console.print(f"[red]File not found:[/red] {file}")
+            raise typer.Exit(1)
+        agent = _parse_file_to_config(file)
+    elif name:
+        if not store.is_initialized():
+            console.print(
+                "[red]Not initialized.[/red] Run "
+                "[cyan]writ init[/cyan] first, or pass a file path.",
+            )
+            raise typer.Exit(1)
+        agent = store.load_instruction(name)
+        if not agent:
+            console.print(f"[red]Agent '{name}' not found.[/red]")
+            raise typer.Exit(1)
+    else:
+        console.print(
+            "[yellow]--deep-local requires a target.[/yellow] "
+            "Specify a file path or agent name.",
+        )
+        raise typer.Exit(1)
+
+    content = agent.instructions or ""
+    if not content.strip():
+        console.print("[yellow]Instruction content is empty.[/yellow]")
+        raise typer.Exit(1)
+
+    console.print("[dim]Running local AI analysis...[/dim]")
+
+    try:
+        from writ.core.local_llm import compute_score_local
+
+        results = lint_engine.lint(agent, source_path=file)
+        tier1 = lint_engine.compute_score(agent, results)
+        lint_score = compute_score_local(
+            content, tier1_issues=tier1.issues
+        )
+    except SystemExit:
+        raise
+    except Exception as exc:
+        console.print(
+            f"[red]Local AI scoring failed:[/red] {exc}\n"
+            "Falling back to ML/code-based scoring.",
+        )
+        _fallback_local_lint(agent, file, json_output, ci, min_score)
+        return
+
+    if json_output:
+        sys.stdout.write(_score_to_json(lint_score) + "\n")
+    else:
+        _print_results(results)
+        color = _score_color(lint_score.score)
+        console.print(
+            f"\n  Local AI Score: [{color}][bold]{lint_score.score}"
+            f"[/bold] / 100[/{color}]",
+        )
+        console.print("  [dim](powered by Qwen3.5-0.8B, local)[/dim]")
+        _print_score(lint_score)
+
+    if ci and lint_score.score < min_score:
+        raise typer.Exit(1)
+
+
 def _fallback_local_lint(
     agent: InstructionConfig,
     file: Path | None,
@@ -341,18 +412,35 @@ def _fallback_local_lint(
         raise typer.Exit(1)
 
 
+def _looks_like_file(value: str) -> bool:
+    """Return True if the argument looks like a file path rather than a store name."""
+    p = Path(value)
+    if p.exists() and p.is_file():
+        return True
+    _FILE_EXTENSIONS = {
+        ".md", ".mdc", ".yaml", ".yml", ".txt",
+        ".windsurfrules", ".cursorrules",
+    }
+    if p.suffix.lower() in _FILE_EXTENSIONS:
+        return True
+    if "/" in value or "\\" in value:
+        return True
+    return False
+
+
 def lint_command(
     name: Annotated[
         str | None,
         typer.Argument(
-            help="Agent name to lint (or omit to lint all).",
+            help="File path or agent name to lint (auto-detected).",
         ),
     ] = None,
     file: Annotated[
         Path | None,
         typer.Option(
             "--file", "-f",
-            help="Lint a raw file without requiring writ init.",
+            help="(Deprecated) Lint a raw file. Pass the path as the argument instead.",
+            hidden=True,
         ),
     ] = None,
     json_output: Annotated[
@@ -411,6 +499,13 @@ def lint_command(
             help="Force code-based Tier 1 scoring (skip ML models).",
         ),
     ] = False,
+    deep_local: Annotated[
+        bool,
+        typer.Option(
+            "--deep-local",
+            help="Local AI analysis via fine-tuned Qwen model (no API needed).",
+        ),
+    ] = False,
 ) -> None:
     """Validate instruction quality and compute scores.
 
@@ -420,19 +515,33 @@ def lint_command(
 
     By default uses ML-predicted scores (Tier 2) when models
     are available. Use --code for deterministic code-only scoring,
-    or --deep for AI-powered analysis via enwrit.com.
+    --deep for AI-powered analysis via enwrit.com, or --deep-local
+    for local AI analysis via a fine-tuned Qwen model.
 
     Example:
-        writ lint                          # lint all (ML or code)
-        writ lint reviewer                 # lint specific
-        writ lint --file CLAUDE.md         # lint any file
-        writ lint --code                   # force Tier 1 only
-        writ lint --file rules.mdc --json  # JSON output
-        writ lint --ci --min-score 60      # fail CI if < 60
-        writ lint --changed                # only modified files
-        writ lint --badge                  # print badge URL
-        writ lint --deep --file CLAUDE.md  # AI-powered analysis
+        writ lint                         # lint all (ML or code)
+        writ lint reviewer                # lint by store name
+        writ lint AGENTS.md               # lint a file (auto-detected)
+        writ lint CLAUDE.md --deep        # AI analysis (API)
+        writ lint rules.mdc --json        # JSON output
+        writ lint --code                  # force Tier 1 only
+        writ lint --ci --min-score 60     # fail CI if < 60
+        writ lint --changed               # only modified files
+        writ lint --badge                 # print badge URL
+        writ lint CLAUDE.md --deep-local  # AI analysis (local)
     """
+    if file is None and name is not None and _looks_like_file(name):
+        file = Path(name)
+        name = None
+    if deep_local:
+        _run_deep_local_lint(
+            name=name,
+            file=file,
+            json_output=json_output,
+            ci=ci,
+            min_score=min_score,
+        )
+        return
     if deep:
         _run_deep_lint(
             name=name,
@@ -516,8 +625,8 @@ def lint_command(
     if not store.is_initialized():
         console.print(
             "[red]Not initialized.[/red] Run "
-            "[cyan]writ init[/cyan] first, or use "
-            "[cyan]--file[/cyan] to lint a file directly.",
+            "[cyan]writ init[/cyan] first, or pass a file path "
+            "(e.g. [cyan]writ lint AGENTS.md[/cyan]).",
         )
         raise typer.Exit(1)
 

@@ -76,11 +76,21 @@ class TestLinter:
             )
 
     def test_bad_name_format(self, initialized_project):
+        """name-format only fires for writ-managed instructions."""
         agent = InstructionConfig(
             name="My Agent!", instructions="Test",
+            task_type="agent",
         )
         results = linter.lint(agent)
         assert any(r.rule == "name-format" for r in results)
+
+    def test_bad_name_format_skipped_for_files(self):
+        """name-format does NOT fire for file-based linting (non writ-managed)."""
+        agent = InstructionConfig(
+            name="AGENTS", instructions="Test instructions here.",
+        )
+        results = linter.lint(agent)
+        assert not any(r.rule == "name-format" for r in results)
 
     def test_contradiction_detection(self, initialized_project):
         agent = InstructionConfig(
@@ -273,13 +283,24 @@ class TestNoVerification:
 
 
 class TestHasCommands:
-    def test_detects_no_commands(self):
+    def test_detects_no_commands_with_verification(self):
+        """has-commands fires when no backtick commands AND no-verification didn't fire."""
+        agent = InstructionConfig(
+            name="test",
+            instructions="Run tests often. Verify your work.",
+        )
+        results = linter.lint(agent)
+        assert any(r.rule == "has-commands" for r in results)
+
+    def test_suppressed_when_no_verification_fires(self):
+        """has-commands is suppressed when no-verification already covers it."""
         agent = InstructionConfig(
             name="test",
             instructions="Write clean code. Follow patterns.",
         )
         results = linter.lint(agent)
-        assert any(r.rule == "has-commands" for r in results)
+        assert any(r.rule == "no-verification" for r in results)
+        assert not any(r.rule == "has-commands" for r in results)
 
     def test_no_trigger_with_commands(self):
         agent = InstructionConfig(
@@ -774,19 +795,67 @@ class TestHasExamples:
         assert not any(r.rule == "has-examples" for r in results)
 
 
-class TestMixedConcerns:
-    def test_flags_many_topic_clusters(self):
+class TestGeneralKnowledge:
+    def test_flags_restated_knowledge(self):
+        """3+ general knowledge rules should trigger."""
         agent = InstructionConfig(
             name="test",
             instructions=(
-                "# Testing\nUse pytest.\n\n"
-                "# Security\nUse HTTPS.\n\n"
-                "# Performance\nUse caching.\n\n"
-                "# Architecture\nUse layers."
+                "- Use meaningful variable names\n"
+                "- Avoid magic numbers\n"
+                "- Keep functions small and focused\n"
+                "- Use proper error handling"
             ),
         )
         results = linter.lint(agent)
-        assert any(r.rule == "mixed-concerns" for r in results)
+        assert any(r.rule == "general-knowledge" for r in results)
+
+    def test_no_trigger_few_matches(self):
+        """1-2 matches should not trigger."""
+        agent = InstructionConfig(
+            name="test",
+            instructions=(
+                "- Use meaningful variable names\n"
+                "- Run `pytest -v` before committing\n"
+                "- All endpoints must return JSON"
+            ),
+        )
+        results = linter.lint(agent)
+        assert not any(r.rule == "general-knowledge" for r in results)
+
+
+class TestWallOfText:
+    def test_flags_long_prose_block(self):
+        """6+ consecutive prose lines should trigger."""
+        agent = InstructionConfig(
+            name="test",
+            instructions=(
+                "This is a long paragraph about coding.\n"
+                "It goes on and on without any structure.\n"
+                "There are no bullet points here at all.\n"
+                "Nor are there any code examples to speak of.\n"
+                "The agent will likely skip this entire block.\n"
+                "Because it has no actionable content whatsoever."
+            ),
+        )
+        results = linter.lint(agent)
+        assert any(r.rule == "wall-of-text" for r in results)
+
+    def test_no_trigger_with_structure(self):
+        """Prose interspersed with structural elements should not trigger."""
+        agent = InstructionConfig(
+            name="test",
+            instructions=(
+                "This project uses FastAPI.\n"
+                "- Always use async endpoints\n"
+                "- Run `pytest` before committing\n"
+                "We follow strict typing.\n"
+                "- Use `mypy --strict` for type checking\n"
+                "- All functions need return types"
+            ),
+        )
+        results = linter.lint(agent)
+        assert not any(r.rule == "wall-of-text" for r in results)
 
 
 # ===================================================================

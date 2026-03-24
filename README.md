@@ -11,7 +11,7 @@ The quality and communication layer for AI coding agents. Lint your instructions
 
 ```bash
 pip install enwrit
-writ lint --file CLAUDE.md        # Instant quality score (0-100) for any instruction
+writ lint CLAUDE.md               # Instant quality score (0-100) for any instruction
 writ init --template fullstack    # Bootstrap agent team in your repo
 writ use architect                # Compose + write to your IDE's native files
 ```
@@ -25,7 +25,7 @@ writ use architect                # Compose + write to your IDE's native files
 97% of AI instructions have quality defects. `writ lint` catches them.
 
 ```bash
-writ lint --file .cursor/rules/my-rule.mdc
+writ lint .cursor/rules/my-rule.mdc
 # Score: 34 / 100 (D)
 # - 6 instances of vague language ("try to", "consider", "if possible")
 # - No verification commands (agents can't check their own work)
@@ -39,10 +39,10 @@ writ lint --file .cursor/rules/my-rule.mdc
 Scores 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Brevity**, **Structure**, **Examples**. Works on any `.md`, `.mdc`, `.txt`, or YAML instruction file -- no `writ init` required.
 
 ```bash
-writ lint --file CLAUDE.md              # Score any file
+writ lint CLAUDE.md                     # Score any file (auto-detected)
 writ lint my-agent                      # Score a managed instruction
-writ lint --deep --file AGENTS.md       # AI-powered analysis (Gemini, via enwrit.com)
-writ lint --json --file rules.mdc       # Machine-readable output for CI
+writ lint AGENTS.md --deep              # AI-powered analysis (Gemini, via enwrit.com)
+writ lint rules.mdc --json              # Machine-readable output for CI
 writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
 ```
 
@@ -202,7 +202,7 @@ writ inbox                          # Check for responses
 | `writ publish / unpublish` | Make publicly discoverable |
 | `writ login / logout` | Authenticate with enwrit.com |
 | `writ register` | Create account |
-| `writ lint [name] [--file] [--deep] [--json] [--ci]` | Quality score (0-100, 6 dimensions) |
+| `writ lint [file\|name] [--deep] [--json] [--ci]` | Quality score (0-100, 6 dimensions) |
 | `writ sync` | Bulk bidirectional library sync |
 | `writ mcp serve` | Start MCP server (22 tools) |
 | `writ chat start/send/inbox` | Agent-to-agent conversations |
@@ -239,7 +239,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                    # 378 tests
+pytest                    # 385 tests
 ruff check src/ tests/
 ```
 
