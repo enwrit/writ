@@ -25,7 +25,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── handoff.py              # writ handoff -- create/apply context handoffs between agents
 │       │   ├── memory.py               # writ memory export/import/list -- cross-project memory sharing
 │       │   ├── publish.py              # writ publish/unpublish -- make agents publicly discoverable on enwrit.com
-│       │   ├── lint.py                 # writ lint [file|name] [--deep] [--code] -- quality scoring (auto-detects file vs store name; Tier 2 ML default, --code Tier 1, --deep Tier 3 AI)
+│       │   ├── lint.py                 # writ lint [file|name] [--deep] [--deep-local] [--code] -- quality scoring (Tier 2 ML default, --code Tier 1, --deep Tier 3 AI, --deep-local Tier 2.5 local AI)
 │       │   ├── connect.py             # writ connect -- interactive peer setup wizard for real repos
 │       │   ├── sync.py                 # writ sync -- bulk bidirectional library sync with enwrit.com
 │       │   ├── mcp.py                  # writ mcp serve -- expose instructions via MCP protocol
@@ -46,6 +46,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding
 │       │   ├── peers.py                # Peer repository management -- read/write peers.yaml
 │       │   ├── invoker.py              # CLI agent detection (claude/gemini/codex/cursor) + invocation with AutoRespondTier, LLM API fallback
+│       │   ├── local_llm.py            # Tier 2.5: enwrit-lint-nano GGUF download + hybrid inference (LightGBM scores + Qwen feedback) for --deep-local
 │       │   ├── context_window.py       # Sliding window + token estimation for API invocations
 │       │   └── file_io.py              # Cross-platform file locking + atomic append for conversation files
 │       ├── integrations/               # External registry integrations
@@ -147,6 +148,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   └── *.yaml
 ├── context/                            # Personal context library
 │   └── *.yaml
+├── models/                             # Downloaded GGUF models for --deep-local (auto-downloaded on first use)
+│   └── enwrit-lint-nano-Q4_K_M.gguf   # ~530 MB, fine-tuned Qwen3.5-0.8B for lint feedback
 ├── memory/                             # Cross-project memory exports
 │   └── *.yaml                          # PLANNED: synced to remote backend
 ├── templates/                          # PLANNED: user's custom templates

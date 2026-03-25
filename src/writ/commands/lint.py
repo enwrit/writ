@@ -379,12 +379,20 @@ def _run_deep_local_lint(
         sys.stdout.write(_score_to_json(lint_score) + "\n")
     else:
         _print_results(results)
+
+        ai_issues = [i for i in lint_score.issues if i.rule == "local-ai"]
+        if ai_issues:
+            console.print()
+            for item in ai_issues:
+                style = LEVEL_STYLES.get(item.level, item.level)
+                console.print(f"  {style} {item.message}")
+
         color = _score_color(lint_score.score)
         console.print(
             f"\n  Local AI Score: [{color}][bold]{lint_score.score}"
             f"[/bold] / 100[/{color}]",
         )
-        console.print("  [dim](powered by Qwen3.5-0.8B, local)[/dim]")
+        console.print("  [dim](enwrit-lint-nano -- fine-tuned on 30k+ expert evaluations)[/dim]")
         _print_score(lint_score)
 
     if ci and lint_score.score < min_score:

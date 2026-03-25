@@ -5,6 +5,7 @@ The score models are pure Python (m2cgen-generated, zero deps).
 Suggestion retrieval uses numpy for kNN distance calculation.
 
 v2 hybrid: IDF-weighted relevance filtering + auto-mined template fallback.
+v3 tfidf: blended structural + topical neighbor finding via TF-IDF cosine.
 """
 from __future__ import annotations
 
@@ -435,6 +436,201 @@ def _retrieve_suggestions_v2(
 
 
 # ---------------------------------------------------------------------------
+# Suggestion retrieval (v3: TF-IDF blended neighbor finding)
+# ---------------------------------------------------------------------------
+
+def _tfidf_query_vector(
+    instruction_text: str,
+    vocab: dict[str, int],
+    idf: Any,
+) -> Any:
+    """Compute L2-normalized TF-IDF vector for a query instruction.
+
+    Returns a dense numpy array of shape (vocab_size,).
+    """
+    from collections import Counter as _Counter
+
+    import numpy as np
+
+    tokens = list(_tokenize(instruction_text))
+    tf = _Counter(tokens)
+    vec = np.zeros(len(vocab), dtype=np.float32)
+    for term, count in tf.items():
+        if term in vocab:
+            col = vocab[term]
+            vec[col] = (1 + math.log(count)) * float(idf[col])
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+    return vec
+
+
+def _tfidf_cosine_similarities(
+    query_vec: Any,
+    data: Any,
+    indices: Any,
+    indptr: Any,
+    n_docs: int,
+) -> Any:
+    """Compute cosine similarity between query and all stored docs (CSR format).
+
+    Returns numpy array of shape (n_docs,) with cosine similarities in [0, 1].
+    """
+    import numpy as np
+    sims = np.zeros(n_docs, dtype=np.float32)
+    for i in range(n_docs):
+        s, e = int(indptr[i]), int(indptr[i + 1])
+        if s < e:
+            doc_idx = indices[s:e]
+            doc_val = data[s:e]
+            sims[i] = np.dot(query_vec[doc_idx], doc_val)
+    return np.clip(sims, 0.0, 1.0)
+
+
+def _knn_retrieve_blended(
+    raw_signals: dict[str, Any],
+    predicted_dim_scores: dict[str, int],
+    instruction_text: str,
+    k: int = 10,
+) -> list[tuple[str, float, list[str]]]:
+    """Find neighbors by blending structural + topical distance.
+
+    Uses TF-IDF cosine similarity if tfidf_* keys exist in the index,
+    otherwise falls back to pure structural distance (same as v1/v2).
+    """
+    try:
+        import numpy as np
+    except ImportError:
+        return []
+
+    index = _load_suggestion_index()
+    if index is None:
+        return []
+
+    config = _load_feature_config()
+    signal_features = config["signal_features"]
+    sig_min = np.array(config["signal_min"], dtype=np.float32)
+    sig_max = np.array(config["signal_max"], dtype=np.float32)
+
+    shap_weights = _load_shap_weights()
+    shap_w = np.array(
+        [shap_weights.get(f, 0.01) for f in signal_features],
+        dtype=np.float32,
+    )
+
+    # Structural distance (same as v1/v2)
+    query = np.zeros(len(signal_features), dtype=np.float32)
+    for i, feat in enumerate(signal_features):
+        signal_name = feat[4:] if feat.startswith("sig_") else feat
+        val = raw_signals.get(signal_name, raw_signals.get(feat, 0))
+        if isinstance(val, (bool, int, float)):
+            query[i] = float(val)
+    denom = sig_max - sig_min
+    denom[denom == 0] = 1.0
+    q_norm = (query - sig_min) / denom
+
+    signals_matrix = index["signals"]
+    diff = signals_matrix - q_norm
+    struct_distances = np.sqrt(np.sum(shap_w * diff ** 2, axis=1))
+
+    # Normalize structural distances to [0, 1]
+    sd_max = struct_distances.max()
+    if sd_max > 0:
+        struct_norm = struct_distances / sd_max
+    else:
+        struct_norm = struct_distances
+
+    # TF-IDF topical distance
+    tfidf_vocab = index.get("tfidf_vocab")
+    tfidf_idf = index.get("tfidf_idf")
+    tfidf_data = index.get("tfidf_data")
+    tfidf_indices = index.get("tfidf_indices")
+    tfidf_indptr = index.get("tfidf_indptr")
+
+    alpha = index.get("tfidf_alpha", 0.4)
+
+    tfidf_ready = all(
+        x is not None for x in [tfidf_vocab, tfidf_idf, tfidf_data, tfidf_indices, tfidf_indptr]
+    )
+    if tfidf_ready:
+        query_tfidf = _tfidf_query_vector(instruction_text, tfidf_vocab, tfidf_idf)
+        cosine_sims = _tfidf_cosine_similarities(
+            query_tfidf, tfidf_data, tfidf_indices, tfidf_indptr,
+            len(signals_matrix),
+        )
+        topical_dist = 1.0 - cosine_sims
+        blended = (1 - alpha) * struct_norm + alpha * topical_dist
+    else:
+        blended = struct_norm
+
+    neighbor_ids = np.argsort(blended)[:k]
+    weak_dims = [d for d in DIMENSION_NAMES if predicted_dim_scores.get(d, 100) < 50]
+
+    candidates: list[tuple[str, float, list[str]]] = []
+    for nid in neighbor_ids:
+        sim = 1.0 / (1.0 + float(blended[nid]))
+        entry_suggestions = index["suggestions"][nid]
+        for item in entry_suggestions:
+            if isinstance(item, tuple) and len(item) == 2:
+                text, dim_tags = item
+            elif isinstance(item, str):
+                text, dim_tags = item, []
+            else:
+                continue
+            dim_boost = 1.0
+            if weak_dims and dim_tags:
+                overlap = len(set(weak_dims) & set(dim_tags))
+                dim_boost = 1.0 + 0.5 * overlap
+            candidates.append((text, sim * dim_boost, dim_tags))
+
+    return candidates
+
+
+def _retrieve_suggestions_v3(
+    raw_signals: dict[str, Any],
+    predicted_dim_scores: dict[str, int],
+    instruction_text: str,
+    issues: list[dict[str, Any]] | None = None,
+    top_n: int = 3,
+) -> list[str]:
+    """v3 tfidf: topically-aware neighbors + IDF filter + template fallback.
+
+    Same post-processing as v2 (IDF relevance filter, template merge),
+    but neighbors are found using blended structural + topical distance.
+    """
+    index = _load_suggestion_index()
+    idf_vocab = index.get("idf_vocabulary") if index else None
+
+    knn_candidates = _knn_retrieve_blended(
+        raw_signals, predicted_dim_scores, instruction_text, k=10,
+    )
+
+    relevant: list[tuple[str, float]] = []
+    for text, score, _dim_tags in knn_candidates:
+        rel = _idf_relevance(text, instruction_text, idf_vocab)
+        if rel >= 0.02:
+            relevant.append((text, score * (0.5 + rel)))
+
+    context = _extract_instruction_context(instruction_text, issues, raw_signals)
+    template_candidates = _fill_templates(predicted_dim_scores, context)
+
+    final: list[str] = []
+    for text, _ in sorted(relevant, key=lambda x: -x[1]):
+        if len(final) >= top_n:
+            break
+        if not _is_duplicate(text, final):
+            final.append(text)
+
+    for text in template_candidates:
+        if len(final) >= top_n:
+            break
+        if not _is_duplicate(text, final):
+            final.append(text)
+
+    return final
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -479,13 +675,20 @@ def compute_score_ml(
             summary=_ml_dim_summary(dim, score),
         ))
 
-    # Retrieve suggestions: v2 (hybrid) if instruction text available, else v1
+    # Retrieve suggestions: v3 (tfidf) > v2 (hybrid) > v1 (baseline)
     issues_dicts = [{"rule": i.rule, "message": i.message, "level": i.level}
                     for i in tier1_score.issues]
     if instruction_text:
-        suggestions = _retrieve_suggestions_v2(
-            raw_signals, predicted_scores, instruction_text, issues_dicts,
-        )
+        index = _load_suggestion_index()
+        has_tfidf = index and index.get("tfidf_data") is not None
+        if has_tfidf:
+            suggestions = _retrieve_suggestions_v3(
+                raw_signals, predicted_scores, instruction_text, issues_dicts,
+            )
+        else:
+            suggestions = _retrieve_suggestions_v2(
+                raw_signals, predicted_scores, instruction_text, issues_dicts,
+            )
     else:
         suggestions = _retrieve_suggestions_v1(raw_signals, predicted_scores)
 
