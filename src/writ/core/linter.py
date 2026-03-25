@@ -639,7 +639,7 @@ def _check_has_commands(
 # ---------------------------------------------------------------------------
 
 DEAD_CONTENT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"<!--[^>]*-->", re.I), "HTML comment"),
+    (re.compile(r"<!--\s*(TODO|FIXME|HACK|PLACEHOLDER)\b", re.I), "HTML TODO/FIXME comment"),
     (re.compile(r"#\s*TODO\b", re.I), "# TODO"),
     (re.compile(r"//\s*FIXME\b", re.I), "// FIXME"),
     (re.compile(r"//\s*PLACEHOLDER\b", re.I), "// PLACEHOLDER"),
