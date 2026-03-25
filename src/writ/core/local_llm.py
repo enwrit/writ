@@ -16,9 +16,9 @@ from typing import Any
 
 from writ.core.models import DimensionScore, LintResult, LintScore
 
-MODEL_FILENAME = "enwrit-lint-nano-Q4_K_M.gguf"
+MODEL_FILENAME = "writ-lint-0.8B-Q4_K_M.gguf"
 MODEL_URL = (
-    "https://huggingface.co/enwrit/enwrit-lint-nano/resolve/main/"
+    "https://huggingface.co/enwrit/writ-lint-0.8B/resolve/main/"
     + MODEL_FILENAME
 )
 MODEL_SIZE_MB = 530

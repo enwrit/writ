@@ -392,7 +392,7 @@ def _run_deep_local_lint(
             f"\n  Local AI Score: [{color}][bold]{lint_score.score}"
             f"[/bold] / 100[/{color}]",
         )
-        console.print("  [dim](enwrit-lint-nano -- fine-tuned on 30k+ expert evaluations)[/dim]")
+        console.print("  [dim](writ-lint-0.8b -- fine-tuned on 30k+ expert evaluations)[/dim]")
         _print_score(lint_score)
 
     if ci and lint_score.score < min_score:
