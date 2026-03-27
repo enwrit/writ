@@ -276,6 +276,12 @@ def _build_feature_vector(
     for dim in DIMENSION_NAMES:
         values[f"tier1_{dim}"] = float(tier1_dimensions.get(dim, 50))
 
+    # SetFit boolean features (setfit_*)
+    for key in feature_names:
+        if key.startswith("setfit_"):
+            val = raw_signals.get(key, 0.0)
+            values[key] = float(val) if isinstance(val, (int, float, bool)) else 0.0
+
     # Derived features
     token_count = raw_signals.get("token_count", 0) or 1
     values["derived_log_token_count"] = math.log2(max(token_count, 1))
@@ -631,6 +637,66 @@ def _retrieve_suggestions_v3(
 
 
 # ---------------------------------------------------------------------------
+# Issue gating -- suppress Tier 1 issues when ML scores are high
+# ---------------------------------------------------------------------------
+
+_RULE_TO_DIMENSION: dict[str, str] = {
+    "no-verification": "verification",
+    "has-commands": "verification",
+    "has-examples": "examples",
+    "excessive-examples": "examples",
+    "has-boundaries": "coverage",
+    "instruction-bloat": "brevity",
+    "instructions-long": "brevity",
+    "wall-of-text": "structure",
+    "long-without-structure": "structure",
+}
+
+_ALWAYS_KEEP_RULES: frozenset[str] = frozenset({
+    "weak-language",
+    "contradiction",
+    "dead-content",
+    "general-knowledge",
+    "expert-preamble",
+    "name-format",
+    "name-required",
+    "missing-metadata",
+    "empty-globs",
+    "instructions-empty",
+    "instructions-short",
+    "mixed-concerns",
+})
+
+_ML_GATE_THRESHOLD = 60
+
+
+def _gate_tier1_issues(
+    issues: list,
+    predicted_scores: dict[str, int],
+) -> list:
+    """Filter Tier 1 issues against ML-predicted dimension scores.
+
+    Dimension-mapped issues are suppressed when the corresponding ML
+    score is >= 60, indicating the model already detects quality in
+    that dimension. Always-keep rules pass through unconditionally.
+    """
+    filtered = []
+    for issue in issues:
+        rule = issue.rule
+        if rule in _ALWAYS_KEEP_RULES:
+            filtered.append(issue)
+            continue
+        dim = _RULE_TO_DIMENSION.get(rule)
+        if dim is None:
+            filtered.append(issue)
+            continue
+        ml_score = predicted_scores.get(dim, 0)
+        if ml_score < _ML_GATE_THRESHOLD:
+            filtered.append(issue)
+    return filtered
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -647,6 +713,15 @@ def compute_score_ml(
     """
     raw_signals = tier1_score.raw_signals or {}
     tier1_dims = {d.name: d.score for d in tier1_score.dimensions}
+
+    if instruction_text:
+        try:
+            from writ.core.setfit_scorer import predict_boolean_features
+            setfit_preds = predict_boolean_features(instruction_text)
+            if setfit_preds:
+                raw_signals = {**raw_signals, **setfit_preds}
+        except Exception as e:
+            logger.debug("SetFit features unavailable: %s", e)
 
     features = _build_feature_vector(raw_signals, tier1_score.score, tier1_dims)
 
@@ -695,10 +770,12 @@ def compute_score_ml(
     if not suggestions:
         suggestions = tier1_score.suggestions
 
+    filtered_issues = _gate_tier1_issues(tier1_score.issues, predicted_scores)
+
     return LintScore(
         score=headline,
         dimensions=dims,
-        issues=tier1_score.issues,
+        issues=filtered_issues,
         suggestions=suggestions,
         raw_signals=raw_signals,
         tier="ml",

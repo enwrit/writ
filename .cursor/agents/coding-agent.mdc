@@ -1,6 +1,6 @@
 ---
 name: coding-agent
-model: inherit
+model: claude-4.6-opus-high-thinking
 description: Primary coding agent -- implements features according to the implementation plan (enwrit/writ)
 ---
 

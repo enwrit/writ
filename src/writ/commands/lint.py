@@ -144,8 +144,12 @@ def _get_changed_instruction_files() -> list[Path]:
     return result
 
 
-def _print_score(lint_score: LintScore) -> None:
-    """Print the full lint score in rich format."""
+def _print_score(lint_score: LintScore, quiet: bool = False) -> None:
+    """Print the full lint score in rich format.
+
+    When quiet=True, shows headline + dimension table but suppresses
+    individual issues and suggestions.
+    """
     from rich.table import Table
 
     color = _score_color(lint_score.score)
@@ -169,7 +173,7 @@ def _print_score(lint_score: LintScore) -> None:
 
     console.print(table)
 
-    if lint_score.suggestions:
+    if not quiet and lint_score.suggestions:
         console.print("\n  [bold]Suggestions:[/bold]")
         for i, sug in enumerate(lint_score.suggestions, 1):
             console.print(f"    {i}. {sug}")
@@ -186,6 +190,8 @@ def _run_deep_lint(
     json_output: bool,
     ci: bool,
     min_score: int,
+    score_only: bool = False,
+    quiet: bool = False,
 ) -> None:
     """Run AI-powered lint via the enwrit.com backend."""
     from writ.core import auth
@@ -274,6 +280,9 @@ def _run_deep_lint(
 
     if json_output:
         sys.stdout.write(json.dumps(data, indent=2) + "\n")
+    elif score_only:
+        color = _score_color(score)
+        console.print(f"[{color}]{score}[/{color}]")
     else:
         color = _score_color(score)
         tier_label = (
@@ -309,11 +318,12 @@ def _run_deep_lint(
                 )
             console.print(table)
 
-        suggestions = data.get("suggestions", [])
-        if suggestions:
-            console.print("\n  [bold]Suggestions:[/bold]")
-            for i, sug in enumerate(suggestions, 1):
-                console.print(f"    {i}. {sug}")
+        if not quiet:
+            suggestions = data.get("suggestions", [])
+            if suggestions:
+                console.print("\n  [bold]Suggestions:[/bold]")
+                for i, sug in enumerate(suggestions, 1):
+                    console.print(f"    {i}. {sug}")
 
     if ci and score < min_score:
         raise typer.Exit(1)
@@ -325,6 +335,8 @@ def _run_deep_local_lint(
     json_output: bool,
     ci: bool,
     min_score: int,
+    score_only: bool = False,
+    quiet: bool = False,
 ) -> None:
     """Run local AI-powered lint via fine-tuned Qwen model."""
     if file:
@@ -377,15 +389,19 @@ def _run_deep_local_lint(
 
     if json_output:
         sys.stdout.write(_score_to_json(lint_score) + "\n")
+    elif score_only:
+        color = _score_color(lint_score.score)
+        console.print(f"[{color}]{lint_score.score}[/{color}]")
     else:
-        _print_results(results)
+        if not quiet:
+            _print_results(results)
 
-        ai_issues = [i for i in lint_score.issues if i.rule == "local-ai"]
-        if ai_issues:
-            console.print()
-            for item in ai_issues:
-                style = LEVEL_STYLES.get(item.level, item.level)
-                console.print(f"  {style} {item.message}")
+            ai_issues = [i for i in lint_score.issues if i.rule == "local-ai"]
+            if ai_issues:
+                console.print()
+                for item in ai_issues:
+                    style = LEVEL_STYLES.get(item.level, item.level)
+                    console.print(f"  {style} {item.message}")
 
         color = _score_color(lint_score.score)
         console.print(
@@ -393,7 +409,7 @@ def _run_deep_local_lint(
             f"[/bold] / 100[/{color}]",
         )
         console.print("  [dim](writ-lint-0.8B -- fine-tuned on 30k+ expert evaluations)[/dim]")
-        _print_score(lint_score)
+        _print_score(lint_score, quiet=quiet)
 
     if ci and lint_score.score < min_score:
         raise typer.Exit(1)
@@ -514,6 +530,13 @@ def lint_command(
             help="Local AI analysis via fine-tuned Qwen model (no API needed).",
         ),
     ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "--quiet", "-q",
+            help="Show headline + dimensions only (suppress issues and suggestions).",
+        ),
+    ] = False,
 ) -> None:
     """Validate instruction quality and compute scores.
 
@@ -548,6 +571,8 @@ def lint_command(
             json_output=json_output,
             ci=ci,
             min_score=min_score,
+            score_only=score_only,
+            quiet=quiet,
         )
         return
     if deep:
@@ -557,6 +582,8 @@ def lint_command(
             json_output=json_output,
             ci=ci,
             min_score=min_score,
+            score_only=score_only,
+            quiet=quiet,
         )
         return
     if changed:
@@ -584,6 +611,9 @@ def lint_command(
                 console.print(
                     f"  {fp.name}: [{color}]{lint_score.score}[/{color}]",
                 )
+            elif quiet:
+                console.print(f"\n[bold]{fp.name}[/bold]:")
+                _print_score(lint_score, quiet=True)
             else:
                 console.print(f"\n[bold]{fp.name}[/bold]:")
                 _print_results(results)
@@ -593,7 +623,7 @@ def lint_command(
             avg = sum(s.score for s in all_scores_changed) // len(all_scores_changed)
             console.print(_badge_url(avg))
 
-        if not json_output and not score_only and not badge:
+        if not json_output and not score_only and not badge and not quiet:
             _print_summary(all_scores_changed)
 
         if ci and all_scores_changed:
@@ -620,6 +650,9 @@ def lint_command(
             console.print(
                 f"[{color}]{lint_score.score}[/{color}]",
             )
+        elif quiet:
+            console.print(f"\n[bold]{file.name}[/bold]:")
+            _print_score(lint_score, quiet=True)
         else:
             console.print(f"\n[bold]{file.name}[/bold]:")
             _print_results(results)
@@ -675,6 +708,9 @@ def lint_command(
                 f"  {agent.name}: "
                 f"[{color}]{lint_score.score}[/{color}]",
             )
+        elif quiet:
+            console.print(f"\n[bold]{agent.name}[/bold]:")
+            _print_score(lint_score, quiet=True)
         else:
             if not results:
                 console.print(
@@ -692,7 +728,7 @@ def lint_command(
     if badge and all_scores:
         avg = sum(s.score for s in all_scores) // len(all_scores)
         console.print(_badge_url(avg))
-    elif not json_output and not score_only and not badge:
+    elif not json_output and not score_only and not badge and not quiet:
         _print_summary(all_scores)
 
     if ci:

@@ -76,6 +76,8 @@ writ login                      Authenticate with enwrit.com (cross-device sync)
 writ logout                     Remove stored API key
 writ lint <name|file>           Validate quality (auto-detects file vs store name)
 writ lint --code                Force Tier 1 code-only scoring (deterministic)
+writ lint --score               Output headline score only (machine-readable)
+writ lint --quiet               Output score + dimension table only (no issues/suggestions)
 writ lint <file> --deep         AI-powered Tier 3 scoring via enwrit.com (requires login)
 writ connect                   Interactive peer setup wizard for real repos
 writ publish <name>             Make instruction publicly discoverable on enwrit.com

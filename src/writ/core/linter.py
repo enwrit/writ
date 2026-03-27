@@ -10,7 +10,10 @@ Brevity, Examples, Verification) each 0-100, with a weighted headline.
 
 from __future__ import annotations
 
+import math
 import re
+import zlib
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -236,14 +239,13 @@ def _check_instructions_length(
         return results
 
     word_count = len(agent.instructions.split())
-    if word_count > 2000:
+    if word_count > 5000:
         results.append(LintResult(
             level="warning",
             rule="instructions-long",
             message=(
-                f"Instructions are {word_count} words. Research "
-                "shows shorter instructions perform better. "
-                "Consider trimming to under 2000 words."
+                f"Instructions are {word_count} words. "
+                "Check for redundant or restated content."
             ),
             base_penalty=10,
         ))
@@ -398,25 +400,36 @@ def _check_weak_language(
 
     prose = _prose_text(agent.instructions)
     prose_lines = prose.split("\n")
-    results: list[LintResult] = []
+    found_phrases: list[str] = []
+    found_lines: list[int] = []
 
     for line_idx, line in enumerate(prose_lines, start=1):
         for pattern, phrase in WEAK_LANGUAGE_PATTERNS:
             if pattern.search(line):
-                results.append(LintResult(
-                    level="warning",
-                    rule="weak-language",
-                    message=(
-                        f"Vague language '{phrase}' -- models "
-                        "treat suggestions as optional. "
-                        "Use imperative commands instead."
-                    ),
-                    line=line_idx,
-                    base_penalty=15,
-                ))
+                found_phrases.append(phrase)
+                found_lines.append(line_idx)
                 break  # one match per line
 
-    return results
+    if not found_phrases:
+        return []
+
+    unique_phrases = list(dict.fromkeys(found_phrases))
+    phrases_str = ", ".join(f"'{p}'" for p in unique_phrases)
+    lines_str = ", ".join(str(ln) for ln in found_lines)
+    count = len(found_phrases)
+    penalty = min(15 * count, 45)
+
+    return [LintResult(
+        level="warning",
+        rule="weak-language",
+        message=(
+            f"Vague language found: {phrases_str} "
+            f"(lines {lines_str}). "
+            "Models treat suggestions as optional -- "
+            "use imperative commands instead."
+        ),
+        base_penalty=penalty,
+    )]
 
 
 def _check_expert_preamble(
@@ -550,29 +563,28 @@ def _check_instruction_bloat(
     char_count = len(agent.instructions)
     results: list[LintResult] = []
 
-    if char_count > 5000:
-        pct = char_count * 100 // 5000 - 100
+    if char_count > 20000:
         results.append(LintResult(
-            level="error",
+            level="info",
             rule="instruction-bloat",
             message=(
-                f"Instructions are {char_count:,} chars "
-                f"({pct}% over 5000 limit). "
-                "Over-specification reduces agent success "
-                "rates by 20%+."
+                f"Instructions are {char_count:,} chars. "
+                "At this scale, over-specification can reduce "
+                "agent success rates by 20%+. Check for "
+                "redundant or restated content."
             ),
-            base_penalty=25,
+            base_penalty=5,
         ))
-    elif char_count > 2000:
+    elif char_count > 7500:
         results.append(LintResult(
-            level="warning",
+            level="info",
             rule="instruction-bloat",
             message=(
-                f"Instructions are {char_count:,} chars "
-                "(threshold: 2000). Consider trimming -- "
-                "shorter instructions perform better."
+                f"Instructions are {char_count:,} chars. "
+                "If sections feel repetitive, consider "
+                "consolidating overlapping content."
             ),
-            base_penalty=15,
+            base_penalty=0,
         ))
 
     return results
@@ -973,7 +985,6 @@ COVERAGE_TOPICS: dict[str, re.Pattern[str]] = {
 
 CRITICAL_CAPS: dict[str, int] = {
     "contradiction": 25,
-    "instruction-bloat-5k": 40,
 }
 
 # -- Imperative verb starters -----------------------------------------------
@@ -1101,16 +1112,18 @@ def has_substantive_section(
 def length_factor(chars: int) -> float:
     """Coverage expectation multiplier based on instruction length."""
     if chars < 100:
-        return 0.2
-    if chars < 300:
-        return 0.5
-    if chars < 800:
-        return 0.8
-    if chars < 2000:
-        return 1.0
-    if chars < 5000:
+        return 0.3
+    if chars < 500:
+        return 0.6
+    if chars < 1500:
         return 0.9
-    return 0.7
+    if chars < 8000:
+        return 1.0
+    if chars < 15000:
+        return 0.95
+    if chars < 25000:
+        return 0.85
+    return 0.75
 
 
 # -- Phase 2: v2 dimension scorers ------------------------------------------
@@ -1148,22 +1161,19 @@ def _v2_score_coverage(
 
 
 def _v2_score_brevity(chars: int, signals: dict) -> int:
-    """Length-curve scoring penalizing short+empty and bloat."""
-    density = signals["information_density"]
+    """Density-based scoring -- measures info per char, not absolute length."""
+    density = signals.get("information_density_v2",
+                          signals.get("information_density", 0.5))
     if chars < 200 and density < 0.1:
         score = 30.0
-    elif chars < 500:
-        score = 85.0
-    elif chars < 1000:
-        score = 90.0
-    elif chars < 2000:
-        score = 80.0
-    elif chars < 5000:
-        score = 50.0
     else:
-        score = 25.0
-    score -= signals["dead_content_count"] * 8
-    if signals["expert_preamble_present"]:
+        score = 20.0 + density * 70.0
+        if chars > 25000:
+            score -= 10
+        elif chars > 15000:
+            score -= 5
+    score -= signals.get("dead_content_count", 0) * 8
+    if signals.get("expert_preamble_present", False):
         score -= 10
     return max(10, min(100, round(score)))
 
@@ -1305,6 +1315,176 @@ def _compute_grade(score: int) -> str:
     return "F"
 
 
+# -- Text quality signal helpers ---------------------------------------------
+
+_STOP_WORDS: frozenset[str] = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "shall",
+    "should", "may", "might", "can", "could", "must", "and", "but", "or",
+    "nor", "not", "so", "yet", "for", "at", "by", "in", "of", "on", "to",
+    "up", "as", "it", "its", "if", "that", "this", "with", "from", "into",
+    "than", "then", "also", "very", "just", "about", "each", "which",
+    "when", "where", "how", "all", "both", "such", "no", "any", "other",
+})
+
+_FILLER_PHRASES: list[str] = [
+    "in order to", "it should be noted that", "it is important to",
+    "please note that", "as a matter of fact", "at the end of the day",
+    "it goes without saying", "for all intents and purposes",
+    "in the event that", "due to the fact that", "in light of the fact",
+    "with respect to", "in terms of", "on the other hand",
+    "it is worth noting", "as previously mentioned",
+    "as a general rule", "in the context of", "for the purpose of",
+    "with regard to", "in addition to", "as well as the",
+    "it is recommended that", "it is suggested that",
+    "take into consideration",
+]
+
+
+def _compute_contextual_redundancy(text: str) -> float:
+    """IDF-weighted Jaccard similarity across sections (0.0-1.0)."""
+    parts = re.split(r"(?m)^#{1,6}\s", text)
+    sections_text = [p.strip() for p in parts if len(p.strip()) > 40]
+    if len(sections_text) < 2:
+        return 0.0
+
+    section_words: list[set[str]] = []
+    doc_freq: Counter[str] = Counter()
+    for sec in sections_text:
+        words = {
+            w for w in re.findall(r"[a-z]{3,}", sec.lower())
+            if w not in _STOP_WORDS
+        }
+        section_words.append(words)
+        for w in words:
+            doc_freq[w] += 1
+
+    n = len(sections_text)
+    idf = {w: math.log((n + 1) / (df + 0.5)) for w, df in doc_freq.items()}
+
+    similarities: list[float] = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            intersection = section_words[i] & section_words[j]
+            union = section_words[i] | section_words[j]
+            if not union:
+                continue
+            weighted_inter = sum(idf.get(w, 0.1) for w in intersection)
+            weighted_union = sum(idf.get(w, 0.1) for w in union)
+            if weighted_union > 0:
+                similarities.append(weighted_inter / weighted_union)
+            elif intersection:
+                raw_jaccard = len(intersection) / len(union)
+                similarities.append(raw_jaccard)
+
+    if not similarities:
+        return 0.0
+    avg_sim = sum(similarities) / len(similarities)
+    max_sim = max(similarities)
+    return min(1.0, 0.4 * avg_sim + 0.6 * max_sim)
+
+
+def _compute_information_density_v2(text: str) -> float:
+    """Content word density + compression ratio + filler penalty (0.0-1.0)."""
+    words = re.findall(r"[a-zA-Z]+", text)
+    if not words:
+        return 0.0
+
+    content_words = [w for w in words if w.lower() not in _STOP_WORDS]
+    content_ratio = len(content_words) / len(words)
+
+    encoded = text.encode("utf-8")
+    if len(encoded) < 20:
+        compression_ratio = 0.5
+    else:
+        compressed = zlib.compress(encoded)
+        compression_ratio = len(compressed) / len(encoded)
+
+    text_lower = text.lower()
+    filler_count = sum(1 for fp in _FILLER_PHRASES if fp in text_lower)
+    filler_penalty = min(filler_count * 0.03, 0.3)
+
+    density = 0.45 * content_ratio + 0.45 * compression_ratio - filler_penalty
+    return max(0.0, min(1.0, density))
+
+
+def _compute_duplicate_ratio(text: str) -> float:
+    """Exact 8-gram repetition + paragraph near-duplicate (0.0-1.0)."""
+    words = text.lower().split()
+    if len(words) < 16:
+        return 0.0
+
+    ngrams: list[str] = []
+    for i in range(len(words) - 7):
+        ngrams.append(" ".join(words[i:i + 8]))
+    ngram_counts = Counter(ngrams)
+    repeated = sum(c - 1 for c in ngram_counts.values() if c > 1)
+    exact_ratio = min(1.0, repeated / max(len(ngrams), 1))
+
+    paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 50]
+    near_dupe = 0.0
+    if len(paragraphs) >= 2:
+        shingle_sets: list[set[str]] = []
+        for para in paragraphs:
+            chars = para.lower()
+            shingles = {chars[i:i + 6] for i in range(len(chars) - 5)}
+            shingle_sets.append(shingles)
+
+        dupe_pairs = 0
+        total_pairs = 0
+        for i in range(len(shingle_sets)):
+            for j in range(i + 1, len(shingle_sets)):
+                total_pairs += 1
+                inter = len(shingle_sets[i] & shingle_sets[j])
+                union = len(shingle_sets[i] | shingle_sets[j])
+                if union > 0 and inter / union > 0.5:
+                    dupe_pairs += 1
+        if total_pairs > 0:
+            near_dupe = dupe_pairs / total_pairs
+
+    return min(1.0, exact_ratio + 0.5 * near_dupe)
+
+
+def _compute_prose_ratio(text: str) -> float:
+    """Fraction of unstructured prose vs structured content (0.0-1.0)."""
+    lines = text.split("\n")
+    total_lines = 0
+    prose_score = 0.0
+    in_code = False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        if stripped.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            total_lines += 1
+            continue
+
+        total_lines += 1
+
+        is_heading = stripped.startswith("#")
+        is_bullet = bool(re.match(r"^[-*+]\s|^\d+\.\s", stripped))
+        is_table = "|" in stripped and stripped.count("|") >= 2
+        is_command = stripped.startswith("`") and stripped.endswith("`")
+
+        if is_heading or is_table or is_command:
+            continue
+        elif is_bullet:
+            words_in_line = len(stripped.split())
+            if len(stripped) > 80 and words_in_line > 15:
+                prose_score += 0.5
+        else:
+            prose_score += 1.0
+
+    if total_lines == 0:
+        return 0.0
+    return min(1.0, prose_score / total_lines)
+
+
 # -- Raw signals collection (v2: includes new measurements) -----------------
 
 def _collect_raw_signals(
@@ -1432,6 +1612,18 @@ def _collect_raw_signals(
             1 for r in results
             if r.level in ("error", "warning")
         ),
+        "contextual_redundancy": round(
+            _compute_contextual_redundancy(text), 3,
+        ),
+        "information_density_v2": round(
+            _compute_information_density_v2(text), 3,
+        ),
+        "duplicate_ratio": round(
+            _compute_duplicate_ratio(text), 3,
+        ),
+        "prose_ratio": round(
+            _compute_prose_ratio(text), 3,
+        ),
     }
 
 
@@ -1500,15 +1692,6 @@ def compute_score(
     for r in results:
         if r.rule == "contradiction":
             headline = min(headline, CRITICAL_CAPS["contradiction"])
-    if chars > 5000:
-        has_bloat = any(
-            r.rule == "instruction-bloat" for r in results
-        )
-        if has_bloat:
-            headline = min(
-                headline,
-                CRITICAL_CAPS["instruction-bloat-5k"],
-            )
 
     headline = max(10, min(100, headline))
     grade = _compute_grade(headline)

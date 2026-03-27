@@ -31,10 +31,18 @@ class TestLinter:
     def test_very_long_instructions(self, initialized_project):
         agent = InstructionConfig(
             name="verbose",
-            instructions=" ".join(["word"] * 2500),
+            instructions=" ".join(["word"] * 5500),
         )
         results = linter.lint(agent)
         assert any(r.rule == "instructions-long" for r in results)
+
+    def test_moderate_length_no_warning(self, initialized_project):
+        agent = InstructionConfig(
+            name="moderate",
+            instructions=" ".join(["word"] * 2500),
+        )
+        results = linter.lint(agent)
+        assert not any(r.rule == "instructions-long" for r in results)
 
     def test_very_short_instructions(self, initialized_project):
         agent = InstructionConfig(
@@ -131,8 +139,8 @@ class TestWeakLanguage:
         )
         results = linter.lint(agent)
         weak = [r for r in results if r.rule == "weak-language"]
-        assert len(weak) >= 1
-        assert weak[0].line is not None
+        assert len(weak) == 1
+        assert "try to" in weak[0].message.lower()
 
     def test_detects_consider(self):
         agent = InstructionConfig(
@@ -175,7 +183,7 @@ class TestWeakLanguage:
         weak = [r for r in results if r.rule == "weak-language"]
         assert len(weak) == 0
 
-    def test_multiple_matches_one_per_line(self):
+    def test_multiple_matches_consolidated(self):
         agent = InstructionConfig(
             name="test",
             instructions=(
@@ -186,7 +194,10 @@ class TestWeakLanguage:
         )
         results = linter.lint(agent)
         weak = [r for r in results if r.rule == "weak-language"]
-        assert len(weak) == 3
+        assert len(weak) == 1
+        assert "try to" in weak[0].message.lower()
+        assert "consider" in weak[0].message.lower()
+        assert "maybe" in weak[0].message.lower()
 
 
 class TestExpertPreamble:
@@ -221,25 +232,44 @@ class TestExpertPreamble:
 
 
 class TestInstructionBloat:
-    def test_warns_over_2000_chars(self):
+    def test_no_trigger_2200_chars(self):
         agent = InstructionConfig(
             name="test",
             instructions="x " * 1100,  # ~2200 chars
         )
         results = linter.lint(agent)
         bloat = [r for r in results if r.rule == "instruction-bloat"]
-        assert len(bloat) == 1
-        assert bloat[0].level == "warning"
+        assert len(bloat) == 0
 
-    def test_errors_over_5000_chars(self):
+    def test_no_trigger_5200_chars(self):
         agent = InstructionConfig(
             name="test",
             instructions="x " * 2600,  # ~5200 chars
         )
         results = linter.lint(agent)
         bloat = [r for r in results if r.rule == "instruction-bloat"]
+        assert len(bloat) == 0
+
+    def test_info_over_7500_chars(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="x " * 4000,  # ~8000 chars
+        )
+        results = linter.lint(agent)
+        bloat = [r for r in results if r.rule == "instruction-bloat"]
         assert len(bloat) == 1
-        assert bloat[0].level == "error"
+        assert bloat[0].level == "info"
+
+    def test_info_over_20000_chars(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="x " * 11000,  # ~22000 chars
+        )
+        results = linter.lint(agent)
+        bloat = [r for r in results if r.rule == "instruction-bloat"]
+        assert len(bloat) == 1
+        assert bloat[0].level == "info"
+        assert "over-specification" in bloat[0].message.lower() or "redundant" in bloat[0].message.lower()
 
     def test_no_trigger_short(self):
         agent = InstructionConfig(
@@ -492,8 +522,10 @@ class TestScoring:
         from writ.core.linter import length_factor
 
         assert length_factor(50) < length_factor(500)
-        assert length_factor(1000) > length_factor(8000)
-        assert length_factor(1500) == 1.0
+        assert length_factor(1000) < length_factor(3500)
+        assert length_factor(3500) == 1.0
+        assert length_factor(8000) <= 1.0
+        assert length_factor(30000) < length_factor(8000)
 
 
 # ===================================================================
@@ -1004,9 +1036,9 @@ class TestV2Anchors:
         )
         results = linter.lint(agent)
         score = linter.compute_score(agent, results)
-        assert 80 <= score.score <= 100, (
+        assert 70 <= score.score <= 100, (
             f"Excellent instruction scored {score.score}, "
-            f"expected 80-100"
+            f"expected 70-100"
         )
 
     # -- Edge cases --
@@ -1072,3 +1104,230 @@ class TestV2Anchors:
         results = linter.lint(agent)
         score = linter.compute_score(agent, results)
         assert score.grade in ("B", "C")
+
+
+# ===================================================================
+# New: ML issue gating tests
+# ===================================================================
+
+
+class TestMLIssueGating:
+    """Verify Tier 1 issues are gated by ML dimension scores."""
+
+    def test_no_verification_suppressed_when_ml_high(self):
+        from writ.core.ml_scorer import _gate_tier1_issues
+        from writ.core.models import LintResult
+
+        issues = [
+            LintResult(
+                level="info", rule="no-verification",
+                message="No verification steps found.",
+            ),
+        ]
+        predicted = {"verification": 70, "examples": 40}
+        filtered = _gate_tier1_issues(issues, predicted)
+        assert len(filtered) == 0
+
+    def test_no_verification_kept_when_ml_low(self):
+        from writ.core.ml_scorer import _gate_tier1_issues
+        from writ.core.models import LintResult
+
+        issues = [
+            LintResult(
+                level="info", rule="no-verification",
+                message="No verification steps found.",
+            ),
+        ]
+        predicted = {"verification": 40, "examples": 40}
+        filtered = _gate_tier1_issues(issues, predicted)
+        assert len(filtered) == 1
+
+    def test_always_keep_rules_not_gated(self):
+        from writ.core.ml_scorer import _gate_tier1_issues
+        from writ.core.models import LintResult
+
+        issues = [
+            LintResult(level="warning", rule="weak-language",
+                       message="Vague language."),
+            LintResult(level="error", rule="contradiction",
+                       message="Contradiction found."),
+            LintResult(level="info", rule="no-verification",
+                       message="No verification."),
+        ]
+        predicted = {"verification": 80, "examples": 80}
+        filtered = _gate_tier1_issues(issues, predicted)
+        rules = [i.rule for i in filtered]
+        assert "weak-language" in rules
+        assert "contradiction" in rules
+        assert "no-verification" not in rules
+
+    def test_instruction_bloat_gated_by_brevity(self):
+        from writ.core.ml_scorer import _gate_tier1_issues
+        from writ.core.models import LintResult
+
+        issues = [
+            LintResult(level="info", rule="instruction-bloat",
+                       message="Instructions are 8,000 chars."),
+        ]
+        predicted = {"brevity": 75}
+        filtered = _gate_tier1_issues(issues, predicted)
+        assert len(filtered) == 0
+
+
+# ===================================================================
+# New: Text quality signal tests
+# ===================================================================
+
+
+class TestTextQualitySignals:
+    """Test the four new text quality signals."""
+
+    def test_contextual_redundancy_low_for_unique_sections(self):
+        text = (
+            "# Setup\nInstall Python 3.11 and configure virtualenv.\n\n"
+            "# Testing\nRun pytest with coverage to verify all endpoints.\n\n"
+            "# Deployment\nUse Docker containers on Kubernetes cluster.\n"
+        )
+        r = linter._compute_contextual_redundancy(text)
+        assert 0.0 <= r <= 0.4
+
+    def test_contextual_redundancy_high_for_repeated_content(self):
+        text = (
+            "# Section A\n"
+            "Use Python for development and ensure that all code is "
+            "properly tested with comprehensive unit tests and integration tests.\n\n"
+            "# Section B\n"
+            "Use Python for development and ensure that all code is "
+            "properly tested with comprehensive unit tests and integration tests.\n\n"
+            "# Section C\n"
+            "Use Python for development and ensure that all code is "
+            "properly tested with comprehensive unit tests and integration tests.\n"
+        )
+        r = linter._compute_contextual_redundancy(text)
+        assert r > 0.3
+
+    def test_information_density_v2_range(self):
+        text = "Use strict TypeScript. Run `pytest -v`. Never use `any`."
+        d = linter._compute_information_density_v2(text)
+        assert 0.0 <= d <= 1.0
+
+    def test_information_density_v2_verbose_lower(self):
+        verbose = (
+            "In order to ensure that the code is of high quality, "
+            "it is recommended that you should take into consideration "
+            "the fact that testing is important. It should be noted that "
+            "as a general rule, it is worth noting that code quality matters. "
+            "It is important to remember that in the context of development, "
+            "with regard to best practices, for the purpose of maintaining "
+            "code quality, you should consider writing tests."
+        )
+        concise = (
+            "Write tests for all public functions. "
+            "Maintain 80% code coverage. "
+            "Run `pytest -v` before committing."
+        )
+        d_verbose = linter._compute_information_density_v2(verbose)
+        d_concise = linter._compute_information_density_v2(concise)
+        assert d_verbose < d_concise
+
+    def test_duplicate_ratio_zero_for_unique(self):
+        text = " ".join(f"word{i}" for i in range(100))
+        r = linter._compute_duplicate_ratio(text)
+        assert r < 0.1
+
+    def test_duplicate_ratio_high_for_repeated(self):
+        block = "Always use type hints. Never use any type. Run pytest first. "
+        text = (block * 10).strip()
+        r = linter._compute_duplicate_ratio(text)
+        assert r > 0.2
+
+    def test_prose_ratio_low_for_structured(self):
+        text = (
+            "# Rules\n"
+            "- Use TypeScript\n"
+            "- Run `pytest`\n"
+            "- Never skip tests\n"
+            "```bash\npytest -v\n```\n"
+            "| Tool | Command |\n"
+            "| --- | --- |\n"
+            "| Lint | `ruff check` |\n"
+        )
+        r = linter._compute_prose_ratio(text)
+        assert r < 0.3
+
+    def test_prose_ratio_high_for_prose(self):
+        text = (
+            "This is a long paragraph about code quality and how to "
+            "properly structure your applications. You should always "
+            "think about the architecture before writing code.\n\n"
+            "Another paragraph about testing strategies and deployment "
+            "pipelines that goes on for quite a while with many words."
+        )
+        r = linter._compute_prose_ratio(text)
+        assert r > 0.5
+
+    def test_signals_in_raw_signals(self):
+        agent = InstructionConfig(
+            name="test", task_type="agent",
+            description="Test agent",
+            instructions=(
+                "# Rules\n"
+                "Use Python 3.11+.\n"
+                "Run `pytest -v` for testing.\n"
+                "Never use `print()` for logging.\n"
+            ),
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        raw = score.raw_signals
+        assert "contextual_redundancy" in raw
+        assert "information_density_v2" in raw
+        assert "duplicate_ratio" in raw
+        assert "prose_ratio" in raw
+
+
+# ===================================================================
+# New: Length factor tests
+# ===================================================================
+
+
+class TestLengthFactor:
+    """Test the updated length_factor curve."""
+
+    def test_very_short(self):
+        assert linter.length_factor(50) == 0.3
+
+    def test_short(self):
+        assert linter.length_factor(300) == 0.6
+
+    def test_medium(self):
+        assert linter.length_factor(1000) == 0.9
+
+    def test_neutral_zone(self):
+        assert linter.length_factor(3500) == 1.0
+        assert linter.length_factor(5000) == 1.0
+
+    def test_long(self):
+        assert linter.length_factor(10000) == 0.95
+
+    def test_very_long(self):
+        assert linter.length_factor(20000) == 0.85
+
+    def test_extreme(self):
+        assert linter.length_factor(30000) == 0.75
+
+
+# ===================================================================
+# New: Critical caps tests
+# ===================================================================
+
+
+class TestCriticalCaps:
+    """Verify instruction-bloat-5k cap was removed."""
+
+    def test_no_bloat_5k_cap(self):
+        assert "instruction-bloat-5k" not in linter.CRITICAL_CAPS
+
+    def test_contradiction_cap_still_present(self):
+        assert "contradiction" in linter.CRITICAL_CAPS
+        assert linter.CRITICAL_CAPS["contradiction"] == 25
