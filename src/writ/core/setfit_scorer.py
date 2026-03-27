@@ -12,10 +12,8 @@ missing, predict_boolean_features() returns an empty dict and the caller
 """
 from __future__ import annotations
 
-import json
 import logging
 import math
-import re
 import unicodedata
 from pathlib import Path
 
@@ -334,7 +332,7 @@ def predict_boolean_features(text: str) -> dict[str, float]:
             return {}
         probs = {
             f"setfit_{label}": _sigmoid(logit)
-            for label, logit in zip(LABELS, logits)
+            for label, logit in zip(LABELS, logits, strict=False)
         }
         all_probs.append(probs)
 

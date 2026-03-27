@@ -269,7 +269,8 @@ class TestInstructionBloat:
         bloat = [r for r in results if r.rule == "instruction-bloat"]
         assert len(bloat) == 1
         assert bloat[0].level == "info"
-        assert "over-specification" in bloat[0].message.lower() or "redundant" in bloat[0].message.lower()
+        msg = bloat[0].message.lower()
+        assert "over-specification" in msg or "redundant" in msg
 
     def test_no_trigger_short(self):
         agent = InstructionConfig(
