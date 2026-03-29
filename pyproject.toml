@@ -65,7 +65,7 @@ packages = ["src/writ"]
 target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = ["src/writ/models/tier2/scorer_*.py"]
+extend-exclude = ["src/writ/models/tier2/scorer_*.py", "src/writ/models/tier2/labels/label_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B"]
