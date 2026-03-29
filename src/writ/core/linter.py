@@ -1485,6 +1485,47 @@ def _compute_prose_ratio(text: str) -> float:
     return min(1.0, prose_score / total_lines)
 
 
+def _list_to_prose(text: str) -> float:
+    lines = [ln for ln in text.split("\n") if ln.strip()]
+    if not lines:
+        return 0.0
+    list_lines = sum(1 for ln in lines if re.match(r"^\s*[-*+]\s|^\s*\d+\.\s", ln))
+    return list_lines / len(lines)
+
+
+def _code_to_text(text: str) -> float:
+    if not text:
+        return 0.0
+    code_chars = 0
+    in_code = False
+    for line in text.split("\n"):
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            code_chars += len(line) + 1
+    return min(1.0, code_chars / len(text))
+
+
+def _section_cv(text: str) -> float:
+    parts = re.split(r"(?m)^#{1,6}\s", text)
+    lengths = [len(p.strip()) for p in parts if len(p.strip()) > 10]
+    if len(lengths) < 2:
+        return 0.0
+    mean_l = sum(lengths) / len(lengths)
+    if mean_l < 1:
+        return 0.0
+    std_l = (sum((s - mean_l) ** 2 for s in lengths) / len(lengths)) ** 0.5
+    return min(3.0, std_l / mean_l)
+
+
+def _unique_heading(text: str) -> float:
+    headings = re.findall(r"(?m)^#{1,6}\s+(.+)", text)
+    if not headings:
+        return 0.0
+    return len(set(h.strip().lower() for h in headings)) / len(headings)
+
+
 # -- Raw signals collection (v2: includes new measurements) -----------------
 
 def _collect_raw_signals(
@@ -1623,6 +1664,26 @@ def _collect_raw_signals(
         ),
         "prose_ratio": round(
             _compute_prose_ratio(text), 3,
+        ),
+        "avg_sentence_length": round(
+            (sum(len(s) for s in sentences) / len(sentences))
+            if sentences else 0.0, 1,
+        ),
+        "list_to_prose_ratio": round(
+            _list_to_prose(text), 3,
+        ),
+        "link_count": (
+            len(re.findall(r"\[([^\]]+)\]\([^)]+\)", text))
+            + len(re.findall(r"https?://\S+", text))
+        ),
+        "code_to_text_ratio": round(
+            _code_to_text(text), 3,
+        ),
+        "section_length_cv": round(
+            _section_cv(text), 3,
+        ),
+        "unique_heading_ratio": round(
+            _unique_heading(text), 3,
         ),
     }
 

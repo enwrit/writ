@@ -40,8 +40,9 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
 │       │   ├── formatter.py            # 9 formats: Cursor, Claude, AGENTS.md, Copilot, Windsurf, Codex, Kiro, agent-card, cursor-mcp
 │       │   ├── linter.py               # v2 earn-up scoring engine (Tier 1): 6-dimension 0-100, specificity density, verification gradient, critical caps, text quality signals (redundancy, density, duplicates, prose ratio)
-│       │   ├── ml_scorer.py            # Tier 2 ML scoring: compute_score_ml(), m2cgen model loading, v2 hybrid retrieval (IDF relevance + template fallback), Tier 1 issue gating
-│       │   ├── setfit_scorer.py        # SetFit ONNX inference: pure-Python WordPiece tokenizer, 512-token chunking, 7-label boolean classification (verification, examples, etc.)
+│       │   ├── ml_scorer.py            # Tier 2 ML scoring: compute_score_ml(), m2cgen + TF-IDF inference, template-based suggestions, label-aware issue gating
+│       │   ├── label_scorer.py         # TF-IDF+LGBM label classifier: positional TF-IDF + 26 structural features, 7 boolean labels (4-10ms inference)
+│       │   ├── setfit_scorer.py        # DEPRECATED: SetFit ONNX inference (superseded by label_scorer.py)
 │       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, LintScore (tier: code|ml|ai), Conversation, Message, PeerConfig
 │       │   ├── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding
@@ -63,11 +64,18 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │       ├── __init__.py         # models_available() check
 │       │       ├── scorer_headline.py  # Auto-generated: headline score prediction (m2cgen)
 │       │       ├── scorer_*.py         # Auto-generated: 6 dimension score predictions
-│       │       ├── suggestion_index.pkl # SHAP-weighted kNN index with tagged suggestions + IDF vocabulary
-│       │       ├── suggestion_templates.json # Auto-mined suggestion templates for slot-filling fallback
+│       │       ├── suggestion_index.pkl # LEGACY: SHAP-weighted kNN index (superseded by template suggestions)
+│       │       ├── suggestion_templates.json # LEGACY: v1 auto-mined templates
+│       │       ├── suggestion_templates_v2.json # Label-driven suggestion templates (14 templates, data-mined from 6.5k instructions)
+│       │       ├── tfidf_config.json   # TF-IDF vocabulary + IDF weights + chi2 feature mask for score models (~2.4 MB)
 │       │       ├── shap_weights.json   # Feature importance weights for kNN distance
-│       │       ├── feature_config.json # Feature names + min/max normalization bounds
-│       │       └── vocab.txt           # WordPiece vocabulary for pure-Python SetFit tokenizer (~226KB)
+│       │       ├── feature_config.json # Feature names (structural + interaction + TF-IDF) + normalization bounds
+│       │       ├── vocab.txt           # WordPiece vocabulary for pure-Python SetFit tokenizer (~226KB)
+│       │       └── labels/             # Label classifier models (positional TF-IDF + LGBM, ~7.67 MB total)
+│       │           ├── __init__.py     # LABEL_NAMES list
+│       │           ├── label_vocab.json # TF-IDF vocabulary: 17.7k features, segment mapping, IDF weights (1.9 MB)
+│       │           ├── label_thresholds.json # Per-label optimized thresholds + evaluation metrics
+│       │           └── label_*.py      # 7 m2cgen-exported LightGBM classifiers (670KB-1MB each)
 │       └── templates/                  # Built-in templates (bundled in package)
 │           ├── default/                # Single general-purpose agent
 │           │   └── agent.yaml
@@ -104,7 +112,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   ├── test_store.py                   # Store read/write tests (.writ/ and ~/.writ/)
 │   ├── test_sync.py                    # Bulk library sync tests (writ sync)
 │   ├── test_models.py                  # Pydantic model tests
-│   ├── test_linter.py                  # Lint rule + v2 scoring + anchor calibration + text quality signals + ML gating tests (98 tests)
+│   ├── test_linter.py                  # Lint rule + v2 scoring + anchor calibration + text quality signals + ML gating + Tier 2 E2E archetype tests
 │   ├── test_messaging.py              # Conversation lifecycle, peers, attachments, CLI smoke tests (26 tests)
 │   ├── test_invoker.py                # CLI agent detection, invocation, API fallback tests (22 tests)
 │   └── test_context_window.py         # Token estimation, sliding window, system prompt tests (19 tests)

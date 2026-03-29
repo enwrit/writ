@@ -1332,3 +1332,94 @@ class TestCriticalCaps:
     def test_contradiction_cap_still_present(self):
         assert "contradiction" in linter.CRITICAL_CAPS
         assert linter.CRITICAL_CAPS["contradiction"] == 25
+
+
+# ===================================================================
+# Tier 2 End-to-End regression tests
+# ===================================================================
+
+
+class TestTier2EndToEnd:
+    """Archetype-based regression tests for Tier 2 ML scoring.
+
+    These verify that compute_score_ml produces sensible predictions
+    for known instruction archetypes. Assertions are conservative
+    (wide bands) to avoid brittleness from model retraining.
+    """
+
+    @staticmethod
+    def _score_text(text: str):
+        from writ.core.ml_scorer import compute_score_ml
+        agent = InstructionConfig(name="test_archetype", instructions=text)
+        results = linter.lint(agent)
+        t1 = linter.compute_score(agent, results)
+        return compute_score_ml(t1, text)
+
+    def test_minimal_1liner_scores_low(self):
+        """A 79-char generic instruction must score below 35 on all dims."""
+        t2 = self._score_text(
+            "You are a helpful coding assistant. Write clean code and follow best practices."
+        )
+        assert t2.score < 35, f"headline={t2.score}, expected <35"
+        dims = {d.name: d.score for d in t2.dimensions}
+        for dim_name in ["verification", "examples", "coverage"]:
+            assert dims[dim_name] < 35, f"{dim_name}={dims[dim_name]}, expected <35"
+
+    def test_minimal_has_no_verification_issue(self):
+        """The minimal instruction must keep the no-verification issue."""
+        t2 = self._score_text(
+            "You are a helpful coding assistant. Write clean code."
+        )
+        issue_rules = [i.rule for i in t2.issues]
+        assert "no-verification" in issue_rules, f"Missing no-verification, got: {issue_rules}"
+
+    def test_vague_scores_moderate(self):
+        """A vague-only instruction should score below 45 headline."""
+        t2 = self._score_text(
+            "You are an expert programmer.\n"
+            "Try to write clean code.\n"
+            "Consider following best practices.\n"
+            "Maybe you should be helpful.\n"
+            "If possible, write tests.\n"
+            "You could perhaps use linting."
+        )
+        assert t2.score < 45, f"headline={t2.score}, expected <45"
+
+    def test_good_structured_scores_above_50(self):
+        """A well-structured instruction with examples should score above 50."""
+        t2 = self._score_text(
+            "# Code Review\n\n"
+            "## Commands\n"
+            "Run `npm test` before committing.\n"
+            "Run `eslint .` to check style.\n\n"
+            "## Rules\n"
+            "- Always use TypeScript strict mode\n"
+            "- Never commit without tests\n"
+            "- Keep functions under 30 lines\n\n"
+            "## Example\n"
+            "```typescript\n"
+            "function greet(name: string): string {\n"
+            '  return `Hello, ${name}`;\n'
+            "}\n"
+            "```\n"
+        )
+        assert t2.score > 50, f"headline={t2.score}, expected >50"
+
+    def test_suggestions_are_strings(self):
+        """Suggestions must be non-empty strings."""
+        t2 = self._score_text("You are a coding assistant.")
+        assert len(t2.suggestions) > 0, "No suggestions generated"
+        for s in t2.suggestions:
+            assert isinstance(s, str) and len(s) > 10, f"Bad suggestion: {s!r}"
+
+    def test_suggestions_relevant_to_weakness(self):
+        """Suggestions for a no-verification instruction should mention verification/testing."""
+        t2 = self._score_text(
+            "# TypeScript Rules\n"
+            "- Always use strict mode\n"
+            "- Use const over let\n"
+            "- Never use any type\n"
+        )
+        combined = " ".join(t2.suggestions).lower()
+        assert any(w in combined for w in ["test", "verif", "validat", "check"]), \
+            f"Suggestions don't mention verification: {t2.suggestions}"

@@ -1,0 +1,131 @@
+{
+  "verification": [
+    {
+      "template": "Add a verification section (## Testing, ## Validation) with specific commands the agent should run to confirm its work.",
+      "condition": {
+        "label": "setfit_has_verification",
+        "threshold": 0.5,
+        "direction": "below"
+      },
+      "priority": 1
+    },
+    {
+      "template": "Include at least one concrete test command (e.g., `pytest`, `npm test`, `cargo test`) with expected success criteria.",
+      "condition": {
+        "label": "setfit_has_actionable_commands",
+        "threshold": 0.5,
+        "direction": "below"
+      },
+      "priority": 2
+    },
+    {
+      "template": "Define what 'done' looks like: specify the exact checks (lint pass, tests pass, no type errors) the agent must run before considering the task complete.",
+      "condition": {
+        "dim_score": 40,
+        "direction": "below"
+      },
+      "priority": 3
+    }
+  ],
+  "examples": [
+    {
+      "template": "Include 1-2 code examples showing expected input/output patterns or good/bad practice pairs.",
+      "condition": {
+        "label": "setfit_has_examples",
+        "threshold": 0.5,
+        "direction": "below"
+      },
+      "priority": 1
+    },
+    {
+      "template": "Add a concrete code block demonstrating the desired coding style, naming conventions, or API usage patterns.",
+      "condition": {
+        "dim_score": 40,
+        "direction": "below"
+      },
+      "priority": 2
+    }
+  ],
+  "coverage": [
+    {
+      "template": "Add a closing section that defines when the agent's task is complete and what deliverables to produce.",
+      "condition": {
+        "label": "setfit_has_closure",
+        "threshold": 0.5,
+        "direction": "below"
+      },
+      "priority": 1
+    },
+    {
+      "template": "Add explicit boundary constraints (always/never/must not) to prevent the agent from making unwanted changes.",
+      "condition": {
+        "label": "setfit_has_negative_constraints",
+        "threshold": 0.5,
+        "direction": "below"
+      },
+      "priority": 2
+    },
+    {
+      "template": "Specify edge cases and error handling expectations so the agent knows how to handle failures gracefully.",
+      "condition": {
+        "dim_score": 40,
+        "direction": "below"
+      },
+      "priority": 3
+    }
+  ],
+  "clarity": [
+    {
+      "template": "Replace vague phrases ('follow best practices', 'write clean code') with specific, measurable rules or imperative commands.",
+      "condition": {
+        "dim_score": 50,
+        "direction": "below"
+      },
+      "priority": 1
+    },
+    {
+      "template": "Use imperative language ('Run X', 'Always Y', 'Never Z') instead of suggestions ('consider', 'try to', 'you might want to').",
+      "condition": {
+        "dim_score": 40,
+        "direction": "below"
+      },
+      "priority": 2
+    }
+  ],
+  "structure": [
+    {
+      "template": "Organize instructions with markdown headings (## Rules, ## Commands, ## Examples) to improve scannability.",
+      "condition": {
+        "dim_score": 40,
+        "direction": "below"
+      },
+      "priority": 1
+    },
+    {
+      "template": "Break long paragraphs into bullet-point lists or numbered steps for clearer task sequencing.",
+      "condition": {
+        "dim_score": 30,
+        "direction": "below"
+      },
+      "priority": 2
+    }
+  ],
+  "brevity": [
+    {
+      "template": "Remove generic preambles ('You are an expert...') and role descriptions that don't contain actionable instructions.",
+      "condition": {
+        "dim_score": 40,
+        "direction": "below"
+      },
+      "priority": 1
+    },
+    {
+      "template": "Consolidate repeated rules and remove redundant sections to improve information density.",
+      "condition": {
+        "dim_score": 30,
+        "direction": "below"
+      },
+      "priority": 2
+    }
+  ]
+}

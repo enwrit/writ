@@ -1,7 +1,10 @@
-﻿!.cursor/insights/
+!.cursor/insights/
 !.cursor/to-do/
 !.cursor/plans/
 
 # ML model artifacts -- agent should know the folder exists but not index contents
 src/writ/models/tier2/scorer_*.py
 src/writ/models/tier2/*.pkl
+src/writ/models/tier2/tfidf_config.json
+src/writ/models/tier2/labels/
+src/writ/models/tier2/suggestion_templates*.json
