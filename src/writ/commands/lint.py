@@ -394,8 +394,6 @@ def _run_deep_local_lint(
         console.print(f"[{color}]{lint_score.score}[/{color}]")
     else:
         if not quiet:
-            _print_results(results)
-
             ai_issues = [i for i in lint_score.issues if i.rule == "local-ai"]
             if ai_issues:
                 console.print()
@@ -403,13 +401,8 @@ def _run_deep_local_lint(
                     style = LEVEL_STYLES.get(item.level, item.level)
                     console.print(f"  {style} {item.message}")
 
-        color = _score_color(lint_score.score)
-        console.print(
-            f"\n  Local AI Score: [{color}][bold]{lint_score.score}"
-            f"[/bold] / 100[/{color}]",
-        )
-        console.print("  [dim](writ-lint-0.8B -- fine-tuned on 30k+ expert evaluations)[/dim]")
         _print_score(lint_score, quiet=quiet)
+        console.print("  [dim](writ-lint-0.8B -- fine-tuned on 30k+ expert evaluations)[/dim]")
 
     if ci and lint_score.score < min_score:
         raise typer.Exit(1)
@@ -530,6 +523,13 @@ def lint_command(
             help="Local AI analysis via fine-tuned Qwen model (no API needed).",
         ),
     ] = False,
+    stop_server: Annotated[
+        bool,
+        typer.Option(
+            "--stop-server",
+            help="Stop the persistent local AI server (frees GPU memory).",
+        ),
+    ] = False,
     quiet: Annotated[
         bool,
         typer.Option(
@@ -560,7 +560,16 @@ def lint_command(
         writ lint --changed               # only modified files
         writ lint --badge                 # print badge URL
         writ lint CLAUDE.md --deep-local  # AI analysis (local)
+        writ lint --stop-server           # free GPU memory
     """
+    if stop_server:
+        from writ.core.local_llm import stop_server as _stop
+
+        if _stop():
+            console.print("[green]Local AI server stopped.[/green]")
+        else:
+            console.print("[dim]No local AI server running.[/dim]")
+        return
     if file is None and name is not None and _looks_like_file(name):
         file = Path(name)
         name = None

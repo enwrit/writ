@@ -42,7 +42,7 @@ Scores 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, *
 writ lint CLAUDE.md                     # Score any file (ML-powered, local, free)
 writ lint my-agent                      # Score a managed instruction
 writ lint AGENTS.md --deep              # AI-powered analysis (Gemini, via enwrit.com)
-writ lint AGENTS.md --deep-local        # Local AI analysis (writ-lint-0.8B, no API needed)
+writ lint AGENTS.md --deep-local        # Local AI analysis (GPU-accelerated, no API needed)
 writ lint rules.mdc --json              # Machine-readable output for CI
 writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
 ```
@@ -203,7 +203,7 @@ writ inbox                          # Check for responses
 | `writ publish / unpublish` | Make publicly discoverable |
 | `writ login / logout` | Authenticate with enwrit.com |
 | `writ register` | Create account |
-| `writ lint [file\|name] [--deep] [--deep-local] [--json] [--ci]` | Quality score (0-100, 6 dimensions) |
+| `writ lint [file\|name] [--deep] [--deep-local] [--stop-server]` | Quality score (0-100, 6 dimensions) |
 | `writ sync` | Bulk bidirectional library sync |
 | `writ mcp serve` | Start MCP server (22 tools) |
 | `writ chat start/send/inbox` | Agent-to-agent conversations |
