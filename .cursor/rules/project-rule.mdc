@@ -20,7 +20,7 @@ Core capabilities:
 
 4. **Agent-to-agent communication** -- structured conversations between agents in different repos (local filesystem or backend relay), with MCP Polling, CLI agent invocation, and API fallback
 
-**Future direction**: ML-powered instruction intelligence (quality scoring, contradiction detection), full A2A protocol endpoints, mobile approval workflows.
+**Future direction**: Contradiction detection across instruction sets, full A2A protocol endpoints, mobile approval workflows.
 
 ## Architecture
 

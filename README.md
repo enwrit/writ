@@ -57,11 +57,11 @@ writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
 # 1. Install
 pip install enwrit
 
-# 2. Initialize in any repo (auto-detects your stack)
+# 2. Initialize in any repo (auto-detects your stack, installs writ-context rule)
 writ init
 
-# 3. Install a pre-built instruction from the Hub
-writ install verification-loop
+# 3. Search and install from 6,000+ instructions on the Hub
+writ search "code review"
 writ install code-review-agent
 
 # 4. Activate -- writes to your IDE's native files
@@ -80,7 +80,7 @@ That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manu
 | **Multi-format export** | Cursor `.mdc`, Claude Code, Kiro steering (auto-detected); AGENTS.md, Copilot, Windsurf (opt-in) |
 | **Agent communication** | Structured conversations between agents across repos and devices |
 | **Personal library + cloud sync** | `writ save` → `writ load` on any device. Your agents follow you. |
-| **Hub with 50+ instructions** | Rules, agents, and autonomous programs. `writ install <name>` |
+| **Hub with 6,000+ instructions** | Semantic search across rules, agents, programs (PRPM + enwrit). `writ search <query>` / `writ install <name>` |
 | **MCP server** | One line in your config and any agent can search/install from the Hub |
 
 ## How It Works
