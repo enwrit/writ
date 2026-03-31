@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from rich.table import Table
 
 from writ.utils import console
 
@@ -24,80 +23,120 @@ def search_command(
     ] = None,
     limit: Annotated[
         int, typer.Option("--limit", "-n", help="Max results to show."),
-    ] = 20,
+    ] = 5,
 ) -> None:
-    """Search for agents across registries.
+    """Search for agents across 6,000+ instructions.
 
-    Searches the enwrit registry, PRPM (7,500+ packages),
-    and Agent Skills CLI (175K+ skills).
+    Uses semantic search to rank results by relevance and quality score.
+    Falls back to keyword search when the Hub is unavailable.
 
     Examples:
         writ search "react typescript"
+        writ search "code review" --limit 10
         writ search "python fastapi" --from enwrit
-        writ search "code review" --from prpm
-        writ search "linting" --limit 5
+        writ search "linting" --from prpm
     """
-    results: list[dict] = []
-    searched: list[str] = []
-
-    if source is None or source in ("enwrit", "registry"):
-        results.extend(_search_registry(query, limit))
-        searched.append("enwrit")
-
-    if source is None or source == "prpm":
-        results.extend(_search_prpm(query, limit))
-        searched.append("prpm")
-
-    if source is None or source == "skills":
-        results.extend(_search_skills(query, limit))
-        searched.append("skills")
+    if source in ("prpm", "skills"):
+        results = _search_legacy(query, source, limit)
+    else:
+        results = _search_hub(query, limit=limit, source=source)
+        if not results:
+            results = _search_legacy_all(query, limit)
 
     if not results:
         console.print(f"[yellow]No results found for '{query}'.[/yellow]")
-        console.print(f"[dim]Searched: {', '.join(searched)}[/dim]")
         console.print(
             "\nTip: install directly if you know the package name:\n"
             "  [cyan]writ install <name>[/cyan]"
         )
         return
 
-    table = Table(
-        title=f"Search results for '{query}'", show_lines=False,
-    )
-    table.add_column("Name", style="cyan", no_wrap=True)
-    table.add_column("Source", style="dim")
-    table.add_column("Score", justify="right")
-    table.add_column("Description")
-    table.add_column("Tags", style="dim")
+    _display_results(query, results, limit)
 
-    for item in results[:limit]:
-        score = item.get("writ_score")
-        if score is not None:
-            if score >= 70:
-                score_str = f"[green]{score}[/green]"
-            elif score >= 50:
-                score_str = f"[yellow]{score}[/yellow]"
-            else:
-                score_str = f"[red]{score}[/red]"
-        else:
-            score_str = "[dim]--[/dim]"
-        table.add_row(
-            item.get("name", "?"),
-            item.get("source", "?"),
-            score_str,
-            item.get("description", "")[:60],
-            ", ".join(item.get("tags", []))[:40],
+
+def _search_hub(
+    query: str,
+    *,
+    limit: int = 5,
+    source: str | None = None,
+) -> list[dict]:
+    """Search via the unified Hub API (enwrit + PRPM, semantic ranking)."""
+    try:
+        from writ.integrations.registry import RegistryClient
+
+        client = RegistryClient()
+        return client.hub_search(
+            query, limit=limit, source=source, semantic=True,
         )
+    except Exception:  # noqa: BLE001
+        return []
 
-    console.print(table)
-    console.print(f"\n[dim]{len(results)} result(s)[/dim]")
+
+def _display_results(query: str, results: list[dict], limit: int) -> None:
+    """Rich CLI output -- numbered results with score, description, and install command."""
+    total = len(results)
+    shown = results[:limit]
+
     console.print(
-        "Install with: [cyan]writ install <name>[/cyan]"
+        f"\n  [bold]Search:[/bold] \"{query}\" "
+        f"({len(shown)} of {total}+ results, ranked by relevance)\n"
     )
+
+    for i, item in enumerate(shown, 1):
+        name = item.get("name", "?")
+        source = item.get("source", "")
+        desc = item.get("description", "") or ""
+        score = item.get("writ_score")
+
+        score_str = _format_score(score)
+        source_badge = f"[dim]\\[{source}][/dim]" if source else ""
+
+        console.print(
+            f"  [bold cyan]{i}[/bold cyan]  [cyan]{name:<40s}[/cyan] "
+            f"Score: {score_str}  {source_badge}"
+        )
+        if desc:
+            console.print(f"     {desc[:100]}")
+
+        install_cmd = f"writ install {name}"
+        if source and source != "enwrit":
+            install_cmd += f" --from {source}"
+        console.print(f"     [dim]{install_cmd}[/dim]\n")
+
+
+def _format_score(score: int | None) -> str:
+    if score is None:
+        return "[dim]--[/dim]"
+    if score >= 70:
+        return f"[green]{score}[/green]"
+    if score >= 50:
+        return f"[yellow]{score}[/yellow]"
+    return f"[red]{score}[/red]"
+
+
+# ---------------------------------------------------------------------------
+# Legacy direct-API fallbacks (used when Hub is unavailable or --from prpm/skills)
+# ---------------------------------------------------------------------------
+
+def _search_legacy(query: str, source: str, limit: int) -> list[dict]:
+    """Search a single legacy source directly."""
+    if source == "prpm":
+        return _search_prpm(query, limit)
+    if source == "skills":
+        return _search_skills(query, limit)
+    return []
+
+
+def _search_legacy_all(query: str, limit: int) -> list[dict]:
+    """Fallback: query enwrit + PRPM + Skills individually."""
+    results: list[dict] = []
+    results.extend(_search_registry(query, limit))
+    results.extend(_search_prpm(query, limit))
+    results.extend(_search_skills(query, limit))
+    return results[:limit]
 
 
 def _search_registry(query: str, limit: int) -> list[dict]:
-    """Search the enwrit public registry."""
     try:
         from writ.integrations.registry import RegistryClient
 
@@ -114,12 +153,10 @@ def _search_registry(query: str, limit: int) -> list[dict]:
             for r in raw[:limit]
         ]
     except Exception:  # noqa: BLE001
-        console.print("[dim]enwrit registry: unavailable[/dim]")
         return []
 
 
 def _search_prpm(query: str, limit: int) -> list[dict]:
-    """Search PRPM registry."""
     try:
         from writ.integrations.prpm import PRPMIntegration
 
@@ -134,19 +171,11 @@ def _search_prpm(query: str, limit: int) -> list[dict]:
             }
             for r in raw[:limit]
         ]
-    except FileNotFoundError:
-        console.print(
-            "[dim]PRPM CLI not installed "
-            "(https://github.com/AbanteAI/prpm)[/dim]"
-        )
-        return []
     except Exception:  # noqa: BLE001
-        console.print("[dim]PRPM search failed[/dim]")
         return []
 
 
 def _search_skills(query: str, limit: int) -> list[dict]:
-    """Search Agent Skills CLI."""
     try:
         from writ.integrations.skills import SkillsIntegration
 
@@ -161,12 +190,5 @@ def _search_skills(query: str, limit: int) -> list[dict]:
             }
             for r in raw[:limit]
         ]
-    except FileNotFoundError:
-        console.print(
-            "[dim]Agent Skills CLI not installed "
-            "(https://github.com/CopilotKit/agent-skills-cli)[/dim]"
-        )
-        return []
     except Exception:  # noqa: BLE001
-        console.print("[dim]Agent Skills search failed[/dim]")
         return []

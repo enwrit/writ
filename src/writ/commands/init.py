@@ -9,11 +9,23 @@ import typer
 from rich.panel import Panel
 
 from writ.core import scanner, store
-from writ.core.models import ProjectConfig
+from writ.core.formatter import (
+    ClaudeRulesFormatter,
+    CursorFormatter,
+    KiroSteeringFormatter,
+)
+from writ.core.models import (
+    CompositionConfig,
+    CursorOverrides,
+    FormatOverrides,
+    InstructionConfig,
+    ProjectConfig,
+)
 from writ.utils import console
 
 # Resolve template root once, relative to the writ package (src/writ/templates/)
 _TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates"
+_BUILTIN_ROOT = _TEMPLATE_ROOT / "_builtin"
 
 
 def init_command(
@@ -51,9 +63,9 @@ def init_command(
     writ_dir = store.init_project_store(clean=force)
     console.print(f"[green]Created[/green] {writ_dir.relative_to(Path.cwd())}/")
 
-    # 2. Detect active IDE tools for format config
+    # 2. Detect active IDE tools for format config (directory-based only)
     detected_formats = _detect_active_tools()
-    config = ProjectConfig(formats=detected_formats or ["agents_md"])
+    config = ProjectConfig(formats=detected_formats or ["cursor"])
     store.save_config(config)
 
     # 3. Scan for existing agent files and optionally import
@@ -72,11 +84,14 @@ def init_command(
     store.save_project_context(project_ctx)
     console.print("[green]Generated[/green] project context (.writ/project-context.md)")
 
-    # 5. Load template if specified
+    # 5. Install writ-context rule to detected IDEs
+    _install_writ_context(detected_formats)
+
+    # 6. Load template if specified
     if template:
         load_template(template)
 
-    # 6. Summary
+    # 7. Summary
     agent_count = len(store.list_instructions())
     console.print()
     console.print(Panel.fit(
@@ -94,24 +109,22 @@ def init_command(
 
 
 def _detect_active_tools() -> list[str]:
-    """Detect which IDE/CLI tools are active in this repo."""
+    """Detect which IDE/CLI tools are active in this repo.
+
+    Only auto-detects directory-based formats where writ writes its own
+    separate files (safe, non-intrusive).  Shared-file formats (AGENTS.md,
+    CLAUDE.md, .windsurfrules, copilot-instructions.md) are available but
+    only activated when the user explicitly passes ``--format <name>``.
+    """
     root = Path.cwd()
     formats: list[str] = []
 
     if (root / ".cursor").is_dir():
         formats.append("cursor")
-    if (root / "CLAUDE.md").exists():
-        formats.append("claude")
-    if (root / "AGENTS.md").exists():
-        formats.append("agents_md")
-    if (root / ".github" / "copilot-instructions.md").exists():
-        formats.append("copilot")
-    if (root / ".windsurfrules").exists():
-        formats.append("windsurf")
-
-    # Default to agents_md if nothing detected
-    if not formats:
-        formats.append("agents_md")
+    if (root / ".claude").is_dir():
+        formats.append("claude_rules")
+    if (root / ".kiro").is_dir():
+        formats.append("kiro_steering")
 
     return formats
 
@@ -177,8 +190,59 @@ def load_template(template_name: str) -> int:
     return count
 
 
+def _install_writ_context(detected_formats: list[str]) -> None:
+    """Write writ-context rule to detected IDE directories.
+
+    Falls back to ``.writ/rules/writ-context.md`` when no IDE directory
+    is detected -- never creates IDE directories that don't already exist.
+    """
+    context_file = _BUILTIN_ROOT / "writ-context.md"
+    if not context_file.exists():
+        return
+
+    content = context_file.read_text(encoding="utf-8").strip()
+
+    cfg = InstructionConfig(
+        name="writ-context",
+        description="writ CLI command reference (auto-generated)",
+        task_type="rule",
+        instructions=content,
+        tags=["writ", "meta"],
+        composition=CompositionConfig(project_context=False),
+        format_overrides=FormatOverrides(
+            cursor=CursorOverrides(
+                description="writ CLI command reference",
+                always_apply=True,
+            ),
+        ),
+    )
+    store.save_instruction(cfg)
+
+    if not detected_formats:
+        console.print(
+            "[green]Saved[/green] writ-context to .writ/rules/writ-context.yaml"
+        )
+        return
+
+    root = Path.cwd()
+    for fmt in detected_formats:
+        if fmt == "cursor":
+            path = CursorFormatter().write(cfg, content, root=root)
+        elif fmt == "claude_rules":
+            path = ClaudeRulesFormatter().write(cfg, content, root=root)
+        elif fmt == "kiro_steering":
+            path = KiroSteeringFormatter().write(cfg, content, root=root)
+        else:
+            continue
+        console.print(f"[green]Wrote[/green] writ-context -> {path}")
+
+
 def list_available_templates() -> list[str]:
     """List available built-in templates."""
     if not _TEMPLATE_ROOT.is_dir():
         return []
-    return [d.name for d in sorted(_TEMPLATE_ROOT.iterdir()) if d.is_dir()]
+    return [
+        d.name
+        for d in sorted(_TEMPLATE_ROOT.iterdir())
+        if d.is_dir() and not d.name.startswith("_")
+    ]

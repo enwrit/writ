@@ -269,18 +269,13 @@ class TestInitImport:
 
 class TestSearch:
     def test_search_no_results(self, tmp_project: Path, monkeypatch):
-        """Search when no registries return results shows no results gracefully."""
-        # Mock integrations to return empty (avoids network, tests no-results path)
+        """Search when Hub and legacy return empty shows no results gracefully."""
         monkeypatch.setattr(
-            "writ.commands.search._search_registry",
-            lambda q, lim: [],
+            "writ.commands.search._search_hub",
+            lambda q, **kw: [],
         )
         monkeypatch.setattr(
-            "writ.commands.search._search_prpm",
-            lambda q, lim: [],
-        )
-        monkeypatch.setattr(
-            "writ.commands.search._search_skills",
+            "writ.commands.search._search_legacy_all",
             lambda q, lim: [],
         )
         result = runner.invoke(app, ["search", "react typescript"])
@@ -404,23 +399,16 @@ class TestSearchRegistry:
     def test_search_includes_enwrit_source(
         self, tmp_project: Path, monkeypatch,
     ):
-        """Search reports enwrit as a searched source."""
-        # Mock integrations to return empty so we get deterministic output
+        """Search reports enwrit as a source when Hub returns enwrit items."""
         monkeypatch.setattr(
-            "writ.commands.search._search_registry",
-            lambda q, lim: [],
-        )
-        monkeypatch.setattr(
-            "writ.commands.search._search_prpm",
-            lambda q, lim: [],
-        )
-        monkeypatch.setattr(
-            "writ.commands.search._search_skills",
-            lambda q, lim: [],
+            "writ.commands.search._search_hub",
+            lambda q, **kw: [
+                {"name": "my-agent", "source": "enwrit", "description": "Test", "writ_score": 70},
+            ],
         )
         result = runner.invoke(app, ["search", "python"])
         assert result.exit_code == 0
-        assert "enwrit" in result.output or "No results" in result.output
+        assert "enwrit" in result.output
 
     def test_search_from_enwrit(self, tmp_project: Path):
         result = runner.invoke(app, [
@@ -433,6 +421,140 @@ class TestSearchRegistry:
             "search", "python", "--limit", "5",
         ])
         assert result.exit_code == 0
+
+
+class TestInitWritContext:
+    """Tests for the writ-context auto-install on writ init."""
+
+    def test_init_creates_writ_context_in_cursor(self, tmp_project: Path):
+        (tmp_project / ".cursor").mkdir()
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        ctx_path = tmp_project / ".cursor" / "rules" / "writ-context.mdc"
+        assert ctx_path.exists()
+        content = ctx_path.read_text()
+        assert "alwaysApply: true" in content
+        assert "writ init" in content
+        assert "writ search" in content
+
+    def test_init_creates_writ_context_in_claude_rules(self, tmp_project: Path):
+        (tmp_project / ".claude").mkdir()
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        ctx_path = tmp_project / ".claude" / "rules" / "writ-context.md"
+        assert ctx_path.exists()
+        content = ctx_path.read_text()
+        assert "writ init" in content
+
+    def test_init_creates_writ_context_in_kiro(self, tmp_project: Path):
+        (tmp_project / ".kiro").mkdir()
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        ctx_path = tmp_project / ".kiro" / "steering" / "writ-context.md"
+        assert ctx_path.exists()
+        content = ctx_path.read_text()
+        assert "inclusion: always" in content
+        assert "writ init" in content
+
+    def test_init_no_ide_saves_to_writ_only(self, tmp_project: Path):
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        yaml_path = tmp_project / ".writ" / "rules" / "writ-context.yaml"
+        assert yaml_path.exists()
+        assert not (tmp_project / ".cursor").exists()
+        assert not (tmp_project / ".claude").exists()
+        assert not (tmp_project / ".kiro").exists()
+
+    def test_init_does_not_inject_agents_md(self, tmp_project: Path):
+        (tmp_project / "AGENTS.md").write_text("# My Agent\n\nMy rules.\n")
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        agents_md = (tmp_project / "AGENTS.md").read_text()
+        assert "writ" not in agents_md.lower() or "My Agent" in agents_md
+
+    def test_init_multi_ide(self, tmp_project: Path):
+        (tmp_project / ".cursor").mkdir()
+        (tmp_project / ".claude").mkdir()
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        assert (tmp_project / ".cursor" / "rules" / "writ-context.mdc").exists()
+        assert (tmp_project / ".claude" / "rules" / "writ-context.md").exists()
+
+
+class TestDetectActiveTools:
+    def test_detects_cursor_only(self, tmp_project: Path):
+        (tmp_project / ".cursor").mkdir()
+        from writ.commands.init import _detect_active_tools
+        formats = _detect_active_tools()
+        assert formats == ["cursor"]
+
+    def test_detects_claude_rules(self, tmp_project: Path):
+        (tmp_project / ".claude").mkdir()
+        from writ.commands.init import _detect_active_tools
+        formats = _detect_active_tools()
+        assert formats == ["claude_rules"]
+
+    def test_detects_kiro_steering(self, tmp_project: Path):
+        (tmp_project / ".kiro").mkdir()
+        from writ.commands.init import _detect_active_tools
+        formats = _detect_active_tools()
+        assert formats == ["kiro_steering"]
+
+    def test_ignores_shared_files(self, tmp_project: Path):
+        (tmp_project / "AGENTS.md").write_text("# Agents\n")
+        (tmp_project / "CLAUDE.md").write_text("# Claude\n")
+        (tmp_project / ".windsurfrules").write_text("rules\n")
+        from writ.commands.init import _detect_active_tools
+        formats = _detect_active_tools()
+        assert "agents_md" not in formats
+        assert "claude" not in formats
+        assert "windsurf" not in formats
+
+    def test_empty_when_no_ide(self, tmp_project: Path):
+        from writ.commands.init import _detect_active_tools
+        formats = _detect_active_tools()
+        assert formats == []
+
+
+class TestSearchRewrite:
+    def test_search_uses_hub_fallback(self, tmp_project: Path, monkeypatch):
+        monkeypatch.setattr(
+            "writ.commands.search._search_hub",
+            lambda q, **kw: [],
+        )
+        monkeypatch.setattr(
+            "writ.commands.search._search_legacy_all",
+            lambda q, lim: [
+                {"name": "test-agent", "source": "enwrit", "description": "Test", "writ_score": 80},
+            ],
+        )
+        result = runner.invoke(app, ["search", "test"])
+        assert result.exit_code == 0
+        assert "test-agent" in result.output
+
+    def test_search_default_limit_5(self, tmp_project: Path, monkeypatch):
+        items = [
+            {"name": f"agent-{i}", "source": "prpm", "description": f"Agent {i}", "writ_score": 50}
+            for i in range(10)
+        ]
+        monkeypatch.setattr(
+            "writ.commands.search._search_hub",
+            lambda q, **kw: items,
+        )
+        result = runner.invoke(app, ["search", "test"])
+        assert result.exit_code == 0
+        assert "agent-0" in result.output
+        assert "agent-4" in result.output
+        assert "agent-5" not in result.output
+
+    def test_search_prpm_direct(self, tmp_project: Path, monkeypatch):
+        monkeypatch.setattr(
+            "writ.commands.search._search_prpm",
+            lambda q, lim: [{"name": "prpm-pkg", "source": "prpm", "description": "From PRPM"}],
+        )
+        result = runner.invoke(app, ["search", "test", "--from", "prpm"])
+        assert result.exit_code == 0
+        assert "prpm-pkg" in result.output
 
 
 class _MockRegistryClient:

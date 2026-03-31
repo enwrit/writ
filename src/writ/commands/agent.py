@@ -14,6 +14,8 @@ from writ.core.formatter import get_formatter
 from writ.core.models import CompositionConfig, InstructionConfig
 from writ.utils import console, yaml_load
 
+_SHARED_FILE_FORMATS = {"claude", "agents_md", "copilot", "windsurf", "codex", "kiro"}
+
 
 def _require_init() -> None:
     """Ensure .writ/ is initialized."""
@@ -217,6 +219,15 @@ def use(
     # Determine output formats
     config = store.load_config()
     target_formats = formats or config.formats
+
+    # Warn if user explicitly chose a shared-file format
+    shared_targets = [f for f in target_formats if f in _SHARED_FILE_FORMATS]
+    if shared_targets and formats:
+        for sf in shared_targets:
+            console.print(
+                f"  [yellow]Warning:[/yellow] format '{sf}' modifies a shared file. "
+                "Use Ctrl+C to cancel."
+            )
 
     # Write to each format
     written_paths: list[str] = []

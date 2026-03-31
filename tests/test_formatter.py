@@ -3,10 +3,13 @@
 from pathlib import Path
 
 from writ.core.formatter import (
+    SAFE_FORMAT_NAMES,
     AgentsMdFormatter,
     ClaudeFormatter,
+    ClaudeRulesFormatter,
     CopilotFormatter,
     CursorFormatter,
+    KiroSteeringFormatter,
     SkillFormatter,
     WindsurfFormatter,
     get_formatter,
@@ -178,3 +181,83 @@ class TestAgentCardFormatter:
 
         fmt = get_formatter("agent-card")
         assert isinstance(fmt, AgentCardFormatter)
+
+
+class TestClaudeRulesFormatter:
+    def test_writes_separate_file(self, tmp_project: Path, sample_agent: InstructionConfig):
+        (tmp_project / ".claude" / "rules").mkdir(parents=True)
+        fmt = ClaudeRulesFormatter()
+        path = fmt.write(sample_agent, "Claude rules content", root=tmp_project)
+        assert path.exists()
+        assert path.name == "writ-test-agent.md"
+        assert ".claude" in str(path)
+        assert "rules" in str(path)
+        content = path.read_text()
+        assert "Claude rules content" in content
+
+    def test_no_frontmatter(self, tmp_project: Path, sample_agent: InstructionConfig):
+        fmt = ClaudeRulesFormatter()
+        path = fmt.write(sample_agent, "Instructions", root=tmp_project)
+        content = path.read_text()
+        assert "---" not in content
+
+    def test_clean(self, tmp_project: Path, sample_agent: InstructionConfig):
+        fmt = ClaudeRulesFormatter()
+        fmt.write(sample_agent, "Test", root=tmp_project)
+        assert fmt.clean("test-agent", root=tmp_project) is True
+        assert not (tmp_project / ".claude" / "rules" / "writ-test-agent.md").exists()
+
+    def test_clean_nonexistent(self, tmp_project: Path):
+        fmt = ClaudeRulesFormatter()
+        assert fmt.clean("nonexistent", root=tmp_project) is False
+
+    def test_in_registry(self):
+        fmt = get_formatter("claude_rules")
+        assert isinstance(fmt, ClaudeRulesFormatter)
+
+
+class TestKiroSteeringFormatter:
+    def test_writes_separate_file(self, tmp_project: Path, sample_agent: InstructionConfig):
+        (tmp_project / ".kiro" / "steering").mkdir(parents=True)
+        fmt = KiroSteeringFormatter()
+        path = fmt.write(sample_agent, "Kiro steering content", root=tmp_project)
+        assert path.exists()
+        assert path.name == "writ-test-agent.md"
+        assert ".kiro" in str(path)
+        assert "steering" in str(path)
+        content = path.read_text()
+        assert "Kiro steering content" in content
+
+    def test_includes_inclusion_frontmatter(
+        self, tmp_project: Path, sample_agent: InstructionConfig,
+    ):
+        fmt = KiroSteeringFormatter()
+        path = fmt.write(sample_agent, "Instructions", root=tmp_project)
+        content = path.read_text()
+        assert "---" in content
+        assert "inclusion: always" in content
+
+    def test_clean(self, tmp_project: Path, sample_agent: InstructionConfig):
+        fmt = KiroSteeringFormatter()
+        fmt.write(sample_agent, "Test", root=tmp_project)
+        assert fmt.clean("test-agent", root=tmp_project) is True
+        assert not (tmp_project / ".kiro" / "steering" / "writ-test-agent.md").exists()
+
+    def test_clean_nonexistent(self, tmp_project: Path):
+        fmt = KiroSteeringFormatter()
+        assert fmt.clean("nonexistent", root=tmp_project) is False
+
+    def test_in_registry(self):
+        fmt = get_formatter("kiro_steering")
+        assert isinstance(fmt, KiroSteeringFormatter)
+
+
+class TestSafeFormatNames:
+    def test_safe_formats_list(self):
+        assert "cursor" in SAFE_FORMAT_NAMES
+        assert "claude_rules" in SAFE_FORMAT_NAMES
+        assert "kiro_steering" in SAFE_FORMAT_NAMES
+        assert "claude" not in SAFE_FORMAT_NAMES
+        assert "agents_md" not in SAFE_FORMAT_NAMES
+        assert "copilot" not in SAFE_FORMAT_NAMES
+        assert "windsurf" not in SAFE_FORMAT_NAMES

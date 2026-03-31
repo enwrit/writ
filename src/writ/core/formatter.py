@@ -1,14 +1,22 @@
 """Export agent instructions to native IDE/CLI formats.
 
-Supported formats:
+Supported formats (safe -- separate writ-owned files):
 - cursor: .cursor/rules/writ-<name>.mdc
+- claude_rules: .claude/rules/writ-<name>.md (auto-loaded by Claude Code)
+- kiro_steering: .kiro/steering/writ-<name>.md (auto-loaded by Kiro)
+
+Legacy formats (modify user-owned shared files -- explicit opt-in only):
 - claude: CLAUDE.md (managed sections)
 - agents_md: AGENTS.md (managed sections)
 - copilot: .github/copilot-instructions.md
 - windsurf: .windsurfrules
-- codex: AGENTS.md (same as agents_md, Codex reads AGENTS.md)
-- kiro: AGENTS.md (same as agents_md, Kiro reads AGENTS.md)
+- codex: AGENTS.md (alias)
+- kiro: AGENTS.md (alias, prefer kiro_steering)
+
+Other:
 - skill: SKILL.md (Anthropic standard, YAML frontmatter + body)
+- agent-card: .well-known/<name>.agent-card.json
+- cursor-mcp: .cursor/mcp.json
 """
 
 from __future__ import annotations
@@ -22,6 +30,13 @@ from writ.utils import update_or_create_markdown, yaml_dumps
 # ---------------------------------------------------------------------------
 # Base formatter
 # ---------------------------------------------------------------------------
+
+def _writ_filename(name: str, ext: str) -> str:
+    """Build ``writ-<name>.<ext>`` avoiding a ``writ-writ-`` double prefix."""
+    if name.startswith("writ-"):
+        return f"{name}.{ext}"
+    return f"writ-{name}.{ext}"
+
 
 class BaseFormatter:
     """Base class for format writers."""
@@ -56,7 +71,7 @@ class CursorFormatter(BaseFormatter):
         root: Path | None = None,
     ) -> Path:
         root = root or Path.cwd()
-        path = root / ".cursor" / "rules" / f"writ-{agent.name}.mdc"
+        path = root / ".cursor" / "rules" / _writ_filename(agent.name, "mdc")
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # Build frontmatter
@@ -81,7 +96,7 @@ class CursorFormatter(BaseFormatter):
 
     def clean(self, agent_name: str, root: Path | None = None) -> bool:
         root = root or Path.cwd()
-        path = root / ".cursor" / "rules" / f"writ-{agent_name}.mdc"
+        path = root / ".cursor" / "rules" / _writ_filename(agent_name, "mdc")
         if path.exists():
             path.unlink()
             return True
@@ -183,6 +198,77 @@ class CodexFormatter(AgentsMdFormatter):
 
 class KiroFormatter(AgentsMdFormatter):
     format_name = "kiro"
+
+
+# ---------------------------------------------------------------------------
+# Claude Code rules: .claude/rules/writ-<name>.md (separate file, safe)
+# ---------------------------------------------------------------------------
+
+class ClaudeRulesFormatter(BaseFormatter):
+    """Write to .claude/rules/writ-<name>.md -- auto-loaded by Claude Code.
+
+    Files in .claude/rules/ without a ``paths:`` frontmatter are loaded at
+    launch with the same priority as .claude/CLAUDE.md (always-on).
+    """
+
+    format_name = "claude_rules"
+
+    def write(
+        self,
+        agent: InstructionConfig,
+        composed_instructions: str,
+        root: Path | None = None,
+    ) -> Path:
+        root = root or Path.cwd()
+        path = root / ".claude" / "rules" / _writ_filename(agent.name, "md")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(composed_instructions + "\n", encoding="utf-8")
+        return path
+
+    def clean(self, agent_name: str, root: Path | None = None) -> bool:
+        root = root or Path.cwd()
+        path = root / ".claude" / "rules" / _writ_filename(agent_name, "md")
+        if path.exists():
+            path.unlink()
+            return True
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Kiro steering: .kiro/steering/writ-<name>.md (separate file, safe)
+# ---------------------------------------------------------------------------
+
+class KiroSteeringFormatter(BaseFormatter):
+    """Write to .kiro/steering/writ-<name>.md -- auto-loaded by Kiro.
+
+    Files with ``inclusion: always`` frontmatter are loaded into every
+    Kiro interaction automatically.
+    """
+
+    format_name = "kiro_steering"
+
+    def write(
+        self,
+        agent: InstructionConfig,
+        composed_instructions: str,
+        root: Path | None = None,
+    ) -> Path:
+        root = root or Path.cwd()
+        path = root / ".kiro" / "steering" / _writ_filename(agent.name, "md")
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        fm_str = yaml_dumps({"inclusion": "always"}).strip()
+        content = f"---\n{fm_str}\n---\n\n{composed_instructions}\n"
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def clean(self, agent_name: str, root: Path | None = None) -> bool:
+        root = root or Path.cwd()
+        path = root / ".kiro" / "steering" / _writ_filename(agent_name, "md")
+        if path.exists():
+            path.unlink()
+            return True
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +405,8 @@ class CursorMcpFormatter(BaseFormatter):
 
 FORMATTERS: dict[str, type[BaseFormatter]] = {
     "cursor": CursorFormatter,
+    "claude_rules": ClaudeRulesFormatter,
+    "kiro_steering": KiroSteeringFormatter,
     "claude": ClaudeFormatter,
     "agents_md": AgentsMdFormatter,
     "copilot": CopilotFormatter,
@@ -329,6 +417,8 @@ FORMATTERS: dict[str, type[BaseFormatter]] = {
     "agent-card": AgentCardFormatter,
     "cursor-mcp": CursorMcpFormatter,
 }
+
+SAFE_FORMAT_NAMES: list[str] = ["cursor", "claude_rules", "kiro_steering"]
 
 ALL_FORMAT_NAMES: list[str] = list(FORMATTERS.keys())
 

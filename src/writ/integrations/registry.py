@@ -132,6 +132,43 @@ class RegistryClient:
         except Exception:  # noqa: BLE001
             return []
 
+    def hub_search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        task_type: str | None = None,
+        source: str | None = None,
+        semantic: bool = True,
+    ) -> list[dict]:
+        """Search the unified Hub (enwrit + PRPM, with semantic ranking).
+
+        Falls back to the legacy ``search()`` method on failure.
+        """
+        try:
+            params: dict = {
+                "q": query,
+                "limit": limit,
+                "sort": "relevance" if semantic else "score",
+            }
+            if source:
+                params["source"] = source
+            if task_type:
+                params["task_type"] = task_type
+            if semantic:
+                params["semantic"] = "true"
+            resp = httpx.get(
+                f"{self.base_url}/hub/search",
+                params=params,
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json().get("items", [])
+            return []
+        except Exception:  # noqa: BLE001
+            logger.debug("hub_search: unavailable", exc_info=True)
+            return []
+
     def pull_public_agent(self, name: str) -> dict | None:
         """Pull a public agent by name (no auth required)."""
         try:

@@ -77,7 +77,7 @@ That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manu
 |-----------|--------------|
 | **Instruction linting** | 6-dimension quality scoring (0-100) for any AI instruction file. Code-based + AI-powered. |
 | **Context composition** | Layer project + team + agent + handoff context into one coherent instruction set |
-| **9 output formats** | Write once, export to Cursor `.mdc`, `CLAUDE.md`, `AGENTS.md`, Copilot, Windsurf, Codex, Kiro, Agent Cards |
+| **Multi-format export** | Cursor `.mdc`, Claude Code, Kiro steering (auto-detected); AGENTS.md, Copilot, Windsurf (opt-in) |
 | **Agent communication** | Structured conversations between agents across repos and devices |
 | **Personal library + cloud sync** | `writ save` → `writ load` on any device. Your agents follow you. |
 | **Hub with 50+ instructions** | Rules, agents, and autonomous programs. `writ install <name>` |
@@ -87,14 +87,14 @@ That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manu
 
 writ writes to **native IDE files** -- it does NOT call LLM APIs.
 
-| Tool | writ writes to |
-|------|----------------|
-| Cursor | `.cursor/rules/writ-*.mdc` |
-| Claude Code | `CLAUDE.md` |
-| AGENTS.md | `AGENTS.md` |
-| GitHub Copilot | `.github/copilot-instructions.md` |
-| Windsurf | `.windsurfrules` |
-| Codex / Kiro | `AGENTS.md` |
+| Tool | writ writes to | Mode |
+|------|----------------|------|
+| Cursor | `.cursor/rules/writ-*.mdc` | Auto-detected |
+| Claude Code | `.claude/rules/writ-*.md` | Auto-detected |
+| Kiro | `.kiro/steering/writ-*.md` | Auto-detected |
+| AGENTS.md | `AGENTS.md` | Opt-in (`--format`) |
+| GitHub Copilot | `.github/copilot-instructions.md` | Opt-in (`--format`) |
+| Windsurf | `.windsurfrules` | Opt-in (`--format`) |
 
 When you run `writ use reviewer`, the tool composes all relevant context and writes it directly into the files your IDE already reads.
 

@@ -44,14 +44,14 @@ src/writ/
 
 The tool writes to native IDE/CLI files. It does NOT call LLM APIs directly (except `writ lint --deep`, which routes through our backend for AI-powered scoring). Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
 
-| Tool | We write to |
-|------|------------|
-| Cursor | `.cursor/rules/writ-*.mdc` |
-| Claude Code | `CLAUDE.md` |
-| AGENTS.md | `AGENTS.md` |
-| Copilot | `.github/copilot-instructions.md` |
-| Windsurf | `.windsurfrules` |
-| Codex/Kiro | `AGENTS.md` |
+| Tool | We write to | Mode |
+|------|------------|------|
+| Cursor | `.cursor/rules/writ-*.mdc` | Default (auto-detected) |
+| Claude Code | `.claude/rules/writ-*.md` | Default (auto-detected) |
+| Kiro | `.kiro/steering/writ-*.md` | Default (auto-detected) |
+| AGENTS.md | `AGENTS.md` | Opt-in (`--format agents_md`) |
+| Copilot | `.github/copilot-instructions.md` | Opt-in (`--format copilot`) |
+| Windsurf | `.windsurfrules` | Opt-in (`--format windsurf`) |
 
 ## Core Commands
 
@@ -69,7 +69,7 @@ writ save <name>                Save to personal library (~/.writ/)
 writ load <name>                Load from library into project
 writ export <name> <format>     Export to specific format
 writ compose <name>             Preview composed context (dry run)
-writ search <query>             Browse from PRPM, Skills, registry
+writ search <query>             Semantic search across 6,000+ instructions (Hub API)
 writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
 writ register                   Interactive account creation + auto-login
 writ login                      Authenticate with enwrit.com (cross-device sync)
