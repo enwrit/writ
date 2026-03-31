@@ -96,7 +96,8 @@ def _display_results(query: str, results: list[dict], limit: int) -> None:
             f"Score: {score_str}  {source_badge}"
         )
         if desc:
-            console.print(f"     {desc[:100]}")
+            safe_desc = desc[:100].encode("ascii", errors="replace").decode("ascii")
+            console.print(f"     {safe_desc}")
 
         install_cmd = f"writ install {name}"
         if source and source != "enwrit":
