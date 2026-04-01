@@ -1,4 +1,4 @@
-"""writ CLI -- Agent instruction management.
+"""writ CLI -- AI instruction management.
 
 Entry point for the `writ` command. Registers all subcommands.
 """
@@ -11,11 +11,8 @@ from writ import __version__
 from writ.commands import (
     agent,
     approvals,
-    compose,
-    export,
     handoff,
     init,
-    install,
     knowledge,
     library,
     lint,
@@ -38,7 +35,7 @@ from writ.utils import console
 
 app = typer.Typer(
     name="writ",
-    help="Agent instruction management CLI -- compose, port, and score AI agent configs.",
+    help="AI instruction management CLI -- find, install, route, and score instructions.",
     no_args_is_help=True,
     rich_markup_mode="rich",
     pretty_exceptions_enable=True,
@@ -49,20 +46,20 @@ app = typer.Typer(
 # Register command groups
 # ---------------------------------------------------------------------------
 
-# Direct commands (no sub-group)
+# Core commands
 app.command(name="init")(init.init_command)
 app.command(name="add")(agent.add)
 app.command(name="list")(agent.list_agents)
-app.command(name="use")(agent.use)
-app.command(name="edit")(agent.edit)
 app.command(name="remove")(agent.remove)
-app.command(name="export")(export.export_command)
-app.command(name="compose")(compose.compose_command)
 
-# Library commands (save/load/library)
+# Hidden alias: `writ install` -> `writ add` (backward compat)
+app.command(name="install", hidden=True)(agent.add)
+
+# Library: save to personal library
 app.command(name="save")(library.save)
-app.command(name="load")(library.load)
-app.command(name="library")(library.library_list)
+
+# Search & discovery
+app.command(name="search")(search.search_command)
 
 # Auth commands (register/login/logout)
 app.command(name="register")(register.register)
@@ -74,10 +71,6 @@ app.command(name="sync")(sync.sync_command)
 
 # Lint command
 app.command(name="lint")(lint.lint_command)
-
-# Install + Search commands
-app.command(name="install")(install.install_command)
-app.command(name="search")(search.search_command)
 
 # Publish commands
 app.command(name="publish")(publish.publish_command)
@@ -97,7 +90,7 @@ app.add_typer(memory_app, name="memory")
 # Handoff sub-group
 handoff_app = typer.Typer(
     name="handoff",
-    help="Context handoffs between agents.",
+    help="Context handoffs between instructions.",
     no_args_is_help=True,
 )
 handoff_app.command(name="create")(handoff.create)
@@ -165,16 +158,16 @@ def status_command() -> None:
     table.add_row("Project initialized", init_val)
 
     if initialized:
-        agents = store.list_instructions()
-        table.add_row("Agents in project", str(len(agents)))
+        instructions = store.list_instructions()
+        table.add_row("Instructions in project", str(len(instructions)))
         config = store.load_config()
         table.add_row("Active formats", ", ".join(config.formats))
 
     logged_in = auth.is_logged_in()
     table.add_row("Logged in", "[green]yes[/green]" if logged_in else "[dim]no[/dim]")
 
-    global_agents = store.list_library()
-    table.add_row("Library agents", str(len(global_agents)))
+    lib_items = store.list_library()
+    table.add_row("Library instructions", str(len(lib_items)))
 
     backend_status = _check_backend()
     table.add_row("Backend (api.enwrit.com)", backend_status)
@@ -203,7 +196,7 @@ def _check_backend() -> str:
 def main(
     version: bool = typer.Option(False, "--version", "-v", help="Show version and exit."),
 ) -> None:
-    """writ -- Agent instruction management CLI."""
+    """writ -- AI instruction management CLI."""
     if version:
         from rich.console import Console
         Console().print(f"writ {__version__}")

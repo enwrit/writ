@@ -12,6 +12,10 @@ from writ.core import auth, store
 
 runner = CliRunner()
 
+# Must not collide with Hub semantic matches when `writ add` runs with an empty library.
+_LOGIN_SAVE_NAME = "writ_test_login_unique_z9"
+_LOGIN_LOCAL_NAME = "writ_test_login_local_z9"
+
 
 class TestLogin:
     def test_login_saves_token(self, tmp_project: Path, tmp_global_writ: Path) -> None:
@@ -82,17 +86,17 @@ class TestIsLoggedIn:
 
 
 class TestRemoteSyncPaths:
-    """Test that save/load/library work correctly with mocked remote."""
+    """Test that save, writ add (library pull), and list --library work with mocked remote."""
 
     def test_save_pushes_to_remote_when_logged_in(
         self, initialized_project: Path, tmp_global_writ: Path
     ) -> None:
-        runner.invoke(app, ["add", "reviewer", "--instructions", "Review code."])
+        runner.invoke(app, ["add", _LOGIN_SAVE_NAME, "--instructions", "Review code."])
         runner.invoke(app, ["login", "--token", "sk_test"])
 
         with patch("writ.commands.library.RegistryClient") as mock_client:
             mock_client.return_value.push_to_library.return_value = True
-            result = runner.invoke(app, ["save", "reviewer"])
+            result = runner.invoke(app, ["save", _LOGIN_SAVE_NAME])
 
         assert result.exit_code == 0
         assert "Synced to enwrit.com" in result.output
@@ -101,12 +105,12 @@ class TestRemoteSyncPaths:
     def test_save_shows_failure_when_remote_fails(
         self, initialized_project: Path, tmp_global_writ: Path
     ) -> None:
-        runner.invoke(app, ["add", "reviewer", "--instructions", "Review code."])
+        runner.invoke(app, ["add", _LOGIN_SAVE_NAME, "--instructions", "Review code."])
         runner.invoke(app, ["login", "--token", "sk_test"])
 
         with patch("writ.commands.library.RegistryClient") as mock_client:
             mock_client.return_value.push_to_library.return_value = False
-            result = runner.invoke(app, ["save", "reviewer"])
+            result = runner.invoke(app, ["save", _LOGIN_SAVE_NAME])
 
         assert result.exit_code == 0
         assert "Local save only" in result.output
@@ -114,16 +118,16 @@ class TestRemoteSyncPaths:
     def test_save_skips_remote_when_logged_out(
         self, initialized_project: Path, tmp_global_writ: Path
     ) -> None:
-        runner.invoke(app, ["add", "reviewer", "--instructions", "Review code."])
+        runner.invoke(app, ["add", _LOGIN_SAVE_NAME, "--instructions", "Review code."])
         store.init_global_store()
 
         with patch("writ.commands.library.RegistryClient") as mock_client:
-            result = runner.invoke(app, ["save", "reviewer"])
+            result = runner.invoke(app, ["save", _LOGIN_SAVE_NAME])
 
         assert result.exit_code == 0
         mock_client.return_value.push_to_library.assert_not_called()
 
-    def test_load_falls_back_to_remote(
+    def test_add_falls_back_to_remote_library(
         self, initialized_project: Path, tmp_global_writ: Path
     ) -> None:
         runner.invoke(app, ["login", "--token", "sk_test"])
@@ -136,47 +140,57 @@ class TestRemoteSyncPaths:
             "instructions": "Remote instructions here.",
         }
 
-        with patch("writ.commands.library.RegistryClient") as mock_client:
+        with patch("writ.integrations.registry.RegistryClient") as mock_client:
             mock_client.return_value.pull_from_library.return_value = remote_data
-            result = runner.invoke(app, ["load", "remote-agent"])
+            result = runner.invoke(app, ["add", "remote-agent"])
 
         assert result.exit_code == 0
-        assert "from enwrit.com" in result.output
+        assert "Added" in result.output
+        assert "remote-agent" in result.output
+        assert "from library" in result.output
+        mock_client.return_value.pull_from_library.assert_called_once()
 
     def test_library_shows_remote_columns_when_logged_in(
         self, initialized_project: Path, tmp_global_writ: Path
     ) -> None:
-        runner.invoke(app, ["add", "local-only", "--instructions", "Local."])
-        runner.invoke(app, ["save", "local-only"])
+        runner.invoke(app, ["add", _LOGIN_LOCAL_NAME, "--instructions", "Local."])
+        runner.invoke(app, ["save", _LOGIN_LOCAL_NAME])
         runner.invoke(app, ["login", "--token", "sk_test"])
 
         remote_list = [
-            {"name": "local-only", "description": "Local.", "version": "1.0.0", "tags": []},
+            {
+                "name": _LOGIN_LOCAL_NAME,
+                "description": "Local.",
+                "version": "1.0.0",
+                "tags": [],
+            },
             {"name": "remote-only", "description": "Remote.", "version": "1.0.0", "tags": []},
         ]
 
-        with patch("writ.commands.library.RegistryClient") as mock_client:
+        with patch("writ.integrations.registry.RegistryClient") as mock_client:
             mock_client.return_value.list_library.return_value = remote_list
-            result = runner.invoke(app, ["library"])
+            result = runner.invoke(app, ["list", "--library"])
 
         assert result.exit_code == 0
         assert "Local" in result.output
         assert "Remote" in result.output
 
-    def test_load_remote_with_malformed_data(
+    def test_add_remote_library_malformed_falls_through_without_crash(
         self, initialized_project: Path, tmp_global_writ: Path
     ) -> None:
-        """Backend returns data missing required fields -- should not crash."""
+        """Library API returns unusable dict -- add proceeds (e.g. new instruction), no crash."""
         runner.invoke(app, ["login", "--token", "sk_test"])
 
-        with patch("writ.commands.library.RegistryClient") as mock_client:
+        with patch("writ.integrations.registry.RegistryClient") as mock_client:
             mock_client.return_value.pull_from_library.return_value = {
                 "unexpected": "format",
             }
-            result = runner.invoke(app, ["load", "bad-agent"])
+            mock_client.return_value.hub_search.return_value = []
+            result = runner.invoke(app, ["add", "bad-agent"])
 
-        assert result.exit_code == 1
-        assert "not found" in result.output.lower()
+        assert result.exit_code == 0
+        assert "Added" in result.output
+        mock_client.return_value.pull_from_library.assert_called_once()
 
     def test_library_with_malformed_remote_entries(
         self, initialized_project: Path, tmp_global_writ: Path
@@ -189,9 +203,9 @@ class TestRemoteSyncPaths:
             {"no_name_field": True},
         ]
 
-        with patch("writ.commands.library.RegistryClient") as mock_client:
+        with patch("writ.integrations.registry.RegistryClient") as mock_client:
             mock_client.return_value.list_library.return_value = remote_list
-            result = runner.invoke(app, ["library"])
+            result = runner.invoke(app, ["list", "--library"])
 
         assert result.exit_code == 0
         assert "good-agent" in result.output

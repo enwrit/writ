@@ -79,11 +79,22 @@ def serve() -> None:
     try:
         from writ.integrations.mcp_server import run_server
     except ImportError:
-        console.print(
-            "[red]MCP dependencies not installed.[/red]\n\n"
-            "Run: [cyan]pip install enwrit\\[mcp][/cyan]\n"
-        )
-        raise typer.Exit(1) from None
+        import subprocess
+        import sys
+
+        console.print("[dim]Installing MCP dependencies...[/dim]")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "enwrit[mcp]", "-q"],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            console.print(
+                "[red]Failed to install MCP dependencies.[/red]\n\n"
+                "Run manually: [cyan]pip install enwrit\\[mcp][/cyan]\n"
+            )
+            raise typer.Exit(1) from None
+        from writ.integrations.mcp_server import run_server
 
     from writ.core import store
 

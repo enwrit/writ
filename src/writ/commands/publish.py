@@ -1,4 +1,4 @@
-"""writ publish / unpublish -- Make agents publicly discoverable."""
+"""writ publish / unpublish -- Make instructions publicly discoverable."""
 
 from __future__ import annotations
 
@@ -28,15 +28,15 @@ def _require_login() -> None:
 
 
 def publish_command(
-    name: Annotated[str, typer.Argument(help="Agent name to publish.")],
+    name: Annotated[str, typer.Argument(help="Instruction name to publish.")],
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompt."),
     ] = False,
 ) -> None:
-    """Publish an agent to enwrit.com (publicly discoverable).
+    """Publish an instruction to enwrit.com (publicly discoverable).
 
-    The agent will be searchable and installable by anyone.
+    The instruction will be searchable and installable by anyone.
 
     Examples:
         writ publish reviewer
@@ -45,11 +45,11 @@ def publish_command(
     _require_init()
     _require_login()
 
-    agent = store.load_instruction(name)
-    if not agent:
+    inst = store.load_instruction(name)
+    if not inst:
         console.print(
-            f"[red]Agent '{name}' not found.[/red] "
-            "Run [cyan]writ list[/cyan] to see available agents."
+            f"[red]'{name}' not found.[/red] "
+            "Run [cyan]writ list[/cyan] to see available instructions."
         )
         raise typer.Exit(1)
 
@@ -65,17 +65,14 @@ def publish_command(
     from writ.integrations.registry import RegistryClient
 
     client = RegistryClient()
-    ok = client.push_to_library(name, agent, is_public=True)
+    ok = client.push_to_library(name, inst, is_public=True)
     if ok:
         console.print(f"\n[green]Published '{name}' to enwrit.com[/green]\n")
         console.print(
-            f"  Agent Card: [cyan]https://api.enwrit.com/agents/{name}/card[/cyan]"
+            f"  Browse:  [cyan]https://enwrit.com/hub/enwrit/{name}[/cyan]"
         )
         console.print(
-            f"  Browse:     [cyan]https://enwrit.com/agents/{name}[/cyan]"
-        )
-        console.print(
-            f"  Install:    [cyan]writ install {name}[/cyan]"
+            f"  Add:     [cyan]writ add {name}[/cyan]"
         )
     else:
         console.print(
@@ -86,11 +83,11 @@ def publish_command(
 
 
 def unpublish_command(
-    name: Annotated[str, typer.Argument(help="Agent name to unpublish.")],
+    name: Annotated[str, typer.Argument(help="Instruction name to unpublish.")],
 ) -> None:
-    """Make a published agent private again.
+    """Make a published instruction private again.
 
-    The agent remains in your personal library but is no longer
+    The instruction remains in your personal library but is no longer
     publicly discoverable or searchable.
 
     Examples:
@@ -99,21 +96,21 @@ def unpublish_command(
     _require_init()
     _require_login()
 
-    agent = store.load_instruction(name)
-    if not agent:
+    inst = store.load_instruction(name)
+    if not inst:
         console.print(
-            f"[red]Agent '{name}' not found.[/red] "
-            "Run [cyan]writ list[/cyan] to see available agents."
+            f"[red]'{name}' not found.[/red] "
+            "Run [cyan]writ list[/cyan] to see available instructions."
         )
         raise typer.Exit(1)
 
     from writ.integrations.registry import RegistryClient
 
     client = RegistryClient()
-    ok = client.push_to_library(name, agent, is_public=False)
+    ok = client.push_to_library(name, inst, is_public=False)
     if ok:
         console.print(
-            f"[green]Agent '{name}' is now private.[/green] "
+            f"[green]'{name}' is now private.[/green] "
             "It remains in your personal library."
         )
     else:

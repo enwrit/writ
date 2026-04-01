@@ -12,11 +12,12 @@ The quality and communication layer for AI coding agents. Lint your instructions
 ```bash
 pip install enwrit
 writ lint CLAUDE.md               # Instant quality score (0-100) for any instruction
-writ init --template fullstack    # Bootstrap agent team in your repo
-writ use architect                # Compose + write to your IDE's native files
+writ init                         # Initialize writ in repo
+writ search "code reviewer"       # Find instructions from Hub database
+writ add code-review-agent        # Install instruction; from library, project or Hub
 ```
 
-**[Try the live lint demo](https://enwrit.com)** -- paste any instruction, get an instant quality score. Or **[browse 50+ instructions on the Hub](https://enwrit.com/hub)**.
+**[Try the live lint demo](https://enwrit.com)** -- paste any instruction, get an instant quality score. Or **[browse 6000+ instructions on the Hub](https://enwrit.com/hub)**.
 
 ---
 
@@ -60,13 +61,9 @@ pip install enwrit
 # 2. Initialize in any repo (auto-detects your stack, installs writ-context rule)
 writ init
 
-# 3. Search and install from 6,000+ instructions on the Hub
+# 3. Search and add from 6,000+ instructions on the Hub
 writ search "code review"
-writ install code-review-agent
-
-# 4. Activate -- writes to your IDE's native files
-writ use verification-loop
-writ use code-review-agent
+writ add code-review-agent         # Fetches from Hub, saves to .writ/, writes to IDE dirs
 ```
 
 That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manual conversion.
@@ -79,8 +76,8 @@ That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manu
 | **Context composition** | Layer project + team + agent + handoff context into one coherent instruction set |
 | **Multi-format export** | Cursor `.mdc`, Claude Code, Kiro steering (auto-detected); AGENTS.md, Copilot, Windsurf (opt-in) |
 | **Agent communication** | Structured conversations between agents across repos and devices |
-| **Personal library + cloud sync** | `writ save` → `writ load` on any device. Your agents follow you. |
-| **Hub with 6,000+ instructions** | Semantic search across rules, agents, programs (PRPM + enwrit). `writ search <query>` / `writ install <name>` |
+| **Personal library + cloud sync** | `writ save` → `writ add --lib` on any device. Your instructions follow you. |
+| **Hub with 6,000+ instructions** | Semantic search across rules, agents, programs (PRPM + enwrit). `writ search <query>` / `writ add <name>` |
 | **MCP server** | One line in your config and any agent can search/install from the Hub |
 
 ## How It Works
@@ -96,7 +93,7 @@ writ writes to **native IDE files** -- it does NOT call LLM APIs.
 | GitHub Copilot | `.github/copilot-instructions.md` | Opt-in (`--format`) |
 | Windsurf | `.windsurfrules` | Opt-in (`--format`) |
 
-When you run `writ use reviewer`, the tool composes all relevant context and writes it directly into the files your IDE already reads.
+When you run `writ add reviewer`, the tool composes all relevant context and writes it directly into the files your IDE already reads.
 
 ## Context Composition
 
@@ -110,8 +107,7 @@ Layer 1: Project context       ← Auto-detected (languages, frameworks, structu
 ```
 
 ```bash
-writ use implementer --with architect    # Compose with architect's context
-writ compose reviewer --with architect   # Preview before writing
+writ add implementer --with architect    # Compose with architect's context
 ```
 
 ## MCP Server (One-Line Setup)
@@ -141,8 +137,7 @@ The [enwrit Hub](https://enwrit.com/hub) has 50+ curated instructions across thr
 
 ```bash
 writ search "code review"          # Search from CLI
-writ install code-review-agent     # Install into your project
-writ use code-review-agent         # Activate in your IDE
+writ add code-review-agent         # Install into your project + activate in your IDE
 ```
 
 ## Templates
@@ -161,8 +156,8 @@ writ init --template rules         # Project rule + coding standards
 ```bash
 writ save my-reviewer              # Save to library (local + cloud)
 writ login                         # Authenticate for cross-device sync
-writ load my-reviewer              # Load on any machine
-writ library                       # See everything (local + remote)
+writ add my-reviewer --lib         # Load from library on any machine
+writ list --library                # See everything (local + remote)
 ```
 
 ## Cross-Project Memory
@@ -187,30 +182,29 @@ writ inbox                          # Check for responses
 
 | Command | Description |
 |---------|-------------|
-| `writ init` | Initialize in current repo |
-| `writ add <name>` | Create instruction (agent, rule, context, program) |
+| `writ init` | Initialize in current repo (auto-installs writ-context rule) |
+| `writ add <name>` | Add instruction: project -> library -> Hub -> create new; auto-writes to IDE dirs |
+| `writ add <name> --lib` | Force fetch from personal library |
+| `writ add <name> --from prpm` | Install directly from PRPM registry |
+| `writ add <name> --format cursor` | Export to a specific format |
 | `writ add --file <path>` | Import markdown file(s) or directory |
-| `writ list` | List all instructions |
-| `writ use <name>` | Activate (compose + write to IDE files) |
-| `writ edit <name>` | Open in $EDITOR |
+| `writ list` | List all instructions in project |
+| `writ list --library` | List personal library (local + remote) |
 | `writ remove <name>` | Remove instruction |
-| `writ export <name> <format>` | Export to specific format |
-| `writ compose <name>` | Preview composed context |
-| `writ save / load` | Personal library (local + cloud) |
-| `writ library` | List personal library |
-| `writ search <query>` | Search Hub |
-| `writ install <name>` | Install from Hub |
+| `writ save <name>` | Save to personal library |
+| `writ search <query>` | Semantic search across Hub (6,000+ instructions) |
 | `writ publish / unpublish` | Make publicly discoverable |
 | `writ login / logout` | Authenticate with enwrit.com |
 | `writ register` | Create account |
-| `writ lint [file\|name] [--deep] [--deep-local] [--stop-server]` | Quality score (0-100, 6 dimensions) |
+| `writ lint [file\|name] [--deep] [--deep-local]` | Quality score (0-100, 6 dimensions) |
 | `writ sync` | Bulk bidirectional library sync |
-| `writ mcp serve` | Start MCP server (22 tools) |
-| `writ chat start/send/inbox` | Agent-to-agent conversations |
+| `writ mcp serve` | Start MCP server (22 tools, auto-installs deps) |
+| `writ chat start/send/inbox` | Agent-to-agent conversations (supports `--file` attachments) |
 | `writ memory export/import` | Cross-project memory |
 | `writ handoff create` | Create agent handoff |
 | `writ review <name>` | Browse/submit reviews |
 | `writ threads` | Knowledge threads |
+| `writ approvals` | Human-in-the-loop approval management |
 
 ## Instruction Format
 
@@ -240,7 +234,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                    # 385 tests
+pytest                    # 432+ tests
 ruff check src/ tests/
 ```
 

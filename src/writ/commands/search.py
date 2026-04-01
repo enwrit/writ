@@ -1,4 +1,4 @@
-"""writ search -- Browse and discover agents from registries."""
+"""writ search -- Browse and discover instructions from registries."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def search_command(
         int, typer.Option("--limit", "-n", help="Max results to show."),
     ] = 5,
 ) -> None:
-    """Search for agents across 6,000+ instructions.
+    """Search for instructions across 6,000+ in the Hub.
 
     Uses semantic search to rank results by relevance and quality score.
     Falls back to keyword search when the Hub is unavailable.
@@ -46,8 +46,8 @@ def search_command(
     if not results:
         console.print(f"[yellow]No results found for '{query}'.[/yellow]")
         console.print(
-            "\nTip: install directly if you know the package name:\n"
-            "  [cyan]writ install <name>[/cyan]"
+            "\nTip: add directly if you know the name:\n"
+            "  [cyan]writ add <name>[/cyan]"
         )
         return
 
@@ -99,10 +99,10 @@ def _display_results(query: str, results: list[dict], limit: int) -> None:
             safe_desc = desc[:100].encode("ascii", errors="replace").decode("ascii")
             console.print(f"     {safe_desc}")
 
-        install_cmd = f"writ install {name}"
+        add_cmd = f"writ add {name}"
         if source and source != "enwrit":
-            install_cmd += f" --from {source}"
-        console.print(f"     [dim]{install_cmd}[/dim]\n")
+            add_cmd += f" --from {source}"
+        console.print(f"     [dim]{add_cmd}[/dim]\n")
 
 
 def _format_score(score: int | None) -> str:

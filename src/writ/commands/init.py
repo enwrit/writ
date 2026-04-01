@@ -1,4 +1,7 @@
-"""writ init -- Initialize writ in the current repository."""
+"""writ init -- Initialize writ in the current repository.
+
+Scans the repo, creates .writ/, detects IDEs, and installs writ-context.
+"""
 
 from __future__ import annotations
 
@@ -40,7 +43,7 @@ def init_command(
         bool,
         typer.Option(
             "--import-existing/--no-import-existing",
-            help="Import detected agent files into .writ/agents/.",
+            help="Import detected instruction files into .writ/.",
         ),
     ] = True,
     force: Annotated[
@@ -50,7 +53,7 @@ def init_command(
 ) -> None:
     """Initialize writ in the current repository.
 
-    Scans the repo for existing agent files, detects project context,
+    Scans the repo for existing instruction files, detects project context,
     and creates the .writ/ directory structure.
     """
     if store.is_initialized() and not force:
@@ -68,11 +71,11 @@ def init_command(
     config = ProjectConfig(formats=detected_formats or ["cursor"])
     store.save_config(config)
 
-    # 3. Scan for existing agent files and optionally import
+    # 3. Scan for existing instruction files and optionally import
     existing = scanner.detect_existing_files()
     imported_count = 0
     if existing:
-        console.print(f"\n[cyan]Found {len(existing)} existing agent file(s):[/cyan]")
+        console.print(f"\n[cyan]Found {len(existing)} existing instruction file(s):[/cyan]")
         for item in existing:
             console.print(f"  {item['format']:12s} {item['path']}")
 
@@ -92,20 +95,28 @@ def init_command(
         load_template(template)
 
     # 7. Summary
-    agent_count = len(store.list_instructions())
+    instr_count = len(store.list_instructions())
     console.print()
-    console.print(Panel.fit(
-        "[bold green]writ initialized![/bold green]\n\n"
-        + (f"Agents: {agent_count} "
-           f"({imported_count} imported)\n" if agent_count else "")
-        + "Next steps:\n"
-        "  [cyan]writ add <name>[/cyan]       Create a new agent\n"
-        "  [cyan]writ add --template[/cyan]   Add agents from a template\n"
-        "  [cyan]writ list[/cyan]             List agents in this project\n"
-        "  [cyan]writ use <name>[/cyan]       Activate an agent",
-        title="writ",
-        border_style="green",
-    ))
+    summary = "[bold green]writ initialized![/bold green]\n\n"
+    if instr_count:
+        summary += (
+            f"Instructions: {instr_count} "
+            f"({imported_count} imported)\n"
+        )
+    summary += (
+        "\n"
+        "Next steps:\n"
+        "  [cyan]writ search <query>[/cyan]    Find instructions (6,000+ in Hub)\n"
+        "  [cyan]writ add <name>[/cyan]        Add from Hub, library, or create new\n"
+        "  [cyan]writ lint <file>[/cyan]       Score instruction quality\n"
+        "  [cyan]writ list[/cyan]              List instructions in this project\n"
+        "\n"
+        "  [dim]writ save <name>[/dim]       [dim]Save to personal library (cross-device)[/dim]\n"
+        "  [dim]writ connect / chat[/dim]    [dim]Agent-to-agent communication[/dim]\n"
+        "  [dim]writ review / threads[/dim]  [dim]Knowledge sharing[/dim]\n"
+        "  [dim]writ mcp serve[/dim]         [dim]Expose via MCP protocol[/dim]"
+    )
+    console.print(Panel.fit(summary, title="writ", border_style="green"))
 
 
 def _detect_active_tools() -> list[str]:
@@ -130,27 +141,26 @@ def _detect_active_tools() -> list[str]:
 
 
 def _import_existing_files(existing: list[dict[str, str]]) -> int:
-    """Parse and import detected existing agent files. Returns count imported."""
+    """Parse and import detected existing instruction files. Returns count imported."""
     count = 0
     for item in existing:
-        agent = scanner.parse_existing_file(item)
-        if agent:
-            # Avoid overwriting if agent with same name already exists
-            if store.load_instruction(agent.name):
+        inst = scanner.parse_existing_file(item)
+        if inst:
+            if store.load_instruction(inst.name):
                 console.print(
-                    f"  [dim]Skipped[/dim] '{agent.name}' (already exists)"
+                    f"  [dim]Skipped[/dim] '{inst.name}' (already exists)"
                 )
                 continue
-            store.save_instruction(agent)
-            console.print(f"  [green]Imported[/green] '{agent.name}' from {item['format']}")
+            store.save_instruction(inst)
+            console.print(f"  [green]Imported[/green] '{inst.name}' from {item['format']}")
             count += 1
     if count:
-        console.print(f"[green]Imported {count} agent(s)[/green] from existing files")
+        console.print(f"[green]Imported {count} instruction(s)[/green] from existing files")
     return count
 
 
 def load_template(template_name: str) -> int:
-    """Load agents from a built-in template. Returns count loaded.
+    """Load instructions from a built-in template. Returns count loaded.
 
     Shared by both `writ init --template` and `writ add --template`.
     """
@@ -175,17 +185,17 @@ def load_template(template_name: str) -> int:
                 console.print(f"  [dim]Skipped[/dim] '{agent.name}' (already exists)")
                 continue
             store.save_instruction(agent)
-            console.print(f"  [green]Created[/green] agent: {agent.name}")
+            console.print(f"  [green]Created[/green] {agent.name}")
             count += 1
         except Exception as e:  # noqa: BLE001
             console.print(f"  [red]Failed[/red] to load {yaml_file.name}: {e}")
 
     if count:
         console.print(
-            f"[green]Loaded {count} agent(s)[/green] from '{template_name}' template"
+            f"[green]Loaded {count} instruction(s)[/green] from '{template_name}' template"
         )
     else:
-        console.print(f"[yellow]No new agents from template '{template_name}'[/yellow]")
+        console.print(f"[yellow]No new instructions from template '{template_name}'[/yellow]")
 
     return count
 

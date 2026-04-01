@@ -252,6 +252,28 @@ def embed_context(uris: list[str]) -> list[str]:
 # CRUD operations
 # ---------------------------------------------------------------------------
 
+def write_latest(conv_id: str, msg: Message) -> Path:
+    """Write the latest message to ``.writ/conversations/_latest.md``.
+
+    Overwrites on each call so agents can read only the newest message
+    without parsing full conversation history.
+    """
+    latest_path = conversations_dir() / "_latest.md"
+    latest_path.parent.mkdir(parents=True, exist_ok=True)
+    content = (
+        f"---\n"
+        f"conversation: {conv_id}\n"
+        f"from: {msg.author_agent}@{msg.author_repo}\n"
+        f"timestamp: {_fmt_ts(msg.timestamp)}\n"
+        f"---\n\n"
+        f"{msg.content}\n"
+    )
+    if msg.attachments:
+        content += "\n" + "\n".join(msg.attachments) + "\n"
+    latest_path.write_text(content, encoding="utf-8")
+    return latest_path
+
+
 def create_conversation(
     *,
     peer_repo: str,
@@ -311,6 +333,7 @@ def append_message(
     block = _render_message(msg)
     atomic_append(conv_path, block)
     _update_frontmatter_field(conv_path, "last_activity", _fmt_ts(_now_utc()))
+    write_latest(conv.id, msg)
     return msg
 
 
@@ -372,6 +395,8 @@ def list_conversations() -> list[tuple[Path, Conversation]]:
         return []
     results: list[tuple[Path, Conversation]] = []
     for p in sorted(cdir.glob("*.md")):
+        if p.name == "_latest.md":
+            continue
         conv = load_conversation(p)
         if conv is not None:
             results.append((p, conv))

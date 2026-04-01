@@ -11,7 +11,7 @@ alwaysApply: true
 
 The communication layer for AI agents. Routes context between repos, devices, and tools. Not a generator (agentseed does that), not a registry (PRPM has 7,500+ packages). We compose, sync, route, and score context and/or agent instructions.
 
-**Core framing**: Every feature is a routing operation -- `writ use` routes instructions to IDE files, `writ save/load` routes between devices, `writ handoff` routes between agents, `writ memory` routes between repos.
+**Core framing**: Every feature is a routing operation -- `writ add` routes instructions to IDE files, `writ save` + `writ add --lib` routes between devices, `writ handoff` routes between agents, `writ memory` routes between repos.
 
 Core capabilities:
 1. **Context composition** -- layer project + team + agent + handoff context into one instruction set
@@ -20,14 +20,14 @@ Core capabilities:
 
 4. **Agent-to-agent communication** -- structured conversations between agents in different repos (local filesystem or backend relay), with MCP Polling, CLI agent invocation, and API fallback
 
-**Future direction**: Contradiction detection across instruction sets, full A2A protocol endpoints, mobile approval workflows.
+**Future direction**: full A2A protocol endpoints, mobile approval workflows.
 
 ## Architecture
 
 ```
 src/writ/
 ├── cli.py              # Typer CLI entry point
-├── commands/           # One file per command group (init, agent, library, export, compose, etc.)
+├── commands/           # One file per command group (init, agent, library, search, chat, etc.)
 ├── core/               # Core logic (scanner, store, composer, formatter, linter, ml_scorer, models)
 ├── models/tier2/       # Bundled ML models for Tier 2 lint (m2cgen scorers + kNN index)
 ├── integrations/       # External registry integrations (PRPM, Agent Skills CLI, URL)
@@ -56,21 +56,19 @@ The tool writes to native IDE/CLI files. It does NOT call LLM APIs directly (exc
 ## Core Commands
 
 ```
-writ init                       Scan repo, detect existing files, create .writ/
+writ init                       Scan repo, create .writ/, auto-install writ-context to detected IDEs
 writ init --template fullstack  Bootstrap from a built-in template
-writ add <name>                 Create a new instruction (agent, rule, or context)
+writ add <name>                 Add instruction: checks project -> library -> Hub -> creates new; auto-writes to IDE dirs
+writ add <name> --lib           Force fetch from personal library instead of project
+writ add <name> --from prpm    Install directly from PRPM registry
+writ add <name> --format cursor Export to a specific format
 writ add --file <path>          Import markdown file(s) or directory into .writ/
 writ add --template rules       Load rule templates into existing project
 writ list                       Show all instructions in project
-writ use <name>                 Compose + write to native IDE files
-writ edit <name>                Open instruction YAML in $EDITOR
+writ list --library             Show personal library contents (local + remote)
 writ remove <name>              Remove instruction from project
 writ save <name>                Save to personal library (~/.writ/)
-writ load <name>                Load from library into project
-writ export <name> <format>     Export to specific format
-writ compose <name>             Preview composed context (dry run)
 writ search <query>             Semantic search across 6,000+ instructions (Hub API)
-writ install <name> --from url  Install from PRPM, Agent Skills CLI, or URL
 writ register                   Interactive account creation + auto-login
 writ login                      Authenticate with enwrit.com (cross-device sync)
 writ logout                     Remove stored API key
@@ -79,14 +77,15 @@ writ lint --code                Force Tier 1 code-only scoring (deterministic)
 writ lint --score               Output headline score only (machine-readable)
 writ lint --quiet               Output score + dimension table only (no issues/suggestions)
 writ lint <file> --deep         AI-powered Tier 3 scoring via enwrit.com (requires login)
-writ connect                   Interactive peer setup wizard for real repos
+writ connect                    Interactive peer setup wizard for real repos
 writ publish <name>             Make instruction publicly discoverable on enwrit.com
 writ sync                       Bulk bidirectional library sync with enwrit.com
-writ mcp serve                  Expose instructions via MCP (22 tools: discovery, Hub search/install, compose, chat, knowledge, approvals)
+writ mcp serve                  Expose instructions via MCP (auto-installs deps on first run - compose, chat, knowledge, approvals)
 writ handoff create <from> <to> Create context handoff between agents
 writ memory export/import       Cross-project memory sharing
 writ chat start --with <repo>   Start agent-to-agent conversation with a peer repo
-writ chat list/read/send/end    Manage and observe agent conversations
+writ chat send <id> "msg" -f x  Send message with optional file attachments
+writ chat list/read/end         Manage and observe agent conversations
 writ review <name>              Browse or submit reviews for public instructions
 writ threads list/start/post    Knowledge threads -- collaborative agent discussions
 writ approvals list/approve/deny  Human-in-the-loop approval management

@@ -7,6 +7,7 @@ Supports both local (filesystem) and remote (backend relay) transport.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.panel import Panel
@@ -252,6 +253,10 @@ def chat_send(
         False, "--with-diff",
         help="Attach git diff to the message (auto-truncated at 8KB).",
     ),
+    files: Annotated[
+        list[Path] | None,
+        typer.Option("--file", "-f", help="Attach file(s) to the message."),
+    ] = None,
     invoke: bool = typer.Option(True, "--invoke/--no-invoke", help="Auto-invoke peer agent."),
 ) -> None:
     """Send a message in an existing conversation."""
@@ -278,10 +283,17 @@ def chat_send(
         else:
             console.print("[dim]No diff found (clean working tree)[/dim]")
 
+    attach = [str(f) for f in files] if files else None
     msg = messaging.append_message(
-        path, agent="user", repo=repo_name, content=full_message,
+        path,
+        agent="user",
+        repo=repo_name,
+        content=full_message,
+        attach_files=attach,
     )
     console.print(f"[green]Sent[/green] {msg.id} in {conv.id}")
+    if files:
+        console.print(f"[dim]Attached {len(files)} file(s)[/dim]")
 
     peer_name = ""
     for p in conv.participants:

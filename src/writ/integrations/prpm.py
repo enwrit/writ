@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from urllib.parse import quote
 
 from writ.core.models import InstructionConfig
 from writ.utils import slugify
@@ -49,7 +50,7 @@ def _install_http(package: str) -> dict | None:
     import httpx
 
     resp = httpx.get(
-        f"{PRPM_API_BASE}/packages/{package}",
+        f"{PRPM_API_BASE}/packages/{quote(package, safe='')}",
         timeout=_TIMEOUT,
     )
     if resp.status_code == 200:

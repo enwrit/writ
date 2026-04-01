@@ -127,33 +127,15 @@ class TestList:
     def test_list_empty(self, initialized_project: Path):
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
-        assert "No agents found" in result.output
+        assert "No instructions found" in result.output
 
-    def test_list_with_agents(self, initialized_project: Path):
+    def test_list_with_instructions(self, initialized_project: Path):
         runner.invoke(app, ["add", "agent-a", "--instructions", "A"])
         runner.invoke(app, ["add", "agent-b", "--instructions", "B"])
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
         assert "agent-a" in result.output
         assert "agent-b" in result.output
-
-
-class TestUse:
-    def test_use_agent(self, initialized_project: Path):
-        runner.invoke(app, ["add", "reviewer", "--instructions", "You review code."])
-        result = runner.invoke(app, ["use", "reviewer"])
-        assert result.exit_code == 0
-        assert "Activated" in result.output
-
-    def test_use_nonexistent(self, initialized_project: Path):
-        result = runner.invoke(app, ["use", "nonexistent"])
-        assert result.exit_code == 1
-
-    def test_use_with_format(self, initialized_project: Path):
-        runner.invoke(app, ["add", "reviewer", "--instructions", "You review code."])
-        result = runner.invoke(app, ["use", "reviewer", "--format", "cursor"])
-        assert result.exit_code == 0
-        assert (initialized_project / ".cursor" / "rules" / "writ-reviewer.mdc").exists()
 
 
 class TestRemove:
@@ -168,39 +150,12 @@ class TestRemove:
         assert result.exit_code == 1
 
 
-class TestExport:
-    def test_export_to_cursor(self, initialized_project: Path):
-        runner.invoke(app, ["add", "reviewer", "--instructions", "Review code."])
-        result = runner.invoke(app, ["export", "reviewer", "cursor"])
-        assert result.exit_code == 0
-        assert "Exported" in result.output
-
-    def test_export_dry_run(self, initialized_project: Path):
-        runner.invoke(app, ["add", "reviewer", "--instructions", "Review code."])
-        result = runner.invoke(app, ["export", "reviewer", "cursor", "--dry-run"])
-        assert result.exit_code == 0
-        assert "Review code" in result.output
-
-    def test_export_invalid_format(self, initialized_project: Path):
-        runner.invoke(app, ["add", "reviewer", "--instructions", "Test"])
-        result = runner.invoke(app, ["export", "reviewer", "invalid"])
-        assert result.exit_code == 1
-
-
-class TestCompose:
-    def test_compose_preview(self, initialized_project: Path):
-        runner.invoke(app, ["add", "reviewer", "--instructions", "Review carefully."])
-        result = runner.invoke(app, ["compose", "reviewer"])
-        assert result.exit_code == 0
-        assert "Review carefully" in result.output
-
-
 class TestAddTemplate:
     def test_add_template_fullstack(self, initialized_project: Path):
         result = runner.invoke(app, ["add", "--template", "fullstack"])
         assert result.exit_code == 0
         assert "Created" in result.output or "Loaded" in result.output
-        # Verify agents were created
+        # Verify template instructions were created
         agents_dir = initialized_project / ".writ" / "agents"
         agent_files = list(agents_dir.glob("*.yaml"))
         assert len(agent_files) >= 3  # architect, implementer, reviewer, tester
@@ -227,12 +182,15 @@ class TestAddTemplate:
         assert "not found" in result.output
 
     def test_add_template_skips_existing(self, initialized_project: Path):
-        # Add fullstack agents first
+        # Add fullstack template first
         runner.invoke(app, ["add", "--template", "fullstack"])
         # Add again -- should skip
         result = runner.invoke(app, ["add", "--template", "fullstack"])
         assert result.exit_code == 0
-        assert "Skipped" in result.output or "No new agents" in result.output
+        assert (
+            "Skipped" in result.output
+            or "No new instructions from template" in result.output
+        )
 
     def test_add_no_name_no_template_fails(self, initialized_project: Path):
         result = runner.invoke(app, ["add"])
@@ -245,7 +203,7 @@ class TestInitImport:
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
         assert "Imported" in result.output
-        # Verify the agent was created
+        # Verify the instruction was created
         assert (tmp_project / ".writ" / "agents" / "agents-md.yaml").exists()
 
     def test_init_imports_cursor_rule(self, tmp_project: Path):
@@ -306,7 +264,7 @@ class TestStatus:
         assert result.exit_code == 0
         assert "yes" in result.output
 
-    def test_status_shows_agent_count(self, initialized_project: Path):
+    def test_status_shows_instruction_count(self, initialized_project: Path):
         runner.invoke(app, ["add", "agent-a", "--instructions", "A"])
         result = runner.invoke(app, ["status"])
         assert result.exit_code == 0
@@ -314,7 +272,7 @@ class TestStatus:
 
 
 class TestLint:
-    def test_lint_agent(self, initialized_project: Path):
+    def test_lint_instruction(self, initialized_project: Path):
         runner.invoke(app, [
             "add", "reviewer", "--description", "A reviewer",
             "--instructions", "Review code.", "--tags", "review",
@@ -340,7 +298,7 @@ class TestPublish:
         assert result.exit_code == 1
         assert "Not logged in" in result.output
 
-    def test_publish_agent_not_found(
+    def test_publish_instruction_not_found(
         self, initialized_project: Path, monkeypatch,
     ):
         monkeypatch.setattr("writ.core.auth.is_logged_in", lambda: True)
@@ -362,9 +320,8 @@ class TestPublish:
         result = runner.invoke(app, ["publish", "reviewer", "--yes"])
         assert result.exit_code == 0
         assert "Published" in result.output
-        assert "Agent Card" in result.output
         assert "Browse" in result.output
-        assert "Install" in result.output
+        assert "writ add reviewer" in result.output
 
     def test_publish_confirmation_cancelled(
         self, initialized_project: Path, monkeypatch,

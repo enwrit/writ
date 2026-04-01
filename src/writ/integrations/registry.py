@@ -169,6 +169,29 @@ class RegistryClient:
             logger.debug("hub_search: unavailable", exc_info=True)
             return []
 
+    def hub_download(
+        self, source: str, name: str,
+    ) -> dict | None:
+        """Download full instruction content from the Hub.
+
+        For external entries (e.g. PRPM), calls GET /hub/external/{source}/{name}.
+        For enwrit entries, calls GET /agents/{name}.
+        Returns dict with keys: name, description, instructions, tags, etc.
+        """
+        try:
+            if source == "enwrit":
+                return self.pull_public_agent(name)
+            resp = httpx.get(
+                f"{self.base_url}/hub/external/{source}/{name}",
+                timeout=_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception:  # noqa: BLE001
+            logger.debug("hub_download %s/%s: error", source, name, exc_info=True)
+            return None
+
     def pull_public_agent(self, name: str) -> dict | None:
         """Pull a public agent by name (no auth required)."""
         try:
