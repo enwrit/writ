@@ -175,23 +175,25 @@ def add(
         console.print(f"[yellow]'{name}' already exists.[/yellow] Use --force to overwrite.")
         raise typer.Exit(1)
 
-    # 1. Check personal library
-    cfg = _try_library(name)
-    if cfg:
-        store.save_instruction(cfg)
-        _print_added(cfg, source="library")
-        _write_to_ide(cfg, cfg.instructions, formats=_resolve_formats(format_flag))
-        return
+    # If user provided --instructions, they want to create -- skip library/Hub
+    if instructions is None:
+        # 1. Check personal library
+        cfg = _try_library(name)
+        if cfg:
+            store.save_instruction(cfg)
+            _print_added(cfg, source="library")
+            _write_to_ide(cfg, cfg.instructions, formats=_resolve_formats(format_flag))
+            return
 
-    # 2. Search Hub
-    cfg = _try_hub(name)
-    if cfg:
-        store.save_instruction(cfg)
-        _print_added(cfg, source="Hub")
-        _write_to_ide(cfg, cfg.instructions, formats=_resolve_formats(format_flag))
-        return
+        # 2. Search Hub
+        cfg = _try_hub(name)
+        if cfg:
+            store.save_instruction(cfg)
+            _print_added(cfg, source="Hub")
+            _write_to_ide(cfg, cfg.instructions, formats=_resolve_formats(format_flag))
+            return
 
-    # 3. Create new blank instruction
+    # 3. Create new instruction
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
     inherit_list = (
         [i.strip() for i in inherits_from.split(",")]
