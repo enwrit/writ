@@ -1,0 +1,109 @@
+name: "writ lint"
+description: "Score AI instruction quality with writ lint. Gate PRs on minimum instruction quality."
+author: "enwrit"
+
+branding:
+  icon: "check-circle"
+  color: "blue"
+
+inputs:
+  files:
+    description: "Glob pattern for instruction files to lint (e.g. '.cursor/rules/*.mdc')"
+    required: true
+  min-score:
+    description: "Minimum quality score (0-100). Fails the check if any file scores below this."
+    required: false
+    default: "0"
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+
+outputs:
+  results:
+    description: "JSON array of lint results [{file, score, tier}]"
+    value: ${{ steps.lint.outputs.results }}
+  lowest-score:
+    description: "The lowest score across all linted files"
+    value: ${{ steps.lint.outputs.lowest_score }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install writ
+      shell: bash
+      run: pip install enwrit
+
+    - name: Run writ lint
+      id: lint
+      shell: bash
+      run: |
+        FILES_PATTERN="${{ inputs.files }}"
+        MIN_SCORE="${{ inputs.min-score }}"
+        
+        echo "Linting files matching: $FILES_PATTERN"
+        echo "Minimum score: $MIN_SCORE"
+        echo ""
+        
+        RESULTS="[]"
+        LOWEST=100
+        FAILED=0
+        TOTAL=0
+        
+        shopt -s globstar nullglob
+        for file in $FILES_PATTERN; do
+          if [ ! -f "$file" ]; then
+            continue
+          fi
+          
+          TOTAL=$((TOTAL + 1))
+          echo "--- Linting: $file ---"
+          
+          # Get JSON result
+          JSON=$(writ lint "$file" --json 2>/dev/null || echo '{"headline_score": 0}')
+          SCORE=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('headline_score', 0))" 2>/dev/null || echo "0")
+          TIER=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tier', 'unknown'))" 2>/dev/null || echo "unknown")
+          
+          # Also print human-readable output
+          writ lint "$file" --quiet 2>/dev/null || true
+          echo ""
+          
+          # Track results
+          RESULTS=$(echo "$RESULTS" | python3 -c "
+        import sys, json
+        arr = json.load(sys.stdin)
+        arr.append({'file': '$file', 'score': $SCORE, 'tier': '$TIER'})
+        print(json.dumps(arr))
+        ")
+          
+          if [ "$SCORE" -lt "$LOWEST" ] 2>/dev/null; then
+            LOWEST=$SCORE
+          fi
+          
+          if [ "$MIN_SCORE" -gt 0 ] && [ "$SCORE" -lt "$MIN_SCORE" ] 2>/dev/null; then
+            echo "::error file=$file::Score $SCORE is below minimum $MIN_SCORE"
+            FAILED=$((FAILED + 1))
+          fi
+        done
+        
+        if [ "$TOTAL" -eq 0 ]; then
+          echo "::warning::No files matched pattern: $FILES_PATTERN"
+        fi
+        
+        echo "results=$RESULTS" >> $GITHUB_OUTPUT
+        echo "lowest_score=$LOWEST" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "=== Summary ==="
+        echo "Files linted: $TOTAL"
+        echo "Lowest score: $LOWEST"
+        
+        if [ "$FAILED" -gt 0 ]; then
+          echo "::error::$FAILED file(s) scored below minimum ($MIN_SCORE)"
+          exit 1
+        fi

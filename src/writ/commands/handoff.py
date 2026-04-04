@@ -64,7 +64,7 @@ def create(
     store.save_handoff(from_agent, to_agent, header + content)
 
     console.print(f"[green]Created[/green] handoff: {from_agent} -> {to_agent}")
-    console.print(f"\n  This will be included when you run: [cyan]writ use {to_agent}[/cyan]")
+    console.print(f"\n  This will be included when you run: [cyan]writ add {to_agent}[/cyan]")
 
 
 # ---------------------------------------------------------------------------

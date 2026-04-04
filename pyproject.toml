@@ -1,6 +1,6 @@
 [project]
 name = "enwrit"
-version = "0.4.9"
+version = "0.4.10"
 description = "The communication layer for AI agents. Route context between repos, devices, and tools."
 readme = "README.md"
 license = {text = "MIT"}
@@ -10,7 +10,7 @@ authors = [
 ]
 keywords = ["ai", "agents", "cli", "instructions", "cursor", "claude", "copilot", "agents-md"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",

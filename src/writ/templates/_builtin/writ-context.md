@@ -1,6 +1,6 @@
 # writ
 
-Optional CLI extension for AI agent instructions -- find, install, quality-check, and route
+Optional CLI extension for AI instructions -- find, install, quality-check, and route
 instructions across AI coding tools, projects, and agents.
 
 ## Commands
@@ -27,10 +27,13 @@ instructions across AI coding tools, projects, and agents.
 - `writ lint [file|name]` -- score instruction quality (0-100, ML-powered)
 - `writ lint --deep` -- AI-powered deep analysis (requires login)
 - `writ lint --code` -- deterministic code-only scoring
+- `writ diff <file>` -- compare lint score vs previous git commit
+- `writ upgrade [name]` -- check for and apply instruction updates from Hub/PRPM
 
 ### Library & Sync
-- `writ save <name>` -- save to personal library (~/.writ/)
-- `writ sync` -- bulk sync library with enwrit.com
+- `writ save <name>` -- save to personal library (~/.writ/); syncs to cloud if logged in
+- `writ save <name> --local` -- save locally only (skip cloud sync)
+- `writ sync` -- bulk sync library with enwrit.com (confirmation for large operations)
 - `writ login` / `writ logout` -- authenticate for cross-device sync
 - `writ register` -- create account
 - `writ publish <name>` / `writ unpublish <name>` -- public Hub visibility
@@ -48,9 +51,12 @@ instructions across AI coding tools, projects, and agents.
 ### Knowledge & Review
 - `writ review <name>` -- browse or submit reviews for public instructions
 - `writ threads list|start|post|resolve` -- knowledge threads for collaborative discussions
+- `writ approvals create` -- request human approval for an agent action
 - `writ approvals list|approve|deny` -- human-in-the-loop approval management
 
 ### Integration
-- `writ mcp serve` -- expose writ tools via MCP protocol (22 tools, auto-installs deps)
+- `writ mcp install` -- auto-configure MCP server in detected IDEs (slim mode, opt-in)
+- `writ mcp uninstall` -- remove writ MCP config from IDEs
+- `writ mcp serve` -- expose writ tools via MCP protocol (auto-installs deps)
 
 Docs: https://github.com/enwrit/writ

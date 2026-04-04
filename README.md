@@ -3,6 +3,7 @@
 **Better instructions. Connected agents.**
 
 [![PyPI](https://img.shields.io/pypi/v/enwrit)](https://pypi.org/project/enwrit/)
+[![Downloads](https://static.pepy.tech/badge/enwrit)](https://pepy.tech/project/enwrit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/enwrit/writ/actions/workflows/ci.yml/badge.svg)](https://github.com/enwrit/writ/actions)
@@ -23,28 +24,34 @@ writ add code-review-agent        # Install instruction; from library, project o
 
 ## Lint Your Instructions
 
-97% of AI instructions have quality defects. `writ lint` catches them.
+97% of AI instructions have quality defects. `writ lint` catches them. Scores 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Brevity**, **Structure**, **Examples**. Works on any `.md`, `.mdc`, `.txt`, or YAML instruction file -- no `writ init` required.
 
 ```bash
 writ lint .cursor/rules/my-rule.mdc
-# Score: 34 / 100 (D)
+# Score: 34 / 100
 # - 6 instances of vague language ("try to", "consider", "if possible")
 # - No verification commands (agents can't check their own work)
 # - No code examples
+# Dimension       Score  Summary
+# Clarity            43  Moderate              
+# Structure          44  Moderate            
+# Coverage           31  Needs improvement              
+# Brevity            51  Moderate              
+# Examples           15  Critical
+# Verification       10  Critical
 # Suggestions:
 #   Replace vague phrases with imperative commands
-#   Add backtick-wrapped test/build/lint commands (2-3x quality impact)
-#   Add 1-3 code examples showing desired patterns
+#   Add verification: test/build/lint commands (2-3x quality impact)
+#   Add 1-2 code examples showing desired patterns
 ```
 
-Scores 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Brevity**, **Structure**, **Examples**. Works on any `.md`, `.mdc`, `.txt`, or YAML instruction file -- no `writ init` required.
+Several options depending on user preferences - fast, local & cloud. The ML-powered solution is TF-IDF + LightGBM based off teacher-student distillation of 6,000+ ratings & suggestions of instructions. writ-lint-08B is a fine-tuned Qwen3.5-0.8B on the same dataset.
 
 ```bash
 writ lint CLAUDE.md                     # Score any file (ML-powered, local, free)
-writ lint my-agent                      # Score a managed instruction
 writ lint AGENTS.md --deep              # AI-powered analysis (Gemini, via enwrit.com)
 writ lint AGENTS.md --deep-local        # Local AI analysis (writ-lint-0.8B, GPU-accelerated)
-writ lint rules.mdc --json              # Machine-readable output for CI
+writ lint rules.mdc --json              # Machine-readable JSON output for CI
 writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
 ```
 
@@ -107,29 +114,30 @@ Layer 1: Project context       ← Auto-detected (languages, frameworks, structu
 ```
 
 ```bash
-writ add implementer --with architect    # Compose with architect's context
+writ add implementer                     # Compose with project context
 ```
 
-## MCP Server (One-Line Setup)
+## MCP Server
 
-Give any MCP-compatible agent access to the Hub -- no CLI needed:
+Optional supplement for MCP-only users or features the CLI can't provide (e.g. `writ_compose`, `writ_chat_send_wait`).
+
+```bash
+writ mcp install      # Auto-detects Cursor, VS Code, Claude Code, Kiro, Windsurf
+                      # Writes MCP config (slim mode), preserves existing servers
+writ mcp uninstall    # Remove writ MCP config from all IDEs
+```
+
+**Slim mode** (default via `writ mcp install`): exposes only 2 MCP-exclusive tools -- the CLI already provides everything else with less token overhead.
+
+**Full mode** (for MCP-only users without the CLI):
 
 ```json
-{
-  "mcpServers": {
-    "writ": {
-      "command": "uvx",
-      "args": ["enwrit", "mcp", "serve"]
-    }
-  }
-}
+{"mcpServers": {"writ": {"command": "uvx", "args": ["enwrit", "mcp", "serve"]}}}
 ```
-
-This exposes 22 tools: search the Hub, install instructions, compose context, read files, start agent conversations, and more. Run `writ mcp serve --help` for the full list.
 
 ## Hub: Browse & Install
 
-The [enwrit Hub](https://enwrit.com/hub) has 50+ curated instructions across three tiers:
+The [enwrit Hub](https://enwrit.com/hub) has 6000+ curated instructions across three tiers:
 
 - **Rules** -- passive context that shapes agent behavior (verification loops, commit hygiene, no-secrets)
 - **Agents** -- on-invocation workers (code review, git commit, documentation, security audit)
@@ -154,7 +162,8 @@ writ init --template rules         # Project rule + coding standards
 ## Personal Library & Cloud Sync
 
 ```bash
-writ save my-reviewer              # Save to library (local + cloud)
+writ save my-reviewer              # Save to library (local + cloud if logged in)
+writ save my-reviewer --local      # Save locally only
 writ login                         # Authenticate for cross-device sync
 writ add my-reviewer --lib         # Load from library on any machine
 writ list --library                # See everything (local + remote)
@@ -186,25 +195,50 @@ writ inbox                          # Check for responses
 | `writ add <name>` | Add instruction: project -> library -> Hub -> create new; auto-writes to IDE dirs |
 | `writ add <name> --lib` | Force fetch from personal library |
 | `writ add <name> --from prpm` | Install directly from PRPM registry |
+| `writ add --from <url>` | Import instruction from any URL |
 | `writ add <name> --format cursor` | Export to a specific format |
 | `writ add --file <path>` | Import markdown file(s) or directory |
 | `writ list` | List all instructions in project |
 | `writ list --library` | List personal library (local + remote) |
 | `writ remove <name>` | Remove instruction |
-| `writ save <name>` | Save to personal library |
+| `writ save <name>` | Save to personal library (syncs to cloud if logged in) |
+| `writ save <name> --local` | Save locally only (skip cloud sync) |
 | `writ search <query>` | Semantic search across Hub (6,000+ instructions) |
+| `writ search <query> --min-score N` | Filter search results by quality score |
+| `writ search <query> --type agent` | Filter by type (agent, rule, program, skill) |
 | `writ publish / unpublish` | Make publicly discoverable |
 | `writ login / logout` | Authenticate with enwrit.com |
 | `writ register` | Create account |
 | `writ lint [file\|name] [--deep] [--deep-local]` | Quality score (0-100, 6 dimensions) |
-| `writ sync` | Bulk bidirectional library sync |
-| `writ mcp serve` | Start MCP server (22 tools, auto-installs deps) |
+| `writ lint <file> --json` | Machine-readable JSON output |
+| `writ lint <file> --ci --min-score N` | CI gate: exit 1 if score below threshold |
+| `writ diff <file>` | Compare lint score vs previous git commit |
+| `writ upgrade [name]` | Pull latest version of installed instructions from source |
+| `writ sync` | Bulk bidirectional library sync (confirmation for large ops, `--undo` to revert) |
+| `writ mcp install` | Auto-configure MCP server in detected IDEs (slim mode) |
+| `writ mcp uninstall` | Remove writ MCP server from IDE configs |
+| `writ mcp serve` | Start MCP server (21 tools full / 2 slim, called by IDE) |
 | `writ chat start/send/inbox` | Agent-to-agent conversations (supports `--file` attachments) |
 | `writ memory export/import` | Cross-project memory |
 | `writ handoff create` | Create agent handoff |
 | `writ review <name>` | Browse/submit reviews |
 | `writ threads` | Knowledge threads |
 | `writ approvals` | Human-in-the-loop approval management |
+| `writ peers add/list/remove` | Manage peer repo connections |
+| `writ connect` | Interactive peer setup wizard |
+
+## GitHub Action
+
+Gate PR quality with `writ lint` in CI. You choose which files to lint:
+
+```yaml
+- uses: enwrit/writ@main
+  with:
+    files: ".cursor/rules/*.mdc"    # Glob pattern for files to lint
+    min-score: 50                   # Fail if any file scores below this
+```
+
+Not all instruction types need the same lint emphasis. E.g. skills and planning instructions may score lower on verification/examples by design -- choose your files and thresholds accordingly.
 
 ## Instruction Format
 
@@ -234,7 +268,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                    # 432+ tests
+pytest                    # 540+ tests
 ruff check src/ tests/
 ```
 

@@ -112,6 +112,10 @@ class GlobalConfig(BaseModel):
         default=None,
         description="API key for enwrit.com authentication.",
     )
+    identity: str | None = Field(
+        default=None,
+        description="Persistent user identity for agent messages (auto-generated on first use).",
+    )
 
 
 class LintResult(BaseModel):

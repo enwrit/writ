@@ -93,7 +93,10 @@ def add(
     ] = None,
     from_source: Annotated[
         str | None,
-        typer.Option("--from", help="Source registry: prpm, skills, url."),
+        typer.Option(
+            "--from",
+            help="Registry: prpm, skills, url -- or an http(s) URL to fetch directly.",
+        ),
     ] = None,
     format_flag: Annotated[
         str | None,
@@ -121,6 +124,8 @@ def add(
       writ add --template list                   # show available templates
       writ add --file my-rules.md                # import a markdown file
       writ add --file .cursor/rules/             # import all files in a directory
+      writ add --from https://.../AGENTS.md      # fetch markdown/YAML from a URL
+      writ add my-rule --from https://.../x.md   # same, with explicit instruction name
       writ add reviewer --format claude-rules    # write to a specific format only
     """
     if template == "list":
@@ -138,6 +143,17 @@ def add(
         _import_from_file(
             file,
             name_override=name,
+            description_override=description or None,
+            tags_override=tags,
+            task_type_override=task_type,
+        )
+        return
+
+    if from_source and from_source.strip().lower().startswith(("http://", "https://")):
+        _add_from_http_url(
+            from_source.strip(),
+            name_override=name,
+            format_flag=format_flag,
             description_override=description or None,
             tags_override=tags,
             task_type_override=task_type,
@@ -314,6 +330,42 @@ def _cfg_from_hub(data: dict, *, source: str = "") -> InstructionConfig | None:
         return None
 
 
+def _add_from_http_url(
+    url: str,
+    *,
+    name_override: str | None,
+    format_flag: str | None,
+    description_override: str | None,
+    tags_override: str | None,
+    task_type_override: str | None,
+) -> None:
+    """Fetch instruction content from an http(s) URL and save like ``writ add --file``."""
+    from writ.integrations.url import URLIntegration
+
+    url_int = URLIntegration()
+    cfg = url_int.install(url, name_override=name_override)
+    if not cfg:
+        console.print(f"[red]Could not fetch or parse URL:[/red] {url}")
+        raise typer.Exit(1)
+
+    if description_override:
+        cfg.description = description_override
+    if tags_override:
+        cfg.tags = [t.strip() for t in tags_override.split(",")]
+    if task_type_override:
+        cfg.task_type = task_type_override
+
+    if store.load_instruction(cfg.name):
+        console.print(
+            f"[yellow]'{cfg.name}' already exists.[/yellow] Use --force to overwrite.",
+        )
+        raise typer.Exit(1)
+
+    store.save_instruction(cfg)
+    _print_added(cfg, source="url")
+    _write_to_ide(cfg, cfg.instructions, formats=_resolve_formats(format_flag))
+
+
 def _add_from_source(name: str, source: str, *, format_flag: str | None = None) -> None:
     """Fetch from a specific source (prpm, skills, url) and save."""
     if source == "prpm":
@@ -338,7 +390,10 @@ def _add_from_source(name: str, source: str, *, format_flag: str | None = None) 
             console.print(f"[red]Could not install from URL:[/red] {name}")
             raise typer.Exit(1)
     else:
-        console.print(f"[red]Unknown source '{source}'.[/red] Use: prpm, skills, url.")
+        console.print(
+            f"[red]Unknown source '{source}'.[/red] "
+            "Use: prpm, skills, url, or pass an https:// URL as --from.",
+        )
         raise typer.Exit(1)
 
     store.save_instruction(cfg)

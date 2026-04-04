@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -13,7 +14,7 @@ import typer
 from writ.core import linter as lint_engine
 from writ.core import store
 from writ.core.models import InstructionConfig, LintScore
-from writ.utils import console
+from writ.utils import console, project_writ_dir
 
 
 def _maybe_ml_score(
@@ -184,6 +185,153 @@ def _score_to_json(lint_score: LintScore) -> str:
     return lint_score.model_dump_json(indent=2)
 
 
+_LINT_SCORES_FILE = "lint-scores.json"
+
+
+def _lint_timestamp() -> str:
+    return datetime.now().replace(microsecond=0).isoformat(sep="T")
+
+
+def _path_key_for_scores(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    cwd = Path.cwd().resolve()
+    try:
+        resolved = path.resolve()
+        rel = resolved.relative_to(cwd)
+        return rel.as_posix()
+    except (ValueError, OSError):
+        try:
+            return path.resolve().as_posix()
+        except OSError:
+            return None
+
+
+def _storage_entry_from_lint_score(lint_score: LintScore) -> dict:
+    ts = _lint_timestamp()
+    dims = {d.name: d.score for d in lint_score.dimensions}
+    return {
+        "headline_score": lint_score.score,
+        "tier": lint_score.tier,
+        "dimensions": dims,
+        "issue_count": len(lint_score.issues),
+        "suggestion_count": len(lint_score.suggestions),
+        "timestamp": ts,
+    }
+
+
+def _dim_name_from_api_row(d: dict) -> str:
+    name = d.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip().lower()
+    label = d.get("label")
+    if isinstance(label, str) and label.strip():
+        return label.strip().lower().replace(" ", "_")
+    return ""
+
+
+def _storage_entry_from_deep_dict(data: dict) -> dict:
+    ts = _lint_timestamp()
+    dims: dict[str, int] = {}
+    for row in data.get("dimensions") or []:
+        if not isinstance(row, dict):
+            continue
+        key = _dim_name_from_api_row(row)
+        if not key:
+            continue
+        try:
+            dims[key] = int(row.get("score", 0))
+        except (TypeError, ValueError):
+            dims[key] = 0
+    issues = data.get("issues")
+    if not isinstance(issues, list):
+        issues = []
+    suggestions = data.get("suggestions")
+    if not isinstance(suggestions, list):
+        suggestions = []
+    tier = data.get("tier")
+    if not isinstance(tier, str) or not tier:
+        tier = "ai"
+    try:
+        headline = int(data.get("score", 0))
+    except (TypeError, ValueError):
+        headline = 0
+    return {
+        "headline_score": headline,
+        "tier": tier,
+        "dimensions": dims,
+        "issue_count": len(issues),
+        "suggestion_count": len(suggestions),
+        "timestamp": ts,
+    }
+
+
+def _merge_write_lint_scores(updates: dict[str, dict]) -> None:
+    if not updates or not store.is_initialized():
+        return
+    root = project_writ_dir()
+    if not root.is_dir():
+        return
+    out_path = root / _LINT_SCORES_FILE
+    now_meta = _lint_timestamp()
+    try:
+        scores: dict[str, dict] = {}
+        meta: dict[str, str] = {}
+        if out_path.is_file():
+            raw = out_path.read_text(encoding="utf-8")
+            if raw.strip():
+                loaded = json.loads(raw)
+                if isinstance(loaded, dict):
+                    existing_scores = loaded.get("scores")
+                    if isinstance(existing_scores, dict):
+                        scores = {
+                            str(k): v
+                            for k, v in existing_scores.items()
+                            if isinstance(v, dict)
+                        }
+                    existing_meta = loaded.get("_meta")
+                    if isinstance(existing_meta, dict):
+                        meta = {
+                            str(k): str(v)
+                            for k, v in existing_meta.items()
+                        }
+        scores.update(updates)
+        meta["last_updated"] = now_meta
+        payload = {"scores": scores, "_meta": meta}
+        out_path.write_text(
+            json.dumps(payload, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+
+def _persist_lint_scores(
+    *,
+    lint_score: LintScore | None = None,
+    deep_response: dict | None = None,
+    file: Path | None = None,
+    instruction_name: str | None = None,
+) -> None:
+    if not store.is_initialized():
+        return
+    rel_key: str | None = None
+    if file is not None:
+        rel_key = _path_key_for_scores(file)
+    elif instruction_name:
+        inst_path = store.find_instruction_path(instruction_name)
+        rel_key = _path_key_for_scores(inst_path)
+    if not rel_key:
+        return
+    if lint_score is not None:
+        entry = _storage_entry_from_lint_score(lint_score)
+    elif deep_response is not None:
+        entry = _storage_entry_from_deep_dict(deep_response)
+    else:
+        return
+    _merge_write_lint_scores({rel_key: entry})
+
+
 def _run_deep_lint(
     name: str | None,
     file: Path | None,
@@ -325,6 +473,12 @@ def _run_deep_lint(
                 for i, sug in enumerate(suggestions, 1):
                     console.print(f"    {i}. {sug}")
 
+    _persist_lint_scores(
+        deep_response=data,
+        file=file,
+        instruction_name=name if file is None else None,
+    )
+
     if ci and score < min_score:
         raise typer.Exit(1)
 
@@ -404,6 +558,12 @@ def _run_deep_local_lint(
         _print_score(lint_score, quiet=quiet)
         console.print("  [dim](writ-lint-0.8B -- fine-tuned on 30k+ expert evaluations)[/dim]")
 
+    _persist_lint_scores(
+        lint_score=lint_score,
+        file=file,
+        instruction_name=name if file is None else None,
+    )
+
     if ci and lint_score.score < min_score:
         raise typer.Exit(1)
 
@@ -424,6 +584,12 @@ def _fallback_local_lint(
     else:
         _print_results(results)
         _print_score(lint_score)
+
+    _persist_lint_scores(
+        lint_score=lint_score,
+        file=file,
+        instruction_name=agent.name if file is None else None,
+    )
 
     if ci and lint_score.score < min_score:
         raise typer.Exit(1)
@@ -602,11 +768,16 @@ def lint_command(
             return
 
         all_scores_changed: list[LintScore] = []
+        scores_batch: dict[str, dict] = {}
         for fp in changed_files:
             agent = _parse_file_to_config(fp)
             results = lint_engine.lint(agent, source_path=fp)
             lint_score = _maybe_ml_score(agent, results, force_code=code)
             all_scores_changed.append(lint_score)
+            if store.is_initialized():
+                rel_k = _path_key_for_scores(fp)
+                if rel_k:
+                    scores_batch[rel_k] = _storage_entry_from_lint_score(lint_score)
 
             if json_output:
                 data = json.loads(lint_score.model_dump_json())
@@ -634,6 +805,8 @@ def lint_command(
 
         if not json_output and not score_only and not badge and not quiet:
             _print_summary(all_scores_changed)
+
+        _merge_write_lint_scores(scores_batch)
 
         if ci and all_scores_changed:
             worst = min(s.score for s in all_scores_changed)
@@ -667,6 +840,8 @@ def lint_command(
             _print_results(results)
             _print_score(lint_score)
 
+        _persist_lint_scores(lint_score=lint_score, file=file)
+
         if ci and lint_score.score < min_score:
             raise typer.Exit(1)
 
@@ -696,12 +871,17 @@ def lint_command(
             return
 
     all_scores: list[LintScore] = []
+    scores_batch: dict[str, dict] = {}
 
     for agent in agents:
         src_path = store.find_instruction_path(agent.name)
         results = lint_engine.lint(agent, source_path=src_path)
         lint_score = _maybe_ml_score(agent, results, force_code=code)
         all_scores.append(lint_score)
+        if store.is_initialized():
+            rel_k = _path_key_for_scores(src_path)
+            if rel_k:
+                scores_batch[rel_k] = _storage_entry_from_lint_score(lint_score)
 
         if json_output:
             data = json.loads(lint_score.model_dump_json())
@@ -739,6 +919,8 @@ def lint_command(
         console.print(_badge_url(avg))
     elif not json_output and not score_only and not badge and not quiet:
         _print_summary(all_scores)
+
+    _merge_write_lint_scores(scores_batch)
 
     if ci:
         worst = min(

@@ -84,6 +84,10 @@ def publish_command(
 
 def unpublish_command(
     name: Annotated[str, typer.Argument(help="Instruction name to unpublish.")],
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation prompt."),
+    ] = False,
 ) -> None:
     """Make a published instruction private again.
 
@@ -92,6 +96,7 @@ def unpublish_command(
 
     Examples:
         writ unpublish reviewer
+        writ unpublish reviewer --yes
     """
     _require_init()
     _require_login()
@@ -103,6 +108,15 @@ def unpublish_command(
             "Run [cyan]writ list[/cyan] to see available instructions."
         )
         raise typer.Exit(1)
+
+    if not yes:
+        confirm = typer.confirm(
+            f"Unpublish '{name}'? "
+            "It will no longer be publicly visible."
+        )
+        if not confirm:
+            console.print("[dim]Cancelled.[/dim]")
+            raise typer.Exit(0)
 
     from writ.integrations.registry import RegistryClient
 

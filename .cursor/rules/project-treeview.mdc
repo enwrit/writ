@@ -10,29 +10,32 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 ├── src/
 │   └── writ/                           # Python package
 │       ├── __init__.py                 # Package init, version
+│       ├── __main__.py                 # Entry point for python -m writ (venv/MCP support)
 │       ├── cli.py                      # Typer app, top-level command registration
 │       ├── commands/                   # One file per command group
 │       │   ├── __init__.py
 │       │   ├── init.py                 # writ init -- scan repo, create .writ/, import existing files, auto-install writ-context to detected IDEs
 │       │   ├── agent.py                # writ add/list/remove -- unified instruction management (add from Hub/library/--from prpm/create, auto-writes to IDE dirs, --format, --lib)
-│       │   ├── library.py              # writ save -- personal library (local + remote sync via enwrit.com)
+│       │   ├── library.py              # writ save [--local] -- personal library (local + optional cloud sync via enwrit.com)
 │       │   ├── login.py                # writ login/logout -- authenticate with enwrit.com for cross-device sync
 │       │   ├── register.py             # writ register -- interactive account creation + auto-login
 │       │   ├── export.py               # INTERNAL: format export logic (CLI command removed, replaced by --format on writ add)
 │       │   ├── compose.py              # INTERNAL: composition preview (CLI command removed)
-│       │   ├── search.py               # writ search -- Hub API semantic search (6,000+ instructions), PRPM/Skills fallback
+│       │   ├── search.py               # writ search -- Hub API semantic search (6,000+ instructions), --min-score, --type filters
 │       │   ├── install.py              # Hidden alias for writ add (backward compat)
 │       │   ├── handoff.py              # writ handoff -- create/apply context handoffs between agents
 │       │   ├── memory.py               # writ memory export/import/list -- cross-project memory sharing
-│       │   ├── publish.py              # writ publish/unpublish -- make instructions publicly discoverable on enwrit.com
-│       │   ├── lint.py                 # writ lint [file|name] [--deep] [--deep-local] [--code] [--stop-server] -- quality scoring (Tier 2 ML default, --code Tier 1, --deep Tier 3 AI, --deep-local Tier 2.5 local AI)
-│       │   ├── connect.py             # writ connect -- interactive peer setup wizard for real repos
-│       │   ├── sync.py                 # writ sync -- bulk bidirectional library sync with enwrit.com
-│       │   ├── mcp.py                  # writ mcp serve -- expose instructions via MCP protocol (auto-installs deps)
+│       │   ├── publish.py              # writ publish/unpublish [--yes] -- make instructions publicly discoverable on enwrit.com
+│       │   ├── lint.py                 # writ lint [file|name] [--deep] [--deep-local] [--code] [--json] [--ci] [--stop-server] -- quality scoring (Tier 2 ML default, --code Tier 1, --deep Tier 3 AI)
+│       │   ├── connect.py              # writ connect -- interactive peer setup wizard for real repos
+│       │   ├── sync.py                 # writ sync [--push|--pull|--prefer-local|--dry-run] -- bulk bidirectional library sync with confirmation prompt
+│       │   ├── mcp.py                  # writ mcp install/uninstall/serve [--slim|--full] -- MCP server management (slim=2 tools, full=21 tools)
 │       │   ├── chat.py                 # writ chat start/list/read/send/end/resume/gc -- agent-to-agent conversations (--file attach)
 │       │   ├── peers_cmd.py            # writ peers add/list/remove -- manage peer repo connections
 │       │   ├── knowledge.py            # writ review + writ threads list/read/start/post/resolve -- knowledge threads
-│       │   └── approvals.py            # writ approvals list/approve/deny -- human-in-the-loop approval management
+│       │   ├── approvals.py            # writ approvals create/list/approve/deny -- human-in-the-loop approval management
+│       │   ├── diff.py                 # writ diff <file> [--ref] -- lint score comparison vs git history
+│       │   └── upgrade.py              # writ upgrade [name] [--dry-run] -- version-aware instruction updates from Hub/PRPM
 │       ├── core/                       # Core business logic
 │       │   ├── __init__.py
 │       │   ├── scanner.py              # Detect languages, frameworks; parse_markdown_file() for --file import
@@ -44,7 +47,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── label_scorer.py         # TF-IDF+LGBM label classifier: positional TF-IDF + 26 structural features, 7 boolean labels (4-10ms inference)
 │       │   ├── setfit_scorer.py        # DEPRECATED: SetFit ONNX inference (superseded by label_scorer.py)
 │       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, LintScore (tier: code|ml|ai), Conversation, Message, PeerConfig
-│       │   ├── auth.py                 # Auth token management (read/write API key to ~/.writ/config.yaml)
+│       │   ├── auth.py                 # Auth token management + persistent user identity (read/write API key to ~/.writ/config.yaml)
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding, _latest.md
 │       │   ├── peers.py                # Peer repository management -- read/write peers.yaml
 │       │   ├── invoker.py              # CLI agent detection (claude/gemini/codex/cursor) + invocation with AutoRespondTier, LLM API fallback
@@ -57,7 +60,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── skills.py               # HTTP-first Agent Skills integration (httpx -> agent-skills API, CLI fallback) -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
 │       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, hub_search (semantic), hub_download, relay, knowledge, approvals
-│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search/install, V3 conversations, V4 knowledge, V5 approvals (22 tools)
+│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search/add, V3 conversations+peers, V4 knowledge, V5 approvals (21 full / 2 slim)
 │       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
 │       ├── models/                     # Bundled ML models for Tier 2 lint scoring
 │       │   └── tier2/                  # m2cgen pure-Python scorers + kNN suggestion index
@@ -101,14 +104,14 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           │   └── api-context.yaml
 │           └── _builtin/              # Auto-installed on writ init (not user-selectable templates)
 │               └── writ-context.md    # CLI command reference, written to IDE rules dirs
-├── tests/                              # pytest test suite (432+ tests)
+├── tests/                              # pytest test suite (541+ tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
-│   ├── test_cli.py                     # CLI command tests (init, add, search, templates, import)
+│   ├── test_cli.py                     # CLI command tests (init, add, search, templates, import, publish/unpublish)
 │   ├── test_compose.py                 # Composition engine tests
 │   ├── test_formatter.py               # Formatter output tests (Cursor, Claude, AGENTS.md, etc.)
 │   ├── test_library.py                 # save + list --library tests
 │   ├── test_login.py                   # Login/logout + remote sync + writ add fallback tests (mocked RegistryClient)
-│   ├── test_mcp.py                     # MCP server tools V1-V5 + cursor-mcp formatter + install tests (45 tests)
+│   ├── test_mcp.py                     # MCP server tools V1-V5 + peer tools + identity + install tests (86 tests)
 │   ├── test_register.py                # Account registration tests (writ register)
 │   ├── test_scanner.py                 # Scanner + file parsing tests (mdc, CLAUDE.md, .windsurfrules)
 │   ├── test_store.py                   # Store read/write tests (.writ/ and ~/.writ/)
@@ -117,7 +120,15 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   ├── test_linter.py                  # Lint rule + v2 scoring + anchor calibration + text quality signals + ML gating + Tier 2 E2E archetype tests
 │   ├── test_messaging.py              # Conversation lifecycle, peers, attachments, _latest.md, CLI smoke tests
 │   ├── test_invoker.py                # CLI agent detection, invocation, API fallback tests (22 tests)
-│   └── test_context_window.py         # Token estimation, sliding window, system prompt tests (19 tests)
+│   ├── test_context_window.py         # Token estimation, sliding window, system prompt tests (19 tests)
+│   ├── test_approvals_cli.py          # Approvals create/list/approve/deny CLI tests (14 tests)
+│   ├── test_diff.py                   # writ diff score comparison tests
+│   ├── test_handoff_cli.py            # Handoff create/list CLI tests (10 tests)
+│   ├── test_knowledge_cli.py          # Review + threads CLI tests (17 tests)
+│   ├── test_memory_cli.py             # Memory export/import/list CLI tests (9 tests)
+│   └── test_upgrade.py               # Upgrade command tests (10 tests)
+├── action/                             # GitHub Action for writ lint (composite action, enwrit/writ@main)
+│   └── action.yml                     # Composite action: install enwrit, lint specified files, optional quality gate
 ├── .cursor/                            # See .cursor-treeview.mdc for full breakdown
 ├── pyproject.toml                      # Package metadata, deps, CLI entry point ([project.scripts] writ)
 ├── requirements.txt                    # Core dependencies (pinned versions)
@@ -150,6 +161,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 ├── memory/                             # Importable cross-project memory
 ├── conversations/                      # Agent-to-agent conversation files (append-only markdown)
 │   └── _latest.md                      # Latest received message (overwritten on each new message, for efficient agent reads)
+├── lint-scores.json                    # Auto-saved lint scores (headline, dimensions, tier, timestamp per file)
 ├── peers.yaml                          # Peer repo connections (name, path/remote, auto_respond, max_turns)
 └── project-context.md                  # Auto-generated project context (from scanner)
 

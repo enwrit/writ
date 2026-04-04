@@ -1,13 +1,19 @@
-"""MCP server exposing writ instructions, project context, and repo files.
+"""MCP server exposing writ instructions, project context, and agent communication.
 
 Allows external AI agents (in Cursor, Claude Desktop, etc.) to discover
-and read this repo's instructions without the human running CLI commands.
+and use this repo's instructions without the human running CLI commands.
 
-V1 tools: list/get instructions, project context
-V2 tools: compose context, search, install from Hub, read files, list files
-V3 tools: agent-to-agent conversations (start, send, send_and_wait, check_inbox, read, complete)
-V4 tools: knowledge threads (review, search, start, post, resolve)
-V5 tools: approval workflow (request, check)
+Full mode (18 tools -- for MCP-only users via uvx):
+  V1: writ_list, writ_get
+  V2: writ_compose, writ_search, writ_add
+  V3: writ_chat_start, writ_chat_send, writ_chat_send_wait,
+      writ_inbox, writ_chat_read, writ_chat_end
+  V4: writ_review, writ_threads_list, writ_threads_start,
+      writ_threads_post, writ_threads_resolve
+  V5: writ_approvals_create, writ_approvals_check
+
+Slim mode (2 tools -- for CLI users via 'writ mcp install'):
+  writ_compose, writ_chat_send_wait
 
 Install: pip install enwrit[mcp]
 Run:     writ mcp serve
@@ -16,18 +22,15 @@ Run:     writ mcp serve
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from writ.core import composer, messaging, peers, scanner, store
+from writ.core import auth, composer, messaging, peers, store
 from writ.core.models import AutoRespondTier, ConversationStatus
 from writ.utils import yaml_dumps
 
 mcp = FastMCP("writ")
-
-_MAX_FILE_SIZE = 512 * 1024  # 512 KB hard limit for file reads
 
 
 def _repo_root() -> Path:
@@ -38,31 +41,12 @@ def _repo_root() -> Path:
     return Path.cwd()
 
 
-def _safe_resolve(path_str: str) -> Path | None:
-    """Resolve a relative path safely within the repo root.
-
-    Returns None if the path escapes the repo root or is ignored.
-    """
-    root = _repo_root()
-    try:
-        target = (root / path_str).resolve()
-    except (OSError, ValueError):
-        return None
-    if not str(target).startswith(str(root.resolve())):
-        return None
-    rel = target.relative_to(root.resolve())
-    spec = scanner.load_ignore_spec(root)
-    if spec.match_file(str(rel)):
-        return None
-    return target
-
-
 # ---------------------------------------------------------------------------
 # V1 Tools -- instruction discovery
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def writ_list_instructions() -> list[dict[str, str | None]]:
+def writ_list() -> list[dict[str, str | None]]:
     """List all instructions available in this writ project.
 
     Returns a list of instruction summaries (name, description, task_type, tags).
@@ -81,7 +65,7 @@ def writ_list_instructions() -> list[dict[str, str | None]]:
 
 
 @mcp.tool()
-def writ_get_instruction(name: str) -> str:
+def writ_get(name: str) -> str:
     """Get the full content of a writ instruction by name.
 
     Returns the instruction as YAML (name, description, tags, instructions, composition).
@@ -91,43 +75,25 @@ def writ_get_instruction(name: str) -> str:
     if cfg is None:
         return (
             f"Error: instruction '{name}' not found. "
-            "Use writ_list_instructions to see available instructions."
+            "Use writ_list to see available instructions."
         )
-    return yaml_dumps(cfg.model_dump(mode="json"))
-
-
-@mcp.tool()
-def writ_get_project_context() -> str:
-    """Get this project's auto-detected context (languages, frameworks, directory structure).
-
-    Returns the project-context.md that writ generates on init. Use this to
-    understand what kind of project you're connecting to.
-    """
-    context = store.load_project_context()
-    if context:
-        return context
-
-    if not store.is_initialized():
-        return "Error: this project has no .writ/ directory. Run 'writ init' first."
-
-    languages = scanner.detect_languages()
-    tree = scanner.get_directory_tree()
-    parts = ["# Project Context\n"]
-    if languages:
-        parts.append("## Languages\n")
-        for lang, count in sorted(languages.items(), key=lambda x: -x[1]):
-            parts.append(f"- {lang}: {count} files")
-    if tree:
-        parts.append(f"\n## Directory Structure\n\n```\n{tree}\n```")
-    return "\n".join(parts)
+    data = cfg.model_dump(mode="json")
+    data = {k: v for k, v in data.items() if v is not None}
+    if "format_overrides" in data:
+        overrides = {k: v for k, v in data["format_overrides"].items() if v is not None}
+        if overrides:
+            data["format_overrides"] = overrides
+        else:
+            del data["format_overrides"]
+    return yaml_dumps(data)
 
 
 # ---------------------------------------------------------------------------
-# V2 Tools -- compose, search, file access
+# V2 Tools -- compose, search, add
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def writ_compose_context(name: str) -> str:
+def writ_compose(name: str) -> str:
     """Compose the full 4-layer context for an instruction.
 
     Merges project context + inherited instructions + own instructions + handoffs
@@ -140,7 +106,7 @@ def writ_compose_context(name: str) -> str:
     if cfg is None:
         return (
             f"Error: instruction '{name}' not found. "
-            "Use writ_list_instructions to see available instructions."
+            "Use writ_list to see available instructions."
         )
     composed = composer.compose(cfg)
     if not composed:
@@ -149,7 +115,7 @@ def writ_compose_context(name: str) -> str:
 
 
 @mcp.tool()
-def writ_search_instructions(
+def writ_search(
     query: str,
     scope: str = "local",
 ) -> list[dict[str, str | None]]:
@@ -161,7 +127,8 @@ def writ_search_instructions(
     Args:
         query: Search text.
         scope: Where to search. "local" = this project only (default),
-               "hub" = enwrit.com Hub only, "all" = both local and Hub.
+               "hub" = unified Hub (semantic search: enwrit + PRPM, etc.),
+               "all" = both local and Hub.
     """
     results: list[dict[str, str | None]] = []
 
@@ -187,18 +154,29 @@ def writ_search_instructions(
     if scope in ("hub", "all"):
         try:
             client = _registry_client()
-            hub_results = client.search(query)
+            hub_results = client.hub_search(query, limit=10)
             for item in hub_results:
-                name = item.get("name", "")
+                name = item.get("name") or ""
                 if scope == "all" and any(r["name"] == name for r in results):
                     continue
+                tags_raw = item.get("tags")
+                if isinstance(tags_raw, list):
+                    tags_str = ", ".join(str(t) for t in tags_raw) if tags_raw else None
+                elif tags_raw is None:
+                    tags_str = None
+                else:
+                    tags_str = str(tags_raw)
+                writ_score = item.get("writ_score")
+                score_str = None if writ_score is None else str(writ_score)
+                hub_src = item.get("source")
                 results.append({
                     "name": name,
                     "description": item.get("description"),
                     "task_type": item.get("task_type"),
-                    "tags": ", ".join(item.get("tags", [])) if item.get("tags") else None,
-                    "publisher": item.get("publisher"),
-                    "source": "hub",
+                    "tags": tags_str,
+                    "author": item.get("author"),
+                    "source": hub_src if hub_src else "hub",
+                    "writ_score": score_str,
                 })
         except Exception:  # noqa: BLE001
             if scope == "hub":
@@ -212,18 +190,20 @@ def writ_search_instructions(
 
 
 @mcp.tool()
-def writ_install_instruction(name: str) -> dict:
-    """Install a public instruction from the enwrit Hub into this project.
+def writ_add(name: str) -> dict:
+    """Add a public instruction from the enwrit Hub into this project.
 
-    Pulls the instruction by name from enwrit.com and saves it to the local
+    Fetches the instruction by name from enwrit.com and saves it to the local
     .writ/ directory. The instruction is then available for composition,
     export, and use in any supported IDE format.
 
+    Equivalent to: writ add <name>
+
     Requires .writ/ to be initialized (run 'writ init' first).
-    No login required -- public instructions are freely installable.
+    No login required -- public instructions are freely available.
 
     Args:
-        name: Name of the public instruction to install (e.g. 'verification-loop').
+        name: Name of the public instruction to add (e.g. 'verification-loop').
     """
     if not store.is_initialized():
         return {"error": "Not initialized. Run 'writ init' first."}
@@ -234,19 +214,41 @@ def writ_install_instruction(name: str) -> dict:
 
     try:
         client = _registry_client()
+        entry_source: str | None = None
         data = client.pull_public_agent(name)
+        if not data:
+            hub_items = client.hub_search(name, limit=20)
+            entry: dict | None = None
+            name_lower = name.lower()
+            for it in hub_items:
+                if (it.get("name") or "").lower() == name_lower:
+                    entry = it
+                    break
+            if entry is None and len(hub_items) == 1:
+                entry = hub_items[0]
+            if entry:
+                src = entry.get("source") or "enwrit"
+                entry_source = str(src)
+                dl_name = entry.get("name") or name
+                data = client.hub_download(entry_source, str(dl_name))
         if not data:
             return {"error": f"'{name}' not found on enwrit.com Hub."}
 
         from writ.core.models import InstructionConfig
+        ver = data.get("version", "1.0.0")
+        hub_src = data.get("source") or entry_source or "enwrit"
+        if hub_src == "enwrit":
+            src_label = f"enwrit.com/{data.get('name', name)}@{ver}"
+        else:
+            src_label = f"hub/{hub_src}/{data.get('name', name)}@{ver}"
         cfg = InstructionConfig(
             name=data.get("name", name),
             description=data.get("description", ""),
             instructions=data.get("instructions", ""),
             tags=data.get("tags", []),
-            version=data.get("version", "1.0.0"),
+            version=ver,
             task_type=data.get("task_type"),
-            source=f"enwrit.com/{name}@{data.get('version', '1.0.0')}",
+            source=src_label,
         )
         store.save_instruction(cfg)
         return {
@@ -259,94 +261,28 @@ def writ_install_instruction(name: str) -> dict:
         return {"error": f"Failed to install '{name}': {exc}"}
 
 
-@mcp.tool()
-def writ_read_file(path: str) -> str:
-    """Read a file from this repository (read-only).
-
-    Path is relative to the repo root. Respects .writignore and .gitignore.
-    Rejects paths that escape the repository or point to ignored/binary files.
-    Maximum file size: 512 KB.
-
-    Use this when instructions and project context aren't enough and you need
-    to inspect actual source code in the repo.
-    """
-    if not path or path.strip() == "":
-        return "Error: path is required."
-
-    target = _safe_resolve(path)
-    if target is None:
-        return f"Error: '{path}' is outside the repo or matched by ignore patterns."
-
-    if not target.is_file():
-        return f"Error: '{path}' is not a file or does not exist."
-
-    size = target.stat().st_size
-    if size > _MAX_FILE_SIZE:
-        return f"Error: '{path}' is too large ({size:,} bytes, max {_MAX_FILE_SIZE:,})."
-
-    try:
-        return target.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return f"Error: '{path}' appears to be a binary file."
-    except OSError as exc:
-        return f"Error reading '{path}': {exc}"
-
-
-@mcp.tool()
-def writ_list_files(
-    directory: str = ".",
-    pattern: str = "",
-) -> list[str]:
-    """List files in a directory of this repository.
-
-    Returns relative paths from repo root. Respects .writignore/.gitignore.
-    Optionally filter by a substring pattern (e.g. '.py', 'test_').
-
-    Args:
-        directory: Directory to list, relative to repo root. Default: root.
-        pattern: Optional substring filter on filenames.
-    """
-    root = _repo_root()
-    target_dir = _safe_resolve(directory)
-    if target_dir is None or not target_dir.is_dir():
-        return [f"Error: '{directory}' is not a valid directory."]
-
-    spec = scanner.load_ignore_spec(root)
-    resolved_root = root.resolve()
-    results: list[str] = []
-    pattern_lower = pattern.lower()
-
-    for dirpath, dirnames, filenames in os.walk(target_dir):
-        dp = Path(dirpath)
-        rel_dir = dp.relative_to(resolved_root)
-        if spec.match_file(str(rel_dir) + "/"):
-            dirnames.clear()
-            continue
-
-        for fname in sorted(filenames):
-            rel_file = str(rel_dir / fname)
-            if spec.match_file(rel_file):
-                continue
-            if pattern_lower and pattern_lower not in fname.lower():
-                continue
-            results.append(rel_file)
-
-        if len(results) >= 500:
-            break
-
-    return results
-
-
 # ---------------------------------------------------------------------------
 # V3 Tools -- agent-to-agent conversations
 # ---------------------------------------------------------------------------
 
 def _local_identity() -> tuple[str, str]:
-    """Return (agent_name, repo_name) for this MCP server's repo."""
+    """Return (agent_name, repo_name) for this MCP server's repo.
+
+    Agent name prefers the first instruction with task_type == "agent",
+    falling back to "agent".  Repo name is always the directory name.
+    """
     repo = _repo_root().name
     instructions = store.list_instructions()
-    agent = instructions[0].name if instructions else "agent"
-    return agent, repo
+    for cfg in instructions:
+        if cfg.task_type == "agent":
+            return cfg.name, repo
+    return "agent", repo
+
+
+def _user_identity() -> str:
+    """Return persistent user identity (username or auto-generated)."""
+    from writ.core.auth import get_identity
+    return get_identity()
 
 
 def _relay_message(
@@ -355,7 +291,6 @@ def _relay_message(
 ) -> bool:
     """Send a message through the backend relay (for remote peers)."""
     try:
-        from writ.core import auth
         if not auth.is_logged_in():
             return False
         from writ.integrations.registry import RegistryClient
@@ -389,7 +324,74 @@ def _invoke_peer_agent(peer_name: str, message: str) -> str | None:
 
 
 @mcp.tool()
-def writ_start_conversation(
+def writ_peers_add(
+    name: str,
+    path: str = "",
+    remote: str = "",
+) -> dict:
+    """Register a peer repository for agent-to-agent communication.
+
+    A peer is another repository whose agent you want to talk to via
+    writ_chat_start / writ_chat_send.
+
+    For local peers (same machine): provide the filesystem path.
+    For remote peers (different machines): provide the writ username
+    (requires both sides to be logged in to enwrit.com).
+
+    Args:
+        name: Short name for this peer (e.g. 'backend-repo').
+        path: Local filesystem path to the peer's repo root.
+        remote: Remote writ username (for cross-device relay).
+    """
+    if not path and not remote:
+        return {"error": "Provide either 'path' (local) or 'remote' (enwrit username)."}
+
+    existing = peers.get_peer(name)
+    if existing:
+        return {"error": f"Peer '{name}' already registered. Remove it first to re-add."}
+
+    peer = peers.add_peer(name, path=path or None, remote=remote or None)
+    return {
+        "status": "added",
+        "name": peer.name,
+        "transport": peer.transport,
+        "path": peer.path,
+        "remote": peer.remote,
+    }
+
+
+@mcp.tool()
+def writ_peers_list() -> list[dict]:
+    """List all registered peer repositories.
+
+    Shows peers you can communicate with via writ_chat_start.
+    """
+    manifest = peers.load_peers()
+    return [
+        {
+            "name": p.name,
+            "transport": p.transport,
+            "path": p.path,
+            "remote": p.remote,
+        }
+        for p in manifest.peers.values()
+    ]
+
+
+@mcp.tool()
+def writ_peers_remove(name: str) -> dict:
+    """Remove a registered peer repository.
+
+    Args:
+        name: Name of the peer to remove.
+    """
+    if peers.remove_peer(name):
+        return {"status": "removed", "name": name}
+    return {"error": f"Peer '{name}' not found."}
+
+
+@mcp.tool()
+def writ_chat_start(
     to_repo: str,
     goal: str,
     message: str,
@@ -410,7 +412,7 @@ def writ_start_conversation(
     """
     peer = peers.get_peer(to_repo)
     if peer is None:
-        return {"error": f"Peer '{to_repo}' not found. Use writ peers add to register it."}
+        return {"error": f"Peer '{to_repo}' not found. Use writ_peers_add to register it first."}
 
     agent, repo = _local_identity()
     conv = messaging.create_conversation(
@@ -440,14 +442,26 @@ def writ_start_conversation(
                 import shutil
                 peer_conv_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(str(conv_path), str(peer_file))
-    elif peer.transport == "remote":
-        _relay_message(conv.id, agent, repo, message, goal=goal)
+    relay_ok = True
+    if peer.transport == "remote":
+        relay_ok = _relay_message(
+            conv.id, agent, repo, message,
+            goal=goal, attachments=attach_files,
+        )
 
-    return {"conv_id": conv.id, "status": "started", "file": conv_path.name}
+    out: dict = {
+        "conv_id": conv.id,
+        "status": "started",
+        "file": conv_path.name,
+        "identity": _user_identity(),
+    }
+    if peer.transport == "remote" and not relay_ok:
+        out["warning"] = "Message saved locally but relay delivery failed"
+    return out
 
 
 @mcp.tool()
-def writ_send_message(
+def writ_chat_send(
     conv_id: str,
     message: str,
     attach_files: list[str] | None = None,
@@ -460,7 +474,7 @@ def writ_send_message(
     a response before continuing.
 
     Args:
-        conv_id: Conversation ID from writ_start_conversation.
+        conv_id: Conversation ID from writ_chat_start.
         message: Your message text.
         attach_files: Optional file paths to embed.
         attach_context: Optional writ:// URIs to embed.
@@ -485,11 +499,21 @@ def writ_send_message(
         attach_context=attach_context,
         repo_root=_repo_root(),
     )
+
+    peer_name = ""
+    for p in conv.participants:
+        if p.repo != repo:
+            peer_name = p.repo
+            break
+    peer = peers.find_peer(peer_name) if peer_name else None
+    if peer and peer.transport == "remote":
+        _relay_message(conv.id, agent, repo, message, attachments=attach_files)
+
     return {"status": "sent", "message_id": msg.id, "message_count": conv.turn_count + 1}
 
 
 @mcp.tool()
-async def writ_send_and_wait(
+async def writ_chat_send_wait(
     conv_id: str,
     message: str,
     attach_files: list[str] | None = None,
@@ -539,7 +563,7 @@ async def writ_send_and_wait(
 
     peer = peers.find_peer(peer_name) if peer_name else None
     if peer and peer.transport == "remote":
-        _relay_message(conv.id, agent, repo, message)
+        _relay_message(conv.id, agent, repo, message, attachments=attach_files)
 
     while elapsed < timeout:
         await asyncio.sleep(interval)
@@ -582,7 +606,7 @@ async def writ_send_and_wait(
 
 
 @mcp.tool()
-def writ_check_inbox() -> list[dict]:
+def writ_inbox() -> list[dict]:
     """Check for conversations that have new messages you haven't read yet.
 
     Returns a list of conversations with unread activity. Use this at the
@@ -597,11 +621,16 @@ def writ_check_inbox() -> list[dict]:
             continue
         last = conv.messages[-1]
         if last.author_repo != repo:
+            unread = 0
+            for msg in reversed(conv.messages):
+                if msg.author_repo == repo:
+                    break
+                unread += 1
             results.append({
                 "conv_id": conv.id,
                 "peer": last.author_repo,
                 "goal": conv.goal,
-                "unread_count": 1,
+                "unread_count": unread,
                 "last_message_preview": last.content[:200],
                 "status": conv.status.value,
             })
@@ -609,7 +638,7 @@ def writ_check_inbox() -> list[dict]:
 
 
 @mcp.tool()
-def writ_read_conversation(
+def writ_chat_read(
     conv_id: str,
     last_n: int = 0,
 ) -> dict:
@@ -653,26 +682,27 @@ def writ_read_conversation(
 
 
 @mcp.tool()
-def writ_complete_conversation(
+def writ_chat_end(
     conv_id: str,
-    summary: str,
+    summary: str = "",
 ) -> dict:
-    """Mark a conversation as completed with a brief summary.
+    """Mark a conversation as completed.
 
-    Include a summary of the outcome so both participants and human
-    observers can understand what was achieved.
+    Optionally include a summary of the outcome so both participants and
+    human observers can understand what was achieved.
 
     Args:
         conv_id: Conversation ID.
-        summary: Brief summary of the conversation outcome.
+        summary: Optional brief summary. Defaults to 'Conversation ended'.
     """
     result = messaging.find_conversation(conv_id)
     if result is None:
         return {"error": f"Conversation '{conv_id}' not found."}
     path, _ = result
 
-    messaging.complete_conversation(path, summary)
-    return {"status": "completed", "summary": summary}
+    final_summary = summary or "Conversation ended"
+    messaging.complete_conversation(path, final_summary)
+    return {"status": "completed", "summary": final_summary}
 
 
 # ---------------------------------------------------------------------------
@@ -686,15 +716,21 @@ def _registry_client():
 
 
 def _agent_identity() -> tuple[str, str]:
-    """Return (agent_name, repo_name) for the current project."""
+    """Return (agent_name, repo_name) for the current project.
+
+    Prefers the first instruction with task_type == "agent".
+    Falls back to "agent" (never "unknown" or alphabetically-first).
+    """
     repo_name = _repo_root().name
     instructions = store.list_instructions()
-    agent_name = instructions[0].name if instructions else "unknown"
-    return agent_name, repo_name
+    for cfg in instructions:
+        if cfg.task_type == "agent":
+            return cfg.name, repo_name
+    return "agent", repo_name
 
 
 @mcp.tool()
-def writ_review_instruction(
+def writ_review(
     instruction_name: str,
     rating: float,
     summary: str,
@@ -715,6 +751,8 @@ def writ_review_instruction(
         weaknesses: List of what could be improved.
         context: Optional metadata (e.g. model, task_type, language).
     """
+    if not auth.is_logged_in():
+        return {"error": "Not logged in. Run `writ login` first."}
     agent_name, repo_name = _agent_identity()
     client = _registry_client()
     result = client.submit_review(
@@ -733,7 +771,7 @@ def writ_review_instruction(
 
 
 @mcp.tool()
-def writ_search_threads(
+def writ_threads_list(
     query: str | None = None,
     thread_type: str | None = None,
     category: str | None = None,
@@ -763,7 +801,7 @@ def writ_search_threads(
 
 
 @mcp.tool()
-def writ_start_thread(
+def writ_threads_start(
     title: str,
     goal: str,
     thread_type: str,
@@ -784,6 +822,8 @@ def writ_start_thread(
         category: Optional category: coding, testing, architecture, etc.
         first_message_type: Type of opening message: comment, finding, question, proposal.
     """
+    if not auth.is_logged_in():
+        return {"error": "Not logged in. Run `writ login` first."}
     agent_name, repo_name = _agent_identity()
     client = _registry_client()
     result = client.start_thread(
@@ -802,7 +842,7 @@ def writ_start_thread(
 
 
 @mcp.tool()
-def writ_post_to_thread(
+def writ_threads_post(
     thread_id: str,
     content: str,
     message_type: str = "comment",
@@ -816,6 +856,8 @@ def writ_post_to_thread(
         content: Message content.
         message_type: One of: comment, finding, question, proposal.
     """
+    if not auth.is_logged_in():
+        return {"error": "Not logged in. Run `writ login` first."}
     agent_name, repo_name = _agent_identity()
     client = _registry_client()
     result = client.post_to_thread(
@@ -831,7 +873,7 @@ def writ_post_to_thread(
 
 
 @mcp.tool()
-def writ_resolve_thread(
+def writ_threads_resolve(
     thread_id: str,
     conclusion: str,
 ) -> dict:
@@ -844,6 +886,8 @@ def writ_resolve_thread(
         thread_id: UUID of the thread to resolve.
         conclusion: The distilled conclusion/outcome of the thread.
     """
+    if not auth.is_logged_in():
+        return {"error": "Not logged in. Run `writ login` first."}
     client = _registry_client()
     result = client.resolve_thread(thread_id, conclusion=conclusion)
     if result is None:
@@ -856,7 +900,7 @@ def writ_resolve_thread(
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def writ_request_approval(
+def writ_approvals_create(
     action_type: str,
     description: str,
     reasoning: str = "",
@@ -903,12 +947,12 @@ def writ_request_approval(
         repo_name=repo_name,
     )
     if "id" in result:
-        result["console_url"] = "https://enwrit.com/console"
+        result["console_url"] = f"https://enwrit.com/console?approval={result['id']}"
     return result
 
 
 @mcp.tool()
-def writ_check_approval(approval_id: str) -> dict:
+def writ_approvals_check(approval_id: str) -> dict:
     """Check the status of an approval request.
 
     Returns: {status, resolved_at, deny_reason}
@@ -944,12 +988,18 @@ def project_context_resource() -> str:
     return store.load_project_context() or "No project context available."
 
 
-@mcp.resource("writ://files/{path}")
-def file_resource(path: str) -> str:
-    """Read a file from the repository by path (relative to repo root)."""
-    return writ_read_file(path)
+def run_server(slim: bool = False) -> None:
+    """Start the MCP server on stdio transport.
 
-
-def run_server() -> None:
-    """Start the MCP server on stdio transport."""
-    mcp.run(transport="stdio")
+    slim=True: only expose writ_compose and writ_chat_send_wait (2 tools).
+    slim=False: expose all 21 tools (full mode for MCP-only users).
+    """
+    if slim:
+        slim_mcp = FastMCP("writ")
+        slim_mcp.tool()(writ_compose)
+        slim_mcp.tool()(writ_chat_send_wait)
+        slim_mcp.resource("writ://instructions/{name}")(instruction_resource)
+        slim_mcp.resource("writ://project-context")(project_context_resource)
+        slim_mcp.run(transport="stdio")
+    else:
+        mcp.run(transport="stdio")

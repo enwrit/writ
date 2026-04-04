@@ -1,6 +1,7 @@
 """Tests for CLI commands via Typer's testing runner."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
@@ -123,6 +124,69 @@ class TestAddFile:
         assert "context" in result.output
 
 
+class TestAddFromUrl:
+    """``writ add --from https://...`` and ``--from url`` with mocked HTTP."""
+
+    def _mock_response(self, text: str, final_url: str) -> MagicMock:
+        mock_resp = MagicMock()
+        mock_resp.text = text
+        mock_resp.url = final_url
+        mock_resp.raise_for_status = MagicMock()
+        return mock_resp
+
+    def test_add_from_https_url_name_from_path(self, initialized_project: Path):
+        body = "# Remote Guide\n\nDo the thing.\n"
+        mock_resp = self._mock_response(
+            body, "https://example.com/path/remote-guide.md",
+        )
+        with patch("writ.integrations.url.httpx.get", return_value=mock_resp):
+            result = runner.invoke(
+                app,
+                ["add", "--from", "https://example.com/path/remote-guide.md"],
+            )
+        assert result.exit_code == 0
+        assert "Added" in result.output
+        assert "remote-guide" in result.output
+        assert (initialized_project / ".writ" / "agents" / "remote-guide.yaml").exists()
+
+    def test_add_from_https_url_with_name_override(self, initialized_project: Path):
+        body = "# Title\n\nBody.\n"
+        mock_resp = self._mock_response(body, "https://example.com/x.md")
+        with patch("writ.integrations.url.httpx.get", return_value=mock_resp):
+            result = runner.invoke(
+                app,
+                ["add", "custom-name", "--from", "https://example.com/x.md"],
+            )
+        assert result.exit_code == 0
+        assert "custom-name" in result.output
+        assert (initialized_project / ".writ" / "agents" / "custom-name.yaml").exists()
+
+    def test_add_from_url_legacy_flag(self, initialized_project: Path):
+        body = "# Legacy\n\nOK.\n"
+        mock_resp = self._mock_response(body, "https://example.com/legacy.md")
+        with patch("writ.integrations.url.httpx.get", return_value=mock_resp):
+            result = runner.invoke(
+                app,
+                ["add", "https://example.com/legacy.md", "--from", "url"],
+            )
+        assert result.exit_code == 0
+        assert "legacy" in result.output
+
+    def test_add_from_https_fetch_fails(self, initialized_project: Path):
+        import httpx
+
+        with patch(
+            "writ.integrations.url.httpx.get",
+            side_effect=httpx.HTTPError("network"),
+        ):
+            result = runner.invoke(
+                app,
+                ["add", "--from", "https://example.com/missing.md"],
+            )
+        assert result.exit_code == 1
+        assert "Could not fetch" in result.output
+
+
 class TestList:
     def test_list_empty(self, initialized_project: Path):
         result = runner.invoke(app, ["list"])
@@ -234,7 +298,7 @@ class TestSearch:
         )
         monkeypatch.setattr(
             "writ.commands.search._search_legacy_all",
-            lambda q, lim: [],
+            lambda q, lim, **kw: [],
         )
         result = runner.invoke(app, ["search", "react typescript"])
         assert result.exit_code == 0
@@ -347,7 +411,7 @@ class TestUnpublish:
             "writ.integrations.registry.RegistryClient",
             _MockRegistryClient,
         )
-        result = runner.invoke(app, ["unpublish", "reviewer"])
+        result = runner.invoke(app, ["unpublish", "reviewer", "--yes"])
         assert result.exit_code == 0
         assert "private" in result.output
 
@@ -481,7 +545,7 @@ class TestSearchRewrite:
         )
         monkeypatch.setattr(
             "writ.commands.search._search_legacy_all",
-            lambda q, lim: [
+            lambda q, lim, **kw: [
                 {"name": "test-agent", "source": "enwrit", "description": "Test", "writ_score": 80},
             ],
         )

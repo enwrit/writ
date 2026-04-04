@@ -11,6 +11,7 @@ from writ import __version__
 from writ.commands import (
     agent,
     approvals,
+    diff,
     handoff,
     init,
     knowledge,
@@ -22,6 +23,7 @@ from writ.commands import (
     register,
     search,
     sync,
+    upgrade,
 )
 from writ.commands.chat import chat_app, inbox_command
 from writ.commands.connect import connect_command
@@ -71,6 +73,12 @@ app.command(name="sync")(sync.sync_command)
 
 # Lint command
 app.command(name="lint")(lint.lint_command)
+
+# Diff: lint score vs git revision
+app.command(name="diff")(diff.diff_command)
+
+# Upgrade: pull latest versions from source
+app.command(name="upgrade")(upgrade.upgrade_command)
 
 # Publish commands
 app.command(name="publish")(publish.publish_command)

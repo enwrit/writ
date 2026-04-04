@@ -114,7 +114,9 @@ def init_command(
         "  [dim]writ save <name>[/dim]       [dim]Save to personal library (cross-device)[/dim]\n"
         "  [dim]writ connect / chat[/dim]    [dim]Agent-to-agent communication[/dim]\n"
         "  [dim]writ review / threads[/dim]  [dim]Knowledge sharing[/dim]\n"
-        "  [dim]writ mcp serve[/dim]         [dim]Expose via MCP protocol[/dim]"
+        "  [dim]writ mcp install[/dim]      [dim]Connect via MCP protocol (opt-in)[/dim]\n"
+        "\n"
+        "[dim]Star us on GitHub: https://github.com/enwrit/writ[/dim]"
     )
     console.print(Panel.fit(summary, title="writ", border_style="green"))
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -24,6 +25,57 @@ def _require_login() -> None:
             "Run [cyan]writ login[/cyan] to authenticate with enwrit.com."
         )
         raise typer.Exit(1)
+
+
+@approvals_app.command(name="create")
+def create_approval(
+    action_type: Annotated[str, typer.Argument(help="Action type (e.g. deploy, delete, refactor)")],
+    description: Annotated[str, typer.Argument(help="What the agent wants to do")],
+    reasoning: Annotated[
+        str, typer.Option("--reasoning", "-r", help="Why this action is needed"),
+    ] = "",
+    urgency: Annotated[
+        str, typer.Option("--urgency", "-u", help="low|normal|high|critical"),
+    ] = "normal",
+) -> None:
+    """Create an approval request for a human to review.
+
+    Use this when an AI agent needs explicit human permission before
+    proceeding with a significant action.
+
+    Examples:
+        writ approvals create deploy "Deploy v2.0 to production"
+        writ approvals create delete "Remove legacy auth module" --urgency high
+    """
+    _require_login()
+
+    from writ.integrations.registry import RegistryClient
+
+    client = RegistryClient()
+    result = client.create_approval(
+        action_type=action_type,
+        description=description,
+        reasoning=reasoning,
+        urgency=urgency,
+        repo_name=str(Path.cwd().name),
+    )
+    if "error" in result:
+        console.print(f"[red]Error: {result['error']}[/red]")
+        raise typer.Exit(1)
+
+    approval_id = result.get("id", "")
+    console.print(
+        Panel(
+            f"[bold]Action:[/bold] {action_type}\n"
+            f"[bold]Description:[/bold] {description}\n"
+            f"[bold]Urgency:[/bold] {urgency}\n"
+            f"[bold]Status:[/bold] [yellow]pending[/yellow]\n"
+            f"\nApproval ID: [cyan]{approval_id}[/cyan]",
+            title="Approval Request Created",
+            border_style="green",
+        )
+    )
+    console.print("\n  Check status: [cyan]writ approvals list[/cyan]")
 
 
 @approvals_app.command(name="list")

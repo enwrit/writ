@@ -113,7 +113,7 @@ class TestRemoteSyncPaths:
             result = runner.invoke(app, ["save", _LOGIN_SAVE_NAME])
 
         assert result.exit_code == 0
-        assert "Local save only" in result.output
+        assert "Cloud sync failed" in result.output
 
     def test_save_skips_remote_when_logged_out(
         self, initialized_project: Path, tmp_global_writ: Path

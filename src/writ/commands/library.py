@@ -22,6 +22,10 @@ def save(
     alias: Annotated[
         str | None, typer.Option("--as", help="Save under a different name.")
     ] = None,
+    local: Annotated[
+        bool,
+        typer.Option("--local", help="Save locally only (skip cloud sync)."),
+    ] = False,
 ) -> None:
     """Save an instruction from this project to your personal library (~/.writ/).
 
@@ -29,7 +33,7 @@ def save(
     Use 'writ add <name>' in any project to pull it back.
 
     If you are logged in (writ login), the instruction is also synced to enwrit.com
-    so you can access it from any device.
+    so you can access it from any device. Use --local to save locally only.
     """
     if not store.is_initialized():
         console.print("[red]Not initialized.[/red] Run [cyan]writ init[/cyan] first.")
@@ -47,13 +51,18 @@ def save(
     store.init_global_store()
     path = store.save_to_library(inst, alias=save_name)
 
-    console.print(f"[green]Saved[/green] '{save_name}' to personal library ({path})")
+    console.print(
+        f"[green]Saved[/green] '{save_name}' to personal library\n"
+        f"  [dim]{path}[/dim]"
+    )
 
-    if auth.is_logged_in():
+    if not local and auth.is_logged_in():
         client = RegistryClient()
         if client.push_to_library(save_name, inst):
-            console.print("[dim]  Synced to enwrit.com[/dim]")
+            console.print("  [cyan]+ Synced to enwrit.com[/cyan] (access from any device)")
         else:
-            console.print("[dim]  Local save only (remote sync failed)[/dim]")
+            console.print("  [dim]Cloud sync failed -- saved locally only[/dim]")
+    elif local:
+        console.print("  [dim]Local only (--local flag)[/dim]")
 
     console.print(f"\n  Add to any project: [cyan]writ add {save_name}[/cyan]")

@@ -163,7 +163,13 @@ class RegistryClient:
                 timeout=_TIMEOUT,
             )
             if resp.status_code == 200:
-                return resp.json().get("items", [])
+                data = resp.json()
+                items = data.get("items", [])
+                total = data.get("total")
+                if total is not None:
+                    for item in items:
+                        item["_hub_total"] = total
+                return items
             return []
         except Exception:  # noqa: BLE001
             logger.debug("hub_search: unavailable", exc_info=True)
@@ -400,10 +406,11 @@ class RegistryClient:
                 body["conv_id"] = conv_id
             if session_id:
                 body["session_id"] = session_id
+            headers = {**self._headers(), "X-Writ-Source": "mcp"}
             resp = httpx.post(
                 f"{self.base_url}/approvals",
                 json=body,
-                headers=self._headers(),
+                headers=headers,
                 timeout=_TIMEOUT,
             )
             if resp.status_code in (200, 201):
