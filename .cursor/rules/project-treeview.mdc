@@ -35,7 +35,11 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── knowledge.py            # writ review + writ threads list/read/start/post/resolve -- knowledge threads
 │       │   ├── approvals.py            # writ approvals create/list/approve/deny -- human-in-the-loop approval management
 │       │   ├── diff.py                 # writ diff <file> [--ref] -- lint score comparison vs git history
-│       │   └── upgrade.py              # writ upgrade [name] [--dry-run] -- version-aware instruction updates from Hub/PRPM
+│       │   ├── upgrade.py              # writ upgrade [name] [--dry-run] -- version-aware instruction updates from Hub/PRPM
+│       │   ├── plan.py                 # writ plan review <file> [--json] [--no-context] -- AI-powered plan review (LLM via writ model or enwrit.com backend)
+│       │   ├── docs.py                 # writ docs check [--json] -- project documentation health (dead refs, treeview drift, staleness, contradictions)
+│       │   ├── hook.py                 # writ hook install/uninstall -- git pre-commit hook for instruction quality checks
+│       │   └── model.py                # writ model set/list/clear -- configure LLM provider (openai, anthropic, gemini, local) for plan review
 │       ├── core/                       # Core business logic
 │       │   ├── __init__.py
 │       │   ├── scanner.py              # Detect languages, frameworks; parse_markdown_file() for --file import
@@ -53,7 +57,11 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── invoker.py              # CLI agent detection (claude/gemini/codex/cursor) + invocation with AutoRespondTier, LLM API fallback
 │       │   ├── local_llm.py            # Tier 2.5: auto-downloads llama.cpp binary (Vulkan GPU / CPU) + GGUF model, persistent server, hybrid inference (LightGBM scores + Qwen feedback) for --deep-local
 │       │   ├── context_window.py       # Sliding window + token estimation for API invocations
-│       │   └── file_io.py              # Cross-platform file locking + atomic append for conversation files
+│       │   ├── file_io.py              # Cross-platform file locking + atomic append for conversation files
+│       │   ├── llm_client.py           # Multi-provider LLM client (OpenAI, Anthropic, Gemini, local/LM Studio) for plan review
+│       │   ├── doc_health.py           # Documentation health analysis: dead refs, treeview drift, staleness, contradictions
+│       │   └── rubrics/                # Versioned rubric files for AI-powered features
+│       │       └── plan-review-v1.md   # Plan review rubric (system prompt for LLM analysis)
 │       ├── integrations/               # External registry integrations
 │       │   ├── __init__.py
 │       │   ├── prpm.py                 # HTTP-first PRPM integration (httpx -> prpm.dev API, CLI fallback) -> 7500+ packages
@@ -103,7 +111,11 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           │   ├── project-context.yaml
 │           │   └── api-context.yaml
 │           └── _builtin/              # Auto-installed on writ init (not user-selectable templates)
-│               └── writ-context.md    # CLI command reference, written to IDE rules dirs
+│               ├── writ-context.md    # CLI command reference, written to IDE rules dirs
+│               └── skills/            # 10 battle-tested skills, auto-installed to IDE skill dirs on writ init
+│                   ├── autoresearch.md, plan-skill.md, doc-maintenance.md, pre-commit-checks.md
+│                   ├── code-simplifier.md, security-scan.md, verify-skill.md, tech-debt-fixer.md
+│                   └── superpower-skill.md, skill-creator-skill.md
 ├── tests/                              # pytest test suite (541+ tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, search, templates, import, publish/unpublish)

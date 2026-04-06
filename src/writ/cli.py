@@ -27,8 +27,12 @@ from writ.commands import (
 )
 from writ.commands.chat import chat_app, inbox_command
 from writ.commands.connect import connect_command
+from writ.commands.docs import docs_app
+from writ.commands.hook import hook_app
 from writ.commands.mcp import mcp_app
+from writ.commands.model import model_app
 from writ.commands.peers_cmd import peers_app
+from writ.commands.plan import plan_app
 from writ.utils import console
 
 # ---------------------------------------------------------------------------
@@ -124,6 +128,18 @@ app.add_typer(knowledge.threads_app, name="threads")
 
 # Approvals (human-in-the-loop for agent actions)
 app.add_typer(approvals.approvals_app, name="approvals")
+
+# Model configuration (AI model for plan review)
+app.add_typer(model_app, name="model")
+
+# Plan review
+app.add_typer(plan_app, name="plan")
+
+# Documentation health
+app.add_typer(docs_app, name="docs")
+
+# Pre-commit hook
+app.add_typer(hook_app, name="hook")
 
 
 # ---------------------------------------------------------------------------

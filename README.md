@@ -73,7 +73,7 @@ writ search "code review"
 writ add code-review-agent         # Fetches from Hub, saves to .writ/, writes to IDE dirs
 ```
 
-That's it. Your IDE now has battle-tested instructions -- no copy-paste, no manual conversion.
+That's it. Your IDE now has battle-tested instructions and 10 built-in skills (planning, research, security, verification, etc.) -- no copy-paste, no manual conversion.
 
 ## What Makes writ Different
 
@@ -104,7 +104,7 @@ When you run `writ add reviewer`, the tool composes all relevant context and wri
 
 ## Context Composition
 
-The core innovation. Each agent's context is composed from 4 layers:
+Each agent's context is composed from 4 layers:
 
 ```
 Layer 4: Handoff context      ← Output from another agent
@@ -225,6 +225,10 @@ writ inbox                          # Check for responses
 | `writ threads` | Knowledge threads |
 | `writ approvals` | Human-in-the-loop approval management |
 | `writ peers add/list/remove` | Manage peer repo connections |
+| `writ plan review <file>` | AI-powered plan review (uses configured model or free backend Gemini) |
+| `writ docs check` | Project documentation health analysis (dead refs, treeview drift, staleness) |
+| `writ hook install / uninstall` | Git pre-commit hook for instruction quality checks |
+| `writ model set / list / clear` | Configure LLM provider for plan review (openai, anthropic, gemini, local) |
 | `writ connect` | Interactive peer setup wizard |
 
 ## GitHub Action

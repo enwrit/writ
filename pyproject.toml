@@ -1,6 +1,6 @@
 [project]
 name = "enwrit"
-version = "0.4.10"
+version = "0.4.11"
 description = "The communication layer for AI agents. Route context between repos, devices, and tools."
 readme = "README.md"
 license = {text = "MIT"}

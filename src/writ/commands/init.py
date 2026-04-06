@@ -90,11 +90,14 @@ def init_command(
     # 5. Install writ-context rule to detected IDEs
     _install_writ_context(detected_formats)
 
-    # 6. Load template if specified
+    # 6. Install built-in skills to detected IDEs
+    skills_installed = _install_builtin_skills(detected_formats)
+
+    # 7. Load template if specified
     if template:
         load_template(template)
 
-    # 7. Summary
+    # 8. Summary
     instr_count = len(store.list_instructions())
     console.print()
     summary = "[bold green]writ initialized![/bold green]\n\n"
@@ -103,6 +106,8 @@ def init_command(
             f"Instructions: {instr_count} "
             f"({imported_count} imported)\n"
         )
+    if skills_installed:
+        summary += f"Built-in skills: {skills_installed} installed\n"
     summary += (
         "\n"
         "Next steps:\n"
@@ -110,6 +115,8 @@ def init_command(
         "  [cyan]writ add <name>[/cyan]        Add from Hub, library, or create new\n"
         "  [cyan]writ lint <file>[/cyan]       Score instruction quality\n"
         "  [cyan]writ list[/cyan]              List instructions in this project\n"
+        "  [cyan]writ plan review <file>[/cyan] AI-powered plan review\n"
+        "  [cyan]writ docs check[/cyan]        Documentation health scan\n"
         "\n"
         "  [dim]writ save <name>[/dim]       [dim]Save to personal library (cross-device)[/dim]\n"
         "  [dim]writ connect / chat[/dim]    [dim]Agent-to-agent communication[/dim]\n"
@@ -247,6 +254,90 @@ def _install_writ_context(detected_formats: list[str]) -> None:
         else:
             continue
         console.print(f"[green]Wrote[/green] writ-context -> {path}")
+
+
+_SKILL_DIRS: dict[str, tuple[str, str]] = {
+    "cursor": (".cursor/skills/writ", "mdc"),
+    "claude_rules": (".claude/skills/writ", "md"),
+    "kiro_steering": (".kiro/skills/writ", "md"),
+}
+
+
+def _install_builtin_skills(detected_formats: list[str]) -> int:
+    """Install built-in skills from _builtin/skills/ to IDE skill directories.
+
+    Skills go to dedicated skill dirs (e.g. .cursor/skills/writ/) NOT to
+    rules dirs. This keeps skills separate from project-specific rules.
+    Returns the number of skills installed.
+    """
+    skills_dir = _BUILTIN_ROOT / "skills"
+    if not skills_dir.is_dir():
+        return 0
+
+    skill_files = sorted(skills_dir.glob("*.md"))
+    if not skill_files:
+        return 0
+
+    root = Path.cwd()
+    count = 0
+
+    from writ.utils import yaml_dumps
+
+    for skill_file in skill_files:
+        skill_name = skill_file.stem
+        content = skill_file.read_text(encoding="utf-8").strip()
+        writ_name = f"writ-{skill_name}"
+
+        cfg = InstructionConfig(
+            name=writ_name,
+            description=f"Built-in skill: {skill_name.replace('-', ' ')}",
+            task_type="rule",
+            instructions=content,
+            tags=["writ", "skill", "builtin"],
+            composition=CompositionConfig(project_context=False),
+            format_overrides=FormatOverrides(
+                cursor=CursorOverrides(
+                    description=f"Built-in skill: {skill_name.replace('-', ' ')}",
+                    always_apply=True,
+                ),
+            ),
+        )
+        store.save_instruction(cfg)
+
+        wrote_to_ide = False
+        for fmt in detected_formats:
+            if fmt not in _SKILL_DIRS:
+                continue
+            dir_rel, ext = _SKILL_DIRS[fmt]
+            skill_dir = root / dir_rel
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"{skill_name}.{ext}"
+            path = skill_dir / filename
+
+            if ext == "mdc":
+                fm = yaml_dumps({
+                    "description": f"Built-in skill: "
+                    f"{skill_name.replace('-', ' ')}",
+                    "alwaysApply": True,
+                }).strip()
+                path.write_text(
+                    f"---\n{fm}\n---\n\n{content}\n",
+                    encoding="utf-8",
+                )
+            else:
+                path.write_text(content + "\n", encoding="utf-8")
+            wrote_to_ide = True
+
+        if wrote_to_ide:
+            count += 1
+
+    if count:
+        skill_names = ", ".join(f.stem for f in skill_files)
+        console.print(
+            f"[green]Installed {count} built-in skill(s):[/green] {skill_names}",
+        )
+
+    return count
 
 
 def list_available_templates() -> list[str]:

@@ -97,6 +97,27 @@ class ProjectConfig(BaseModel):
     )
 
 
+class ModelConfig(BaseModel):
+    """User-configured AI model for plan review and future AI features."""
+
+    provider: str = Field(
+        description="Model provider: openai, anthropic, gemini, or local.",
+    )
+    api_key: str | None = Field(
+        default=None,
+        description="API key for cloud providers (null for local).",
+    )
+    model_name: str | None = Field(
+        default=None,
+        description="Specific model name (e.g. gpt-4o, claude-sonnet-4-20250514). "
+        "Uses sensible defaults per provider if omitted.",
+    )
+    base_url: str | None = Field(
+        default=None,
+        description="Custom endpoint URL (required for local, optional for cloud).",
+    )
+
+
 class GlobalConfig(BaseModel):
     """Global writ configuration stored in ~/.writ/config.yaml."""
 
@@ -115,6 +136,10 @@ class GlobalConfig(BaseModel):
     identity: str | None = Field(
         default=None,
         description="Persistent user identity for agent messages (auto-generated on first use).",
+    )
+    model: ModelConfig | None = Field(
+        default=None,
+        description="Configured AI model for plan review and other AI features.",
     )
 
 

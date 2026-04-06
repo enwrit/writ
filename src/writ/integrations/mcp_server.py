@@ -3,7 +3,7 @@
 Allows external AI agents (in Cursor, Claude Desktop, etc.) to discover
 and use this repo's instructions without the human running CLI commands.
 
-Full mode (18 tools -- for MCP-only users via uvx):
+Full mode (20 tools -- for MCP-only users via uvx):
   V1: writ_list, writ_get
   V2: writ_compose, writ_search, writ_add
   V3: writ_chat_start, writ_chat_send, writ_chat_send_wait,
@@ -11,6 +11,7 @@ Full mode (18 tools -- for MCP-only users via uvx):
   V4: writ_review, writ_threads_list, writ_threads_start,
       writ_threads_post, writ_threads_resolve
   V5: writ_approvals_create, writ_approvals_check
+  V6: writ_lint_instruction, writ_plan_review, writ_docs_check
 
 Slim mode (2 tools -- for CLI users via 'writ mcp install'):
   writ_compose, writ_chat_send_wait
@@ -967,6 +968,154 @@ def writ_approvals_check(approval_id: str) -> dict:
 
     client = _registry_client()
     return client.get_approval(approval_id)
+
+
+# ---------------------------------------------------------------------------
+# V6 Tools -- lint + plan review
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def writ_lint_instruction(
+    name: str = "",
+    content: str = "",
+) -> dict:
+    """Score the quality of an instruction (0-100 across 6 dimensions).
+
+    Provide either:
+    - name: instruction name to load from this project's .writ/ store
+    - content: raw instruction text to lint directly
+
+    Returns: headline score, dimension scores, issues, and suggestions.
+    Uses ML-powered scoring when available, falls back to code-based.
+    """
+    from writ.core.linter import compute_score, lint
+    from writ.core.models import InstructionConfig
+
+    if not name and not content:
+        return {"error": "Provide either 'name' or 'content' to lint."}
+
+    if name and not content:
+        cfg = store.load_instruction(name)
+        if cfg is None:
+            return {"error": f"Instruction '{name}' not found."}
+    else:
+        cfg = InstructionConfig(name=name or "lint-input", instructions=content)
+
+    results = lint(cfg, source_path=None)
+    score = compute_score(cfg, results)
+
+    try:
+        from writ.core.ml_scorer import compute_score_ml
+
+        ml_score = compute_score_ml(score, instruction_text=cfg.instructions)
+        return {
+            "score": ml_score.score,
+            "tier": ml_score.tier,
+            "dimensions": [d.model_dump() for d in ml_score.dimensions],
+            "issues": [
+                {"level": r.level, "message": r.message}
+                for r in ml_score.issues[:10]
+            ],
+            "suggestions": ml_score.suggestions[:5],
+        }
+    except Exception:  # noqa: BLE001
+        return {
+            "score": score.score,
+            "tier": score.tier,
+            "dimensions": [d.model_dump() for d in score.dimensions],
+            "issues": [
+                {"level": r.level, "message": r.message}
+                for r in score.issues[:10]
+            ],
+            "suggestions": score.suggestions[:5],
+        }
+
+
+@mcp.tool()
+def writ_plan_review(
+    plan_content: str,
+    include_context: bool = True,
+) -> str:
+    """Review an implementation plan with AI.
+
+    Sends the plan to the user's configured model (or enwrit.com backend)
+    along with project context. Returns actionable technical critique:
+    feasibility concerns, alternative approaches, risks, contradictions.
+
+    Args:
+        plan_content: The full text of the plan to review.
+        include_context: Whether to include project context (default: True).
+
+    Returns: Structured review with feedback, alternatives, feasibility
+    notes, and overall assessment.
+    """
+    from writ.core import llm_client
+
+    project_context: str | None = None
+    if include_context:
+        project_context = store.load_project_context()
+
+    from writ.commands.plan import _build_user_prompt, _load_rubric
+
+    rubric = _load_rubric()
+    user_prompt = _build_user_prompt(plan_content, project_context)
+
+    model_cfg = llm_client.get_model_config()
+    if model_cfg is not None:
+        try:
+            result = llm_client.call_llm(
+                rubric, user_prompt, stream=False, json_mode=True,
+            )
+            if not isinstance(result, str):
+                result = "".join(result)
+            return result
+        except llm_client.LLMError as exc:
+            return f"Error: {exc}"
+
+    from writ.core import auth as _auth
+
+    if not _auth.is_logged_in():
+        return (
+            "No model configured and not logged in. "
+            "Configure a model with `writ model set openai --api-key <key>`, "
+            "or run `writ login` for 5 free daily plan reviews via Gemini."
+        )
+
+    try:
+        return llm_client.call_backend_plan_review(plan_content, project_context)
+    except llm_client.LLMError as exc:
+        return f"Error: {exc}"
+
+
+@mcp.tool()
+def writ_docs_check() -> dict:
+    """Check documentation health across the project.
+
+    Scans instruction files, rules, README, AGENTS.md, treeviews, and other
+    documentation for issues: dead file references, treeview drift, stale
+    instructions, contradictions. Returns an aggregate health score and
+    per-file issue details.
+
+    Use this to detect when your project's documentation needs updating.
+    """
+    from writ.core.doc_health import run_health_check
+
+    report = run_health_check(_repo_root())
+    return {
+        "health_score": report.health_score,
+        "total_issues": report.total_issues,
+        "files": [
+            {
+                "path": f.path,
+                "freshness": f.freshness,
+                "issues": [
+                    {"kind": i.kind, "message": i.message}
+                    for i in f.issues
+                ],
+            }
+            for f in report.files
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
