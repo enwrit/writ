@@ -26,7 +26,11 @@ instructions across AI coding tools, projects, and agents.
 ### Quality
 - `writ lint [file|name]` -- score instruction quality (0-100, ML-powered)
 - `writ lint --deep` -- AI-powered deep analysis (requires login)
+- `writ lint --deep-local` -- fully local AI analysis (GPU-accelerated)
 - `writ lint --code` -- deterministic code-only scoring
+- `writ plan review <file>` -- AI-powered plan review (catches technical issues, suggests alternatives)
+- `writ plan review <file> --json` -- structured JSON output for agent consumption
+- `writ docs check` -- project documentation health (dead refs, treeview drift, staleness)
 - `writ diff <file>` -- compare lint score vs previous git commit
 - `writ upgrade [name]` -- check for and apply instruction updates from Hub/PRPM
 
@@ -54,9 +58,17 @@ instructions across AI coding tools, projects, and agents.
 - `writ approvals create` -- request human approval for an agent action
 - `writ approvals list|approve|deny` -- human-in-the-loop approval management
 
+### Configuration
+- `writ model set <provider>` -- configure LLM for plan review (openai, anthropic, gemini, local)
+- `writ model set local --url <url>` -- use LM Studio, Ollama, or any OpenAI-compatible server
+- `writ model list` -- show current model configuration
+- `writ model clear` -- remove model configuration
+- `writ hook install` -- git pre-commit hook for instruction quality checks
+- `writ hook uninstall` -- remove pre-commit hook
+
 ### Integration
 - `writ mcp install` -- auto-configure MCP server in detected IDEs (slim mode, opt-in)
 - `writ mcp uninstall` -- remove writ MCP config from IDEs
-- `writ mcp serve` -- expose writ tools via MCP protocol (auto-installs deps)
+- `writ mcp serve` -- expose writ tools via MCP protocol (21 tools full / 2 slim)
 
 Docs: https://github.com/enwrit/writ
