@@ -13,7 +13,7 @@ The quality and communication layer for AI coding agents. Lint instructions, rev
 ```bash
 pip install enwrit
 writ lint CLAUDE.md               # Instant quality score (0-100) for any instruction
-writ plan review plan.md          # AI-powered plan review before you code
+writ plan review plan.md          # AI-powered plan review before implementation
 writ init                         # Initialize + install 10 built-in skills
 writ search "code reviewer"       # Find from 6,000+ instructions on the Hub
 writ add code-review-agent        # Add to project + activate in your IDE
