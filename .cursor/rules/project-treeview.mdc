@@ -45,7 +45,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── scanner.py              # Detect languages, frameworks; parse_markdown_file() for --file import
 │       │   ├── store.py                # Read/write .writ/{agents,rules,context}/ and ~/.writ/ global store
 │       │   ├── composer.py             # 4-layer context composition engine (the core innovation)
-│       │   ├── formatter.py            # Safe formats: Cursor, Claude Rules, Kiro Steering (auto-detected dirs); shared-file formats (AGENTS.md, Copilot, Windsurf) opt-in via --format
+│       │   ├── formatter.py            # IDE_PATHS central config: 11 auto-detected safe formats (Cursor, Claude, Copilot, Kiro, Windsurf, Cline, Roo, AmazonQ, Gemini, Codex, OpenCode); content-category routing (rules/skills/agents by task_type); legacy shared-file formats opt-in via --format
 │       │   ├── linter.py               # v2 earn-up scoring engine (Tier 1): 6-dimension 0-100, specificity density, verification gradient, critical caps, text quality signals (redundancy, density, duplicates, prose ratio)
 │       │   ├── ml_scorer.py            # Tier 2 ML scoring: compute_score_ml(), m2cgen + TF-IDF inference, template-based suggestions, label-aware issue gating
 │       │   ├── label_scorer.py         # TF-IDF+LGBM label classifier: positional TF-IDF + 26 structural features, 7 boolean labels (4-10ms inference)
@@ -120,7 +120,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, search, templates, import, publish/unpublish)
 │   ├── test_compose.py                 # Composition engine tests
-│   ├── test_formatter.py               # Formatter output tests (Cursor, Claude, AGENTS.md, etc.)
+│   ├── test_formatter.py               # Formatter output tests (IDE_PATHS config, content-category routing, all 11 safe formats, legacy formats)
 │   ├── test_library.py                 # save + list --library tests
 │   ├── test_login.py                   # Login/logout + remote sync + writ add fallback tests (mocked RegistryClient)
 │   ├── test_mcp.py                     # MCP server tools V1-V5 + peer tools + identity + install tests (86 tests)

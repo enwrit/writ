@@ -270,15 +270,25 @@ def get_directory_tree(root: Path | None = None, max_depth: int = 2) -> str:
 EXISTING_AGENT_PATTERNS: dict[str, str] = {
     "AGENTS.md": "agents_md",
     "CLAUDE.md": "claude",
+    "GEMINI.md": "gemini",
     "SKILL.md": "skill",
     ".cursorrules": "cursorrules",
-    ".windsurfrules": "windsurf",
+    ".windsurfrules": "windsurf_legacy",
 }
 
-EXISTING_AGENT_DIRS: dict[str, str] = {
-    ".cursor/rules": "cursor",
-    ".github": "copilot",
-}
+_SCAN_DIRS: list[tuple[str, str, str]] = [
+    (".cursor/rules", "*.mdc", "cursor"),
+    (".claude/rules", "*.md", "claude_rules"),
+    (".kiro/steering", "*.md", "kiro_steering"),
+    (".github/instructions", "*.instructions.md", "copilot"),
+    (".windsurf/rules", "*.md", "windsurf"),
+    (".clinerules", "*.md", "cline"),
+    (".roo/rules", "*.md", "roo"),
+    (".amazonq/rules", "*.md", "amazonq"),
+    (".gemini/rules", "*.md", "gemini"),
+    (".codex/rules", "*.md", "codex"),
+    (".opencode/rules", "*.md", "opencode"),
+]
 
 
 def detect_existing_files(root: Path | None = None) -> list[dict[str, str]]:
@@ -286,7 +296,6 @@ def detect_existing_files(root: Path | None = None) -> list[dict[str, str]]:
     root = root or Path.cwd()
     found: list[dict[str, str]] = []
 
-    # Check single files
     for filename, format_type in EXISTING_AGENT_PATTERNS.items():
         path = root / filename
         if path.exists():
@@ -296,25 +305,23 @@ def detect_existing_files(root: Path | None = None) -> list[dict[str, str]]:
                 "name": path.stem.lower(),
             })
 
-    # Check .cursor/rules/*.mdc
-    cursor_rules = root / ".cursor" / "rules"
-    if cursor_rules.is_dir():
-        for mdc in cursor_rules.glob("*.mdc"):
-            # Skip writ-managed files
-            if mdc.name.startswith("writ-"):
-                continue
-            found.append({
-                "path": str(mdc),
-                "format": "cursor",
-                "name": mdc.stem.lower(),
-            })
+    for dir_rel, glob_pattern, fmt in _SCAN_DIRS:
+        scan_dir = root / dir_rel
+        if scan_dir.is_dir():
+            for f in scan_dir.glob(glob_pattern):
+                if f.name.startswith("writ-"):
+                    continue
+                found.append({
+                    "path": str(f),
+                    "format": fmt,
+                    "name": f.stem.lower(),
+                })
 
-    # Check copilot instructions
     copilot_path = root / ".github" / "copilot-instructions.md"
     if copilot_path.exists():
         found.append({
             "path": str(copilot_path),
-            "format": "copilot",
+            "format": "copilot_legacy",
             "name": "copilot-instructions",
         })
 

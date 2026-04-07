@@ -102,5 +102,6 @@ class PRPMIntegration:
             instructions=content,
             tags=pkg_info.get("tags", []),
             version=pkg_info.get("version", "1.0.0"),
+            task_type=pkg_info.get("subtype") or pkg_info.get("task_type"),
             author=pkg_info.get("author", "prpm"),
         )

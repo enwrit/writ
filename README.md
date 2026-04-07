@@ -120,16 +120,21 @@ writ docs check
 
 ## Works With Your Tools
 
-writ writes to **native IDE files** -- your editor picks them up automatically.
+writ writes to **native IDE files** -- your editor picks them up automatically. Instructions are routed to `rules/`, `skills/`, or `agents/` subdirectories based on type.
 
-| Tool | writ writes to | Mode |
-|------|----------------|------|
-| Cursor | `.cursor/rules/writ-*.mdc` | Auto-detected |
-| Claude Code | `.claude/rules/writ-*.md` | Auto-detected |
-| Kiro | `.kiro/steering/writ-*.md` | Auto-detected |
-| AGENTS.md | `AGENTS.md` | Opt-in (`--format`) |
-| GitHub Copilot | `.github/copilot-instructions.md` | Opt-in (`--format`) |
-| Windsurf | `.windsurfrules` | Opt-in (`--format`) |
+| Tool | Auto-detected | Rules | Skills | Agents |
+|------|:---:|-------|--------|--------|
+| Cursor | Yes | `.cursor/rules/` | `.cursor/skills/writ/` | `.cursor/agents/` |
+| Claude Code | Yes | `.claude/rules/` | `.claude/skills/writ/` | `.claude/agents/` |
+| GitHub Copilot | Yes | `.github/instructions/` | `.github/skills/writ/` | `.github/agents/` |
+| Kiro | Yes | `.kiro/steering/` | `.kiro/skills/writ/` | `.kiro/agents/` |
+| Windsurf | Yes | `.windsurf/rules/` | `.windsurf/skills/writ/` | `.windsurf/agents/` |
+| Codex | Yes | `.codex/rules/` | `.codex/skills/writ/` | `.codex/agents/` |
+| Gemini CLI | Yes | `.gemini/rules/` | `.gemini/skills/writ/` | `.gemini/agents/` |
+| OpenCode | Yes | `.opencode/rules/` | `.opencode/skills/writ/` | `.opencode/agents/` |
+| Cline | Yes | `.clinerules/` | `.cline/skills/writ/` | `.cline/agents/` |
+| Roo Code | Yes | `.roo/rules/` | `.roo/skills/writ/` | `.roo/agents/` |
+| Amazon Q | Yes | `.amazonq/rules/` | `.amazonq/rules/` | `.amazonq/agents/` |
 
 When you run `writ add reviewer`, the tool composes all relevant context and writes it directly into the files your IDE already reads.
 
@@ -140,7 +145,7 @@ When you run `writ add reviewer`, the tool composes all relevant context and wri
 | **Instruction linting** | 6-dimension quality scoring (0-100). Code-based, ML-powered, or AI-powered. |
 | **Plan review** | AI analyzes your implementation plans before coding. Local or cloud models. |
 | **Docs health** | Dead reference detection, treeview drift, staleness checks across your project docs. |
-| **Multi-format export** | One instruction, 6+ IDE formats. Auto-detected for Cursor, Claude Code, Kiro. |
+| **Multi-format export** | One instruction, 11 auto-detected IDE formats + legacy opt-in formats. |
 | **Personal library + cloud sync** | `writ save` → `writ add --lib` on any device. Your instructions follow you. |
 | **Hub with 6,000+ instructions** | Semantic search across rules, agents, skills, programs. `writ search` / `writ add`. |
 | **Built-in skills** | 10 community-tested skills auto-installed on `writ init`. |

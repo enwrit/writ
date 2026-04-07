@@ -44,14 +44,23 @@ src/writ/
 
 The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --deep` (backend Gemini), `writ plan review` (user-configured model or backend), and `writ docs check --deep` (planned). Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
 
-| Tool | We write to | Mode |
-|------|------------|------|
-| Cursor | `.cursor/rules/writ-*.mdc` | Default (auto-detected) |
-| Claude Code | `.claude/rules/writ-*.md` | Default (auto-detected) |
-| Kiro | `.kiro/steering/writ-*.md` | Default (auto-detected) |
-| AGENTS.md | `AGENTS.md` | Opt-in (`--format agents_md`) |
-| Copilot | `.github/copilot-instructions.md` | Opt-in (`--format copilot`) |
-| Windsurf | `.windsurfrules` | Opt-in (`--format windsurf`) |
+11 tools auto-detected via `IDE_PATHS` in `formatter.py`. Instructions routed to `rules/`, `skills/writ/`, or `agents/` based on `task_type`:
+
+| Tool | Detect | Example path | Mode |
+|------|--------|-------------|------|
+| Cursor | `.cursor/` | `.cursor/{rules,skills/writ,agents}/writ-*.mdc` | Auto-detected |
+| Claude Code | `.claude/` | `.claude/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| GitHub Copilot | `.github/` | `.github/{instructions,skills/writ,agents}/writ-*` | Auto-detected |
+| Kiro | `.kiro/` | `.kiro/{steering,skills/writ,agents}/writ-*.md` | Auto-detected |
+| Windsurf | `.windsurf/` | `.windsurf/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| Codex | `.codex/` | `.codex/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| Gemini CLI | `.gemini/` | `.gemini/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| OpenCode | `.opencode/` | `.opencode/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| Cline | `.clinerules/` | `.clinerules/writ-*.md`, `.cline/agents/` | Auto-detected |
+| Roo Code | `.roo/` | `.roo/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| Amazon Q | `.amazonq/` | `.amazonq/{rules,agents}/writ-*.md` | Auto-detected |
+
+Legacy shared-file formats (opt-in via `--format`): `claude`, `agents_md`, `copilot_legacy`, `windsurf_legacy`, `codex_legacy`, `kiro`.
 
 ## Core Commands
 

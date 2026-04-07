@@ -91,25 +91,22 @@ def _remove_from_mcp_json(path: Path, servers_key: str) -> bool:
 
 
 def _detect_ide_configs(root: Path) -> list[tuple[str, Path, str]]:
-    """Detect IDE config files. Returns [(ide_name, config_path, servers_key)]."""
+    """Detect IDE config files. Returns [(ide_name, config_path, servers_key)].
+
+    Uses IDE_PATHS.mcp for tools that declare MCP config paths.
+    VS Code is handled specially (it's an editor, not in IDE_PATHS).
+    """
+    from writ.core.formatter import IDE_PATHS
+
     configs: list[tuple[str, Path, str]] = []
 
-    if (root / ".cursor").is_dir():
-        configs.append(("Cursor", root / ".cursor" / "mcp.json", "mcpServers"))
+    for _key, cfg in IDE_PATHS.items():
+        if cfg.mcp and (root / cfg.detect).exists():
+            mcp_path, servers_key = cfg.mcp
+            configs.append((cfg.name, root / mcp_path, servers_key))
 
     if (root / ".vscode").is_dir():
         configs.append(("VS Code", root / ".vscode" / "mcp.json", "servers"))
-
-    if (root / ".claude").is_dir() or (root / "CLAUDE.md").exists():
-        configs.append(("Claude Code", root / ".mcp.json", "mcpServers"))
-
-    if (root / ".kiro").is_dir():
-        configs.append(("Kiro", root / ".kiro" / "settings" / "mcp.json", "mcpServers"))
-
-    if (root / ".windsurfrules").exists():
-        ws_dir = Path.home() / ".codeium" / "windsurf"
-        if ws_dir.is_dir():
-            configs.append(("Windsurf", ws_dir / "mcp_config.json", "mcpServers"))
 
     return configs
 

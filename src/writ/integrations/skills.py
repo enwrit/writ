@@ -95,6 +95,7 @@ def _install_http(skill_name: str) -> InstructionConfig | None:
         instructions=skill_md,
         tags=data.get("capabilities", []) or data.get("skillTypes", []) or [],
         version="1.0.0",
+        task_type="skill",
         author=data.get("owner", "agent-skills"),
     )
 
@@ -134,6 +135,7 @@ def _install_cli(skill_name: str) -> InstructionConfig | None:
             instructions=skill_info.get("content", ""),
             tags=skill_info.get("tags", []),
             version=skill_info.get("version", "1.0.0"),
+            task_type="skill",
             author=skill_info.get("author", "agent-skills"),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):

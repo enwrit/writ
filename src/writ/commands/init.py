@@ -13,9 +13,9 @@ from rich.panel import Panel
 
 from writ.core import scanner, store
 from writ.core.formatter import (
-    ClaudeRulesFormatter,
-    CursorFormatter,
-    KiroSteeringFormatter,
+    IDE_PATHS,
+    IDEFormatter,
+    _build_filename,
 )
 from writ.core.models import (
     CompositionConfig,
@@ -137,16 +137,10 @@ def _detect_active_tools() -> list[str]:
     only activated when the user explicitly passes ``--format <name>``.
     """
     root = Path.cwd()
-    formats: list[str] = []
-
-    if (root / ".cursor").is_dir():
-        formats.append("cursor")
-    if (root / ".claude").is_dir():
-        formats.append("claude_rules")
-    if (root / ".kiro").is_dir():
-        formats.append("kiro_steering")
-
-    return formats
+    return [
+        key for key, cfg in IDE_PATHS.items()
+        if (root / cfg.detect).exists()
+    ]
 
 
 def _import_existing_files(existing: list[dict[str, str]]) -> int:
@@ -245,22 +239,11 @@ def _install_writ_context(detected_formats: list[str]) -> None:
 
     root = Path.cwd()
     for fmt in detected_formats:
-        if fmt == "cursor":
-            path = CursorFormatter().write(cfg, content, root=root)
-        elif fmt == "claude_rules":
-            path = ClaudeRulesFormatter().write(cfg, content, root=root)
-        elif fmt == "kiro_steering":
-            path = KiroSteeringFormatter().write(cfg, content, root=root)
-        else:
+        if fmt not in IDE_PATHS:
             continue
+        formatter = IDEFormatter(fmt)
+        path = formatter.write(cfg, content, root=root)
         console.print(f"[green]Wrote[/green] writ-context -> {path}")
-
-
-_SKILL_DIRS: dict[str, tuple[str, str]] = {
-    "cursor": (".cursor/skills/writ", "mdc"),
-    "claude_rules": (".claude/skills/writ", "md"),
-    "kiro_steering": (".kiro/skills/writ", "md"),
-}
 
 
 def _install_builtin_skills(detected_formats: list[str]) -> int:
@@ -306,24 +289,25 @@ def _install_builtin_skills(detected_formats: list[str]) -> int:
 
         wrote_to_ide = False
         for fmt in detected_formats:
-            if fmt not in _SKILL_DIRS:
+            if fmt not in IDE_PATHS:
                 continue
-            dir_rel, ext = _SKILL_DIRS[fmt]
-            skill_dir = root / dir_rel
+            ide_config = IDE_PATHS[fmt]
+            skills_entry = ide_config.skills
+            skill_dir = root / skills_entry.directory
             skill_dir.mkdir(parents=True, exist_ok=True)
-            filename = f"{skill_name}.{ext}"
+            filename = _build_filename(skills_entry, skill_name)
             path = skill_dir / filename
 
-            if ext == "mdc":
-                fm = yaml_dumps({
-                    "description": f"Built-in skill: "
-                    f"{skill_name.replace('-', ' ')}",
-                    "alwaysApply": True,
-                }).strip()
-                path.write_text(
-                    f"---\n{fm}\n---\n\n{content}\n",
-                    encoding="utf-8",
-                )
+            if skills_entry.frontmatter_fn:
+                fm_dict = skills_entry.frontmatter_fn(cfg)
+                if fm_dict:
+                    fm_str = yaml_dumps(fm_dict).strip()
+                    path.write_text(
+                        f"---\n{fm_str}\n---\n\n{content}\n",
+                        encoding="utf-8",
+                    )
+                else:
+                    path.write_text(content + "\n", encoding="utf-8")
             else:
                 path.write_text(content + "\n", encoding="utf-8")
             wrote_to_ide = True

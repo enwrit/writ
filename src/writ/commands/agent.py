@@ -9,7 +9,7 @@ import typer
 from rich.table import Table
 
 from writ.core import store
-from writ.core.formatter import get_formatter
+from writ.core.formatter import IDE_PATHS, get_formatter
 from writ.core.models import CompositionConfig, InstructionConfig
 from writ.utils import console, slugify
 
@@ -22,22 +22,18 @@ def _require_init() -> None:
 
 
 def _detect_ide_formats() -> list[str]:
-    """Detect which IDE rule directories exist (safe, non-intrusive formats)."""
+    """Detect which IDE/CLI tool directories exist (safe, non-intrusive formats)."""
     root = Path.cwd()
-    formats: list[str] = []
-    if (root / ".cursor").is_dir():
-        formats.append("cursor")
-    if (root / ".claude").is_dir():
-        formats.append("claude_rules")
-    if (root / ".kiro").is_dir():
-        formats.append("kiro_steering")
-    return formats
+    return [
+        key for key, cfg in IDE_PATHS.items()
+        if (root / cfg.detect).exists()
+    ]
 
 
 def _write_to_ide(
     cfg: InstructionConfig, content: str, *, formats: list[str] | None = None,
 ) -> list[str]:
-    """Write instruction to detected IDE rule directories. Returns written paths."""
+    """Write instruction to detected IDE directories. Routes by task_type."""
     target_formats = formats or _detect_ide_formats()
     if not target_formats:
         return []
@@ -308,7 +304,11 @@ def _cfg_from_dict(data: dict) -> InstructionConfig | None:
 
 
 def _cfg_from_hub(data: dict, *, source: str = "") -> InstructionConfig | None:
-    """Build InstructionConfig from a Hub download response."""
+    """Build InstructionConfig from a Hub download response.
+
+    Internal enwrit agents use ``task_type``; external catalog entries
+    (PRPM, github-skills) use ``subtype`` for the same purpose.
+    """
     nm = data.get("name") or data.get("display_name")
     if not nm:
         return None
@@ -320,7 +320,7 @@ def _cfg_from_hub(data: dict, *, source: str = "") -> InstructionConfig | None:
             instructions=instr,
             tags=data.get("tags", []),
             version=data.get("version", "1.0.0"),
-            task_type=data.get("task_type"),
+            task_type=data.get("task_type") or data.get("subtype"),
             author=data.get("author", source or "hub"),
         )
         if source:
