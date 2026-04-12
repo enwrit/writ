@@ -1,48 +1,30 @@
 # Documentation Update Pass
 
-You are performing a documentation health update for this project. Below this
-instruction you will find the results of a heuristic health check -- concrete
-findings about dead references, treeview drift, staleness, and contradictions.
-Your job is to act on those findings and update the documentation.
+You are performing a documentation health update for this project. Below this instruction you will find the results of a heuristic health check -- concrete findings about dead references, treeview drift, staleness, and contradictions. Your job is to act on those findings and update the documentation.
 
 ## Scope: What to Focus On
 
 Do NOT blindly read every file in the documentation index. Prioritize:
 
-1. **Recently changed files** -- run `git status --short` and
-   `git log --oneline -15 --name-only` to see what changed. Documentation
-   describing changed code is most likely to be stale.
-2. **Core files from the index** -- the `## Core files` section in the docs
-   index lists frequently maintained files. These are high-priority.
-3. **Files flagged by the health check** -- the heuristic findings below
-   identify specific issues. Address those directly.
-4. **Cold files** -- only touch archived or rarely-updated files if the health
-   check specifically flags them (e.g., a dead reference pointing to a cold
-   file).
+1. **Recently changed files** -- run `git status --short` and `git log --oneline -15 --name-only` to see what changed. Documentation describing changed code is most likely to be stale.
+2. **Core files from the index** -- the `## Core files` section in the docs index lists frequently maintained files. These are high-priority.
+3. **Files flagged by the health check** -- the heuristic findings below identify specific issues. Address those directly.
+4. **Cold files** -- only touch archived or rarely-updated files if the health check specifically flags them (e.g., a dead reference pointing to a cold file).
 
-**Non-git fallback**: If git is not available (not a git repo, or git not
-installed), skip the git-based steps above and focus entirely on the health
-check findings and the documentation index.
+**Non-git fallback**: If git is not available (not a git repo, or git not installed), skip the git-based steps above and focus entirely on the health check findings and the documentation index.
 
 ## Step 1: Review Health Check Findings
 
-Read through the health check results provided below this instruction. For each
-issue:
+Read through the health check results provided below this instruction. For each issue:
 
-- **Dead references**: Verify the reference is truly dead (not a false
-  positive), then update or remove it.
-- **Treeview drift**: Compare the documented treeview against the actual file
-  tree. Add missing files, remove deleted ones, fix renamed entries.
-- **Staleness**: Read the stale file and the code it describes. Update any
-  claims that no longer hold (counts, paths, descriptions, examples).
-- **Contradictions**: Read both conflicting files. Determine which is correct
-  (usually the more recently updated one). Fix the incorrect file.
+- **Dead references**: Verify the reference is truly dead (not a false positive), then update or remove it.
+- **Treeview drift**: Compare the documented treeview against the actual file tree. Add missing files, remove deleted ones, fix renamed entries.
+- **Staleness**: Read the stale file and the code it describes. Update any claims that no longer hold (counts, paths, descriptions, examples).
+- **Contradictions**: Read both conflicting files. Determine which is correct (usually the more recently updated one). Fix the incorrect file.
 
 ## Step 2: Cross-Reference with Recent Changes
 
-After addressing the flagged issues, check whether recent code changes
-(from `git log`) introduced new files, commands, or patterns that should be
-documented but aren't yet covered. Look for:
+After addressing the flagged issues, check whether recent code changes (from `git log`) introduced new files, commands, or patterns that should be documented but aren't yet covered. Look for:
 
 - New source files with no corresponding documentation entry
 - Changed CLI commands, flags, or configuration formats
@@ -61,8 +43,7 @@ Fix documentation with minimal edits:
 - Preserve the original author's style and structure
 - Match annotation conventions used in treeviews and the docs index
 
-Do NOT rewrite files. Do NOT restructure documentation. Fix what is wrong and
-move on.
+Do NOT rewrite files. Do NOT restructure documentation. Fix what is wrong and move on.
 
 ## Step 4: Update the Documentation Index
 
@@ -77,9 +58,7 @@ The index must stay in sync with reality.
 
 ## Step 5: Log the Summary
 
-As the final step, append a compact entry to the `writ-log` file (visible in
-your IDE's rules/context directory). This is critical -- it turns your ephemeral
-session context into persistent project knowledge.
+As the final step, append a compact entry to the `writ-log` file (visible in your IDE's rules/context directory). This is critical -- it turns your ephemeral session context into persistent project knowledge.
 
 Format:
 
@@ -97,13 +76,11 @@ Example:
   architecture.md needs full rewrite after v2 migration (flagged for human).
 ```
 
-Keep it to 3-5 lines. Include what changed, why key decisions were made, and
-anything you chose to defer rather than fix now.
+Keep it to 3-5 lines. Include what changed, why key decisions were made, and anything you chose to defer rather than fix now.
 
 ---
 
 ## Health Check Results
 
-The following findings were produced by `writ docs check` (heuristic analysis).
-Use them as your starting point:
+The following findings were produced by `writ docs check` (heuristic analysis). Use them as your starting point:
 

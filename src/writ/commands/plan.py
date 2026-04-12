@@ -56,16 +56,14 @@ _BUILTIN_PROMPTS = Path(__file__).resolve().parent.parent / "templates" / "_buil
 
 def _run_local_review(plan_path: Path, with_plan: bool) -> None:
     """Print plan review rubric as an injected instruction for the IDE's AI."""
-    wrapper_path = _BUILTIN_PROMPTS / "plan-review-local-v1.md"
-    if not wrapper_path.exists():
+    rubric_path = _BUILTIN_PROMPTS / "plan-review-local-v1.md"
+    if not rubric_path.exists():
         console.print("[red]Local review prompt not found.[/red]")
         raise typer.Exit(1)
-    wrapper = wrapper_path.read_text(encoding="utf-8")
-    rubric = _load_rubric()
+    rubric = rubric_path.read_text(encoding="utf-8")
 
     console.print("[bold cyan]--- Plan Review Instruction ---[/bold cyan]")
     console.print()
-    console.print(wrapper)
     console.print(rubric)
 
     if with_plan:

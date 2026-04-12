@@ -126,7 +126,7 @@ class TestPlanReviewLocal:
         result = runner.invoke(app, ["plan", "review", str(plan), "--local"])
         assert result.exit_code == 0
         assert "Plan Review" in result.output
-        assert "review priorities" in result.output
+        assert "Review Priorities" in result.output
         assert "Step 1: Do the thing" not in result.output
 
     def test_local_with_plan_includes_content(self, tmp_project: Path):
