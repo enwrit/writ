@@ -1,18 +1,10 @@
 ## Type Context: Rule
 
-This file appears to be a **rule** (detected from its folder location).
-Rules constrain agent behavior -- they define what agents must or must not do.
+This file appears to be a **rule** (detected from its folder location). Rules constrain AI LLM behavior and are typically always-on. cursor-doctor found 75% of popular community rules mix multiple concerns in one file, and 60% of projects scored C or lower on rule quality.
 
-Adapt your review with these rule-specific priorities:
+Prioritize these rule-specific concerns:
 
-- **Testability**: Can each rule be mechanically verified? "Write clean code"
-  is untestable. "Run `ruff check` with zero errors" is testable.
-- **Contradiction check**: Do any rules conflict with each other? Look for
-  pairs where following one rule forces violating another.
-- **Exception handling**: Are edge cases addressed? Rules that say "always"
-  or "never" without exceptions will break in legitimate scenarios.
-- **Priority/precedence**: If rules conflict, which wins? Without explicit
-  ordering, agents make arbitrary choices.
-- **Scope clarity**: Does each rule state when it applies? A rule that
-  applies to "all files" when it should only apply to tests wastes tokens
-  and causes false constraints.
+- **Verifiability**: Can the rule's objective be checked with a command or observable condition? "Write clean code" is unverifiable. "Run `ruff check` with zero errors before committing" is. Rules without verification produce no observable change in agent behavior (Blake Crosley).
+- **Single concern**: Does this rule try to cover too many topics? Rules mixing coding style, git workflow, and testing in one file are harder for agents to follow. If there are 3+ unrelated sections, suggest splitting for modularity.
+- **Constraint count**: AGENTIF data shows compliance drops sharply past ~20 constraints. If this rule has many directives, flag the risk and suggest prioritizing the critical ones.
+- **Exception handling**: Rules that say "always" or "never" without exceptions break in legitimate edge cases. Check for rigid absolutes that need escape hatches.

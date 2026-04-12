@@ -29,7 +29,7 @@ wasting tokens. Flag it only if replacing it would meaningfully help the agent.
 
 ## 2. Verification Gaps
 
-Does the instruction define how the agent proves it is done? Look for:
+Does the instruction define how the AI agent/LLM proves it is done? Look for:
 
 - **Closure definition**: A concrete "done when..." statement
 - **Verification commands**: Backtick-wrapped commands the agent should run
@@ -57,7 +57,7 @@ Flag content that costs tokens without adding value:
 - **General knowledge**: Restating things any LLM already knows
   ("Python uses indentation", "git is version control")
 - **Filler phrases**: "It is important to note that", "Please make sure to"
-- **Redundancy**: The same point stated in multiple places
+- **Redundancy & repetition**: The same point stated in multiple places
 
 For each item, estimate tokens saved by removing it.
 
@@ -66,7 +66,7 @@ For each item, estimate tokens saved by removing it.
 - **Wall of text**: Prose paragraphs without headers or bullets. LLMs parse
   structured content more reliably than dense prose.
 - **Missing sections**: No clear separation between rules, commands, examples
-- **Ordering**: Critical rules buried at the bottom (put ALWAYS/NEVER first)
+- **Ordering**: The most important information may have an advantage from being either first or in the end of the file.
 
 ## 6. Missing Examples
 
@@ -102,3 +102,4 @@ Small fixes (< 1 minute each) that remove waste or add clarity.
 Be pragmatic. If the file is already good, say so briefly and move on.
 Do not manufacture problems to fill sections -- a short review of a
 good file is better than a long review that nitpicks irrelevancies.
+Feedback should be useful and actionable.
