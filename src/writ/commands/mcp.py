@@ -42,7 +42,14 @@ def _resolve_writ_command(slim: bool = True) -> dict:
     if slim:
         args_suffix.append("--slim")
 
-    if sys.prefix != sys.base_prefix:
+    def _in_venv() -> bool:
+        if sys.prefix != sys.base_prefix:
+            return True
+        exe = Path(sys.executable).resolve()
+        parts = [p.lower() for p in exe.parts]
+        return any(v in parts for v in ("venv", ".venv", "env", ".env", "virtualenv"))
+
+    if _in_venv():
         python_path = str(Path(sys.executable).resolve())
         return {"command": python_path, "args": ["-m", "writ", *args_suffix], "disabled": False}
 

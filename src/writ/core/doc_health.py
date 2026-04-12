@@ -112,10 +112,25 @@ def find_doc_files(root: Path | None = None) -> list[Path]:
     return files
 
 
+_FENCED_CODE_BLOCK_RE = re.compile(
+    r'^[ \t]*(`{3,}|~{3,}).*?\n.*?^[ \t]*\1[ \t]*$',
+    re.MULTILINE | re.DOTALL,
+)
+
+_INLINE_CODE_RE = re.compile(r'`[^`\n]+`')
+
+
+def _strip_code_blocks(text: str) -> str:
+    """Remove fenced code blocks and inline code spans."""
+    text = _FENCED_CODE_BLOCK_RE.sub('', text)
+    return _INLINE_CODE_RE.sub('', text)
+
+
 def extract_file_references(text: str) -> list[str]:
     """Extract file path references from instruction text."""
+    cleaned = _strip_code_blocks(text)
     refs: list[str] = []
-    for match in _FILE_PATH_RE.finditer(text):
+    for match in _FILE_PATH_RE.finditer(cleaned):
         backtick_content = match.group(1)
         path = backtick_content or match.group(2)
         if not path or _is_noise_path(path):
@@ -128,7 +143,7 @@ def extract_file_references(text: str) -> list[str]:
 
 _SHELL_CMD_RE = re.compile(
     r'(grep|sed|awk|find|cat|echo|curl|wget|rm|cp|mv|mkdir|chmod|'
-    r'git|pip|npm|docker|tar|ssh|scp)\s',
+    r'git|pip|npm|docker|tar|ssh|scp|writ)\s',
     re.IGNORECASE,
 )
 

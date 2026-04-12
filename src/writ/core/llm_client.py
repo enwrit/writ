@@ -308,7 +308,9 @@ def call_backend_plan_review(
     if resp.status_code != 200:
         raise LLMError(f"Backend error {resp.status_code}: {resp.text[:500]}")
     data = resp.json()
-    return data.get("review", data.get("feedback", json.dumps(data, indent=2)))
+    if "feedback" in data or "alternatives" in data or "overall_assessment" in data:
+        return data
+    return data.get("review", json.dumps(data, indent=2))
 
 
 def is_interactive() -> bool:

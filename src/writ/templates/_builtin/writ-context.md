@@ -51,7 +51,7 @@ instructions across AI coding tools, projects, and agents.
 - `writ publish <name>` / `writ unpublish <name>` -- public Hub visibility
 
 ### Agent Communication
-- `writ chat start --with <repo> --goal "purpose"` -- start conversation with a peer repo's agent (--goal is required)
+- `writ chat start --with <repo> [--goal "purpose"]` -- start conversation with a peer repo's agent
 - `writ chat send <id> "msg" --file <path>` -- send message with optional file attachments
 - `writ chat list` / `writ chat read` -- manage conversations
 - `writ inbox` -- show conversations with unread messages

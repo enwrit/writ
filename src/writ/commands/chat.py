@@ -92,7 +92,7 @@ def _try_invoke_peer(
 @chat_app.command(name="start")
 def chat_start(
     with_repo: str = typer.Option(..., "--with", help="Peer repo name (from peers.yaml)."),
-    goal: str = typer.Option(..., "--goal", help="Goal for this conversation."),
+    goal: str = typer.Option("General discussion", "--goal", help="Goal for this conversation."),
     message: str = typer.Option("", "--message", "-m", help="Opening message (optional)."),
     invoke: bool = typer.Option(True, "--invoke/--no-invoke", help="Auto-invoke peer agent."),
 ) -> None:

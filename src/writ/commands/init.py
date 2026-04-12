@@ -31,6 +31,27 @@ _TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates"
 _BUILTIN_ROOT = _TEMPLATE_ROOT / "_builtin"
 
 
+def _refresh_writ_context_if_stale() -> bool:
+    """Silently overwrite writ-context in IDE dirs if the bundled version changed."""
+    context_file = _BUILTIN_ROOT / "writ-context.md"
+    if not context_file.exists():
+        return False
+
+    bundled = context_file.read_text(encoding="utf-8").strip()
+
+    existing_cfg = store.load_instruction("writ-context")
+    if existing_cfg and existing_cfg.instructions.strip() == bundled:
+        return False
+
+    detected_formats = [
+        key for key, cfg in IDE_PATHS.items()
+        if (Path.cwd() / cfg.detect).exists()
+    ]
+
+    _install_writ_context(detected_formats)
+    return True
+
+
 def init_command(
     template: Annotated[
         str | None,
@@ -57,9 +78,12 @@ def init_command(
     and creates the .writ/ directory structure.
     """
     if store.is_initialized() and not force:
+        refreshed = _refresh_writ_context_if_stale()
         console.print(
             "[yellow]Already initialized.[/yellow] Use --force to reinitialize."
         )
+        if refreshed:
+            console.print("[green]Refreshed[/green] writ-context to latest version.")
         raise typer.Exit()
 
     # 1. Create .writ/ directory structure (clean content dirs on --force)

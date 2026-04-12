@@ -344,6 +344,7 @@ class TestMcpCommandResolution:
         monkeypatch.setattr("shutil.which", lambda cmd: f"/usr/bin/{cmd}" if cmd == "uvx" else None)
         monkeypatch.setattr(sys, "prefix", "/usr")
         monkeypatch.setattr(sys, "base_prefix", "/usr")
+        monkeypatch.setattr(sys, "executable", "/usr/bin/python3")
         entry = mcp_cmd._resolve_writ_command(slim=True)
         assert entry["command"] == "uvx"
         assert "enwrit" in entry["args"]
@@ -356,6 +357,7 @@ class TestMcpCommandResolution:
         monkeypatch.setattr("shutil.which", lambda cmd: None if cmd == "uvx" else f"/usr/bin/{cmd}")
         monkeypatch.setattr(sys, "prefix", "/usr")
         monkeypatch.setattr(sys, "base_prefix", "/usr")
+        monkeypatch.setattr(sys, "executable", "/usr/bin/python3")
         entry = mcp_cmd._resolve_writ_command(slim=False)
         assert entry["command"] == "writ"
         assert "--slim" not in entry["args"]

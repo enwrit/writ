@@ -1,6 +1,6 @@
 [project]
 name = "enwrit"
-version = "0.4.13"
+version = "0.4.14"
 description = "The quality and communication layer for AI coding agents. Lint instructions, review plans, check documentation health, and connect agents across repos, devices, and tools."
 readme = "README.md"
 license = {text = "MIT"}

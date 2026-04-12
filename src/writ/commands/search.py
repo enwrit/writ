@@ -144,10 +144,18 @@ def _display_results(query: str, results: list[dict], limit: int) -> None:
             safe_desc = desc[:100].encode("ascii", errors="replace").decode("ascii")
             console.print(f"     {safe_desc}")
 
-        add_cmd = f"writ add {name}"
         if source and source != "enwrit":
-            add_cmd += f" --from {source}"
-        console.print(f"     [dim]{add_cmd}[/dim]\n")
+            console.print(
+                f"     [dim]writ add {name}[/dim]"
+                f"  [dim](from Hub)[/dim]"
+            )
+            console.print(
+                f"     [dim]writ add {name}"
+                f" --from {source}[/dim]"
+                f"  [dim](latest from {source})[/dim]\n"
+            )
+        else:
+            console.print(f"     [dim]writ add {name}[/dim]\n")
 
 
 def _format_score(score: int | None) -> str:

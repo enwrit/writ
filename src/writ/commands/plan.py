@@ -61,9 +61,11 @@ def _display_review(review_text: str | list | dict, model_label: str, file_path:
         if isinstance(review_text, dict):
             data = review_text
         elif isinstance(review_text, list):
-            data = review_text[0] if review_text and isinstance(review_text[0], dict) else {}
+            data = {"feedback": review_text}
         else:
             data = json.loads(review_text)
+            if isinstance(data, list):
+                data = {"feedback": data}
     except (json.JSONDecodeError, TypeError):
         console.print(Panel(header, border_style="cyan"))
         console.print(str(review_text))

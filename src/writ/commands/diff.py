@@ -98,7 +98,12 @@ def _git_show_blob(repo_root: Path, ref: str, git_path: str) -> str:
     )
     if proc.returncode != 0:
         err = (proc.stderr or "").strip()
-        if "does not exist" in err or "bad revision" in err.lower():
+        not_found = (
+            "does not exist" in err
+            or "bad revision" in err.lower()
+            or "exists on disk, but not in" in err
+        )
+        if not_found:
             console.print(
                 f"[yellow]No previous version to compare.[/yellow] "
                 f"The file may only exist in the current commit.\n"
