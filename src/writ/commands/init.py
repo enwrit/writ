@@ -116,6 +116,7 @@ def init_command(
         "  [cyan]writ lint <file>[/cyan]       Score instruction quality\n"
         "  [cyan]writ list[/cyan]              List instructions in this project\n"
         "  [cyan]writ plan review <file>[/cyan] AI-powered plan review\n"
+        "  [cyan]writ docs init[/cyan]         Set up documentation health tracking\n"
         "  [cyan]writ docs check[/cyan]        Documentation health scan\n"
         "\n"
         "  [dim]writ save <name>[/dim]       [dim]Save to personal library (cross-device)[/dim]\n"

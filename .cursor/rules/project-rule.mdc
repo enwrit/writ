@@ -15,10 +15,13 @@ The communication layer for AI agents. Routes context between repos, devices, an
 
 Core capabilities:
 1. **Context composition** -- layer project + team + agent + handoff context into one instruction set
-2. **Personal agent library with cloud sync** -- save agents to enwrit.com, access from any device
-3. **Cross-project memory** -- export context from Repo A, import into Repo B
+2. **Instruction quality scoring** -- 3-tier lint (code + ML + AI), plan review, pre-commit hooks
+3. **Knowledge health** -- schema-driven documentation health-checking (`writ docs init/check/update`). Uses the "commands as injected instructions" pattern: writ prints instructions for the IDE's own LLM to execute, zero API cost. Validated by Karpathy's LLM Wiki (5K+ stars) as one of three core operations for knowledge management.
+4. **Personal AI instructions with cloud sync** -- save instructions to enwrit.com, access from any device
+5. **Cross-project memory** -- export context from Repo A, import into Repo B
+6. **Agent-to-agent communication** -- structured conversations between agents in different repos (local filesystem or backend relay), with MCP Polling, CLI agent invocation, and API fallback
 
-4. **Agent-to-agent communication** -- structured conversations between agents in different repos (local filesystem or backend relay), with MCP Polling, CLI agent invocation, and API fallback
+**Architectural pattern -- "commands as injected instructions"**: Some writ commands (`writ docs init`, `writ docs update`) don't call APIs. They return plain text instructions that the IDE's built-in LLM executes. No cost to writ. Works with any model. The instructions are stored as versioned `.md` files in `templates/_builtin/prompts/`.
 
 **Future direction**: full A2A protocol endpoints, mobile approval workflows.
 
@@ -42,7 +45,7 @@ src/writ/
 
 ## How It Works
 
-The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --deep` (backend Gemini), `writ plan review` (user-configured model or backend), and `writ docs check --deep` (planned). Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
+The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --deep` (backend Gemini) and `writ plan review` (user-configured model or backend). `writ docs update` uses the "commands as injected instructions" pattern -- it prints instructions for the IDE's own LLM to execute, no API cost to writ. Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
 
 11 tools auto-detected via `IDE_PATHS` in `formatter.py`. Instructions routed to `rules/`, `skills/writ/`, or `agents/` based on `task_type`:
 
@@ -86,13 +89,15 @@ writ lint <name|file>           Validate quality (auto-detects file vs store nam
 writ lint --code                Force Tier 1 code-only scoring (deterministic)
 writ lint --score               Output headline score only (machine-readable)
 writ lint --quiet               Output score + dimension table only (no issues/suggestions)
-writ lint <file> --deep         AI-powered Tier 3 scoring via enwrit.com (requires login)
+writ lint <file> --deep         Deep qualitative review (prints analysis instruction for IDE's AI)
+writ lint <file> --deep --fix  Deep review + instruct the AI to apply fixes directly
+writ lint <file> --deep-api    AI-powered Tier 3 scoring via enwrit.com API (requires login)
 writ connect                    Interactive peer setup wizard for real repos
 writ publish <name>             Make instruction publicly discoverable on enwrit.com
 writ sync                       Bulk bidirectional library sync (confirmation prompt for >5 ops)
 writ sync --dry-run             Preview what would sync without changing anything
 writ mcp install                Install MCP server config to detected IDEs (slim mode by default)
-writ mcp install --full         Install with all 21 MCP tools exposed
+writ mcp install --full         Install with all 24 MCP tools exposed
 writ mcp uninstall              Remove MCP server config from IDEs
 writ mcp serve                  Start MCP server (auto-installs deps on first run)
 writ handoff create <from> <to> Create context handoff between agents
@@ -109,7 +114,11 @@ writ peers add/list/remove      Manage peer repo connections (local or remote)
 writ diff <file>                Compare current lint score vs previous git commit
 writ upgrade [name]             Check for and apply instruction updates from Hub/PRPM
 writ plan review <file>         AI-powered plan review (uses writ model config or backend Gemini)
-writ docs check                 Project documentation health analysis (dead refs, treeview drift, staleness)
+writ docs init                  Create documentation index for knowledge health tracking
+writ docs check                 Heuristic documentation health scan (dead refs, treeview drift, staleness)
+writ docs update                AI-powered documentation update pass (check + injected instruction for LLM)
+writ query                      Show documentation index (agent navigation of project knowledge)
+writ status                     Recent activity log + documentation health score
 writ hook install/uninstall     Git pre-commit hook for instruction quality checks
 writ model set/list/clear       Configure LLM provider for plan review (openai, anthropic, gemini, local)
 ```

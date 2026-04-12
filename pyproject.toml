@@ -1,14 +1,18 @@
 [project]
 name = "enwrit"
-version = "0.4.12"
-description = "The communication layer for AI agents. Route context between repos, devices, and tools."
+version = "0.4.13"
+description = "The quality and communication layer for AI coding agents. Lint instructions, review plans, check documentation health, and connect agents across repos, devices, and tools."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
     {name = "enwrit", email = "hello@enwrit.com"},
 ]
-keywords = ["ai", "agents", "cli", "instructions", "cursor", "claude", "copilot", "agents-md"]
+keywords = [
+    "ai", "agents", "instructions", "lint", "quality",
+    "cursor", "claude", "copilot", "windsurf", "kiro", "codex", "gemini", "opencode", "cline",
+    "mcp", "plan-review", "skills", "cli",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -18,8 +22,9 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Text Processing :: Markup :: Markdown",
 ]
 dependencies = [
     "typer>=0.15",
@@ -48,8 +53,10 @@ local = [
 
 [project.urls]
 Homepage = "https://enwrit.com"
+Documentation = "https://enwrit.com"
 Repository = "https://github.com/enwrit/writ"
 Issues = "https://github.com/enwrit/writ/issues"
+Hub = "https://enwrit.com/hub"
 
 [project.scripts]
 writ = "writ.cli:app"

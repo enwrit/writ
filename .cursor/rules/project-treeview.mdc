@@ -26,10 +26,10 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── handoff.py              # writ handoff -- create/apply context handoffs between agents
 │       │   ├── memory.py               # writ memory export/import/list -- cross-project memory sharing
 │       │   ├── publish.py              # writ publish/unpublish [--yes] -- make instructions publicly discoverable on enwrit.com
-│       │   ├── lint.py                 # writ lint [file|name] [--deep] [--deep-local] [--code] [--json] [--ci] [--stop-server] -- quality scoring (Tier 2 ML default, --code Tier 1, --deep Tier 3 AI)
+│       │   ├── lint.py                 # writ lint [file|name] [--deep] [--deep --fix] [--deep-api] [--deep-local] [--code] [--json] [--ci] [--stop-server] -- quality scoring (Tier 2 ML default, --deep qualitative review, --fix auto-apply, --deep-api Tier 3 AI)
 │       │   ├── connect.py              # writ connect -- interactive peer setup wizard for real repos
 │       │   ├── sync.py                 # writ sync [--push|--pull|--prefer-local|--dry-run] -- bulk bidirectional library sync with confirmation prompt
-│       │   ├── mcp.py                  # writ mcp install/uninstall/serve [--slim|--full] -- MCP server management (slim=2 tools, full=21 tools)
+│       │   ├── mcp.py                  # writ mcp install/uninstall/serve [--slim|--full] -- MCP server management (slim=2 tools, full=24 tools)
 │       │   ├── chat.py                 # writ chat start/list/read/send/end/resume/gc -- agent-to-agent conversations (--file attach)
 │       │   ├── peers_cmd.py            # writ peers add/list/remove -- manage peer repo connections
 │       │   ├── knowledge.py            # writ review + writ threads list/read/start/post/resolve -- knowledge threads
@@ -37,7 +37,9 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── diff.py                 # writ diff <file> [--ref] -- lint score comparison vs git history
 │       │   ├── upgrade.py              # writ upgrade [name] [--dry-run] -- version-aware instruction updates from Hub/PRPM
 │       │   ├── plan.py                 # writ plan review <file> [--json] [--no-context] -- AI-powered plan review (LLM via writ model or enwrit.com backend)
-│       │   ├── docs.py                 # writ docs check [--json] -- project documentation health (dead refs, treeview drift, staleness, contradictions)
+│       │   ├── docs.py                 # writ docs init/check/update [--json] -- knowledge health diagnostics (core differentiator: schema-driven health-checking, "commands as injected instructions" pattern)
+│       │   ├── query.py               # writ query -- return docs index to stdout (agent navigation of local knowledge)
+│       │   ├── status.py              # writ status -- recent log entries + documentation health summary
 │       │   ├── hook.py                 # writ hook install/uninstall -- git pre-commit hook for instruction quality checks
 │       │   └── model.py                # writ model set/list/clear -- configure LLM provider (openai, anthropic, gemini, local) for plan review
 │       ├── core/                       # Core business logic
@@ -68,7 +70,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── skills.py               # HTTP-first Agent Skills integration (httpx -> agent-skills API, CLI fallback) -> 175k+ agent skills
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
 │       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, hub_search (semantic), hub_download, relay, knowledge, approvals
-│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search/add, V3 conversations+peers, V4 knowledge, V5 approvals (21 full / 2 slim)
+│       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search/add, V3 conversations+peers, V4 knowledge, V5 approvals, V7 docs (24 full / 2 slim)
 │       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
 │       ├── models/                     # Bundled ML models for Tier 2 lint scoring
 │       │   └── tier2/                  # m2cgen pure-Python scorers + kNN suggestion index
@@ -112,11 +114,16 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           │   └── api-context.yaml
 │           └── _builtin/              # Auto-installed on writ init (not user-selectable templates)
 │               ├── writ-context.md    # CLI command reference, written to IDE rules dirs
-│               └── skills/            # 10 battle-tested skills, auto-installed to IDE skill dirs on writ init
-│                   ├── autoresearch.md, plan-skill.md, doc-maintenance.md, pre-commit-checks.md
+│               ├── prompts/           # Injected instructions for "commands as instructions" pattern (versioned .md files, loaded by commands at runtime)
+│               │   ├── docs-init-v1.md    # Instruction for writ docs init (LLM populates docs index)
+│               │   ├── docs-update-v1.md  # Instruction for writ docs update (LLM acts on health-check findings, updates docs, logs summary)
+│               │   ├── lint-deep-v1.md    # Qualitative review rubric for writ lint --deep (actionable feedback, not scoring)
+│               │   └── lint-fix-v1.md     # Fix hook for writ lint --deep --fix (instructs LLM to apply fixes directly)
+│               └── skills/            # 11 battle-tested skills, auto-installed to IDE skill dirs on writ init
+│                   ├── autoresearch.md, plan-skill.md, doc-maintenance.md, doc-health.md, pre-commit-checks.md
 │                   ├── code-simplifier.md, security-scan.md, verify-skill.md, tech-debt-fixer.md
 │                   └── superpower-skill.md, skill-creator-skill.md
-├── tests/                              # pytest test suite (541+ tests)
+├── tests/                              # pytest test suite (610+ tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, search, templates, import, publish/unpublish)
 │   ├── test_compose.py                 # Composition engine tests
@@ -138,7 +145,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   ├── test_handoff_cli.py            # Handoff create/list CLI tests (10 tests)
 │   ├── test_knowledge_cli.py          # Review + threads CLI tests (17 tests)
 │   ├── test_memory_cli.py             # Memory export/import/list CLI tests (9 tests)
-│   └── test_upgrade.py               # Upgrade command tests (10 tests)
+│   ├── test_upgrade.py               # Upgrade command tests (10 tests)
+│   └── test_docs.py                  # Documentation health commands tests (docs init/check/update, query, status, log)
 ├── action/                             # GitHub Action for writ lint (composite action, enwrit/writ@main)
 │   └── action.yml                     # Composite action: install enwrit, lint specified files, optional quality gate
 ├── .cursor/                            # See .cursor-treeview.mdc for full breakdown

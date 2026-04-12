@@ -33,6 +33,8 @@ from writ.commands.mcp import mcp_app
 from writ.commands.model import model_app
 from writ.commands.peers_cmd import peers_app
 from writ.commands.plan import plan_app
+from writ.commands.query import query_command
+from writ.commands.status import status_command as _status_command
 from writ.utils import console
 
 # ---------------------------------------------------------------------------
@@ -141,9 +143,15 @@ app.add_typer(docs_app, name="docs")
 # Pre-commit hook
 app.add_typer(hook_app, name="hook")
 
+# Query: documentation index navigation
+app.command(name="query")(query_command)
+
+# Status: project status + knowledge health + recent activity
+app.command(name="status")(_status_command)
+
 
 # ---------------------------------------------------------------------------
-# Standalone commands (version, status)
+# Standalone commands (version)
 # ---------------------------------------------------------------------------
 
 @app.command(name="version")
@@ -160,56 +168,6 @@ def version_command() -> None:
         title="writ",
         border_style="cyan",
     ))
-
-
-@app.command(name="status")
-def status_command() -> None:
-    """Show project status, diagnostics, and connectivity."""
-    from rich.panel import Panel
-    from rich.table import Table
-
-    from writ.core import auth, store
-
-    table = Table(show_header=False, box=None, padding=(0, 2))
-    table.add_column("Key", style="bold")
-    table.add_column("Value")
-
-    initialized = store.is_initialized()
-    if initialized:
-        init_val = "[green]yes[/green]"
-    else:
-        init_val = "[red]no[/red]  (run [cyan]writ init[/cyan])"
-    table.add_row("Project initialized", init_val)
-
-    if initialized:
-        instructions = store.list_instructions()
-        table.add_row("Instructions in project", str(len(instructions)))
-        config = store.load_config()
-        table.add_row("Active formats", ", ".join(config.formats))
-
-    logged_in = auth.is_logged_in()
-    table.add_row("Logged in", "[green]yes[/green]" if logged_in else "[dim]no[/dim]")
-
-    lib_items = store.list_library()
-    table.add_row("Library instructions", str(len(lib_items)))
-
-    backend_status = _check_backend()
-    table.add_row("Backend (api.enwrit.com)", backend_status)
-
-    console.print(Panel(table, title="writ status", border_style="cyan"))
-
-
-def _check_backend() -> str:
-    """Quick health check against the backend."""
-    try:
-        import httpx
-
-        resp = httpx.get("https://api.enwrit.com/health", timeout=5.0)
-        if resp.status_code == 200:
-            return "[green]reachable[/green]"
-        return f"[yellow]HTTP {resp.status_code}[/yellow]"
-    except Exception:  # noqa: BLE001
-        return "[red]unreachable[/red]"
 
 
 # ---------------------------------------------------------------------------

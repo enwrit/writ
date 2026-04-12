@@ -344,6 +344,48 @@ class TestLint:
         result = runner.invoke(app, ["lint", "reviewer"])
         assert result.exit_code == 0
 
+    def test_lint_deep_review_file(self, initialized_project: Path):
+        md = initialized_project / "test-rule.md"
+        md.write_text("# My Rule\nAlways use type hints.\n", encoding="utf-8")
+        result = runner.invoke(app, ["lint", str(md), "--deep"])
+        assert result.exit_code == 0
+        assert "Deep Review Instruction" in result.output
+        assert "Specificity Audit" in result.output
+        assert "Always use type hints" in result.output
+
+    def test_lint_deep_review_store_name(self, initialized_project: Path):
+        runner.invoke(app, [
+            "add", "reviewer", "--instructions", "Review code carefully.",
+        ])
+        result = runner.invoke(app, ["lint", "reviewer", "--deep"])
+        assert result.exit_code == 0
+        assert "Deep Review Instruction" in result.output
+        assert "Review code carefully" in result.output
+
+    def test_lint_deep_review_with_fix(self, initialized_project: Path):
+        md = initialized_project / "test-rule.md"
+        md.write_text("# My Rule\nTry to write clean code.\n", encoding="utf-8")
+        result = runner.invoke(app, ["lint", str(md), "--deep", "--fix"])
+        assert result.exit_code == 0
+        assert "Specificity Audit" in result.output
+        assert "Fix Instruction" in result.output
+        assert "Try to write clean code" in result.output
+
+    def test_lint_deep_review_no_target(self, initialized_project: Path):
+        result = runner.invoke(app, ["lint", "--deep"])
+        assert result.exit_code == 1
+        assert "requires a target" in result.output
+
+    def test_lint_deep_api_requires_login(
+        self, initialized_project: Path, monkeypatch,
+    ):
+        md = initialized_project / "test-rule.md"
+        md.write_text("# Rule\nDo things.\n", encoding="utf-8")
+        monkeypatch.setattr("writ.core.auth.get_token", lambda: None)
+        result = runner.invoke(app, ["lint", str(md), "--deep-api"])
+        assert result.exit_code == 1
+        assert "--deep-api requires" in result.output
+
 
 class TestPublish:
     def test_publish_requires_init(self, tmp_project: Path):

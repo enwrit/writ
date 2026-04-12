@@ -3,7 +3,7 @@
 Allows external AI agents (in Cursor, Claude Desktop, etc.) to discover
 and use this repo's instructions without the human running CLI commands.
 
-Full mode (20 tools -- for MCP-only users via uvx):
+Full mode (24 tools -- for MCP-only users via uvx):
   V1: writ_list, writ_get
   V2: writ_compose, writ_search, writ_add
   V3: writ_chat_start, writ_chat_send, writ_chat_send_wait,
@@ -12,6 +12,7 @@ Full mode (20 tools -- for MCP-only users via uvx):
       writ_threads_post, writ_threads_resolve
   V5: writ_approvals_create, writ_approvals_check
   V6: writ_lint_instruction, writ_plan_review, writ_docs_check
+  V7: writ_docs_init, writ_docs_update, writ_query
 
 Slim mode (2 tools -- for CLI users via 'writ mcp install'):
   writ_compose, writ_chat_send_wait
@@ -1116,6 +1117,147 @@ def writ_docs_check() -> dict:
             for f in report.files
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# V7 Tools -- knowledge health (docs init, docs update, query)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def writ_docs_init() -> str:
+    """Create a documentation index and return the instruction to enrich it.
+
+    Creates a writ-docs-index file with an auto-generated treeview of all
+    documentation files found in the repository.  Returns an instruction for
+    the agent to enrich annotations and add the Core files section.
+    """
+    from writ.commands.docs import _build_index_treeview
+    from writ.core.doc_health import find_doc_files
+    from writ.core.formatter import IDE_PATHS, IDEFormatter
+    from writ.core.models import (
+        CompositionConfig,
+        CursorOverrides,
+        FormatOverrides,
+        InstructionConfig,
+    )
+    from writ.utils import append_log
+
+    if not store.is_initialized():
+        return "Error: Not initialized. Run 'writ init' first."
+
+    root = _repo_root()
+    index_content = _build_index_treeview(root)
+
+    cfg = InstructionConfig(
+        name="writ-docs-index",
+        description="Documentation index -- annotated treeview of project knowledge files",
+        task_type="rule",
+        instructions=index_content,
+        tags=["writ", "docs", "index"],
+        composition=CompositionConfig(project_context=False),
+        format_overrides=FormatOverrides(
+            cursor=CursorOverrides(
+                description="Documentation index for knowledge health tracking",
+                always_apply=True,
+            ),
+        ),
+    )
+    store.save_instruction(cfg)
+
+    detected_formats = [
+        key for key, ide_cfg in IDE_PATHS.items()
+        if (root / ide_cfg.detect).exists()
+    ]
+    for fmt in detected_formats:
+        if fmt in IDE_PATHS:
+            formatter = IDEFormatter(fmt)
+            formatter.write(cfg, index_content, root=root)
+
+    n_files = len(find_doc_files(root))
+    append_log(root, f"docs init -- created writ-docs-index with {n_files} files")
+
+    prompt_path = (
+        Path(__file__).resolve().parent.parent
+        / "templates" / "_builtin" / "prompts" / "docs-init-v1.md"
+    )
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
+    return (
+        "Documentation index created. Populate it with an annotated "
+        "treeview of your documentation files."
+    )
+
+
+@mcp.tool()
+def writ_docs_update() -> str:
+    """Run a documentation health check and return the update instruction.
+
+    First runs the heuristic health check (dead refs, staleness, treeview drift),
+    then returns the findings along with an instruction for the agent to fix
+    the identified issues, update the docs index, and log a summary.
+
+    Requires writ-docs-index to exist (run writ_docs_init first).
+    """
+    from writ.core.doc_health import run_health_check
+    from writ.utils import append_log
+
+    if not store.is_initialized():
+        return "Error: Not initialized. Run 'writ init' first."
+
+    root = _repo_root()
+
+    if not store.load_instruction("writ-docs-index"):
+        return "Error: No documentation index found. Run writ_docs_init first."
+
+    report = run_health_check(root)
+
+    lines: list[str] = []
+    lines.append(f"Health score: {report.health_score}/100")
+    lines.append(f"Total issues: {report.total_issues}")
+    lines.append(f"Files scanned: {len(report.files)}")
+    lines.append("")
+    for f in report.files:
+        status_parts: list[str] = []
+        if f.freshness != "unknown":
+            suffix = f" ({f.last_commit_ago} commits ago)" if f.last_commit_ago else ""
+            status_parts.append(f"freshness={f.freshness}{suffix}")
+        if f.issues:
+            status_parts.append(f"{len(f.issues)} issue(s)")
+        status = ", ".join(status_parts) if status_parts else "ok"
+        lines.append(f"- {f.path}: {status}")
+        for issue in f.issues:
+            lines.append(f"    [{issue.severity}] {issue.kind}: {issue.message}")
+    check_context = "\n".join(lines)
+
+    prompt_path = (
+        Path(__file__).resolve().parent.parent
+        / "templates" / "_builtin" / "prompts" / "docs-update-v1.md"
+    )
+    if prompt_path.exists():
+        instruction = prompt_path.read_text(encoding="utf-8")
+    else:
+        instruction = "Update documentation based on the health check findings below.\n\n"
+
+    append_log(root, "docs update -- triggered documentation update pass")
+
+    return instruction + check_context
+
+
+@mcp.tool()
+def writ_query(query: str = "") -> str:
+    """Return the documentation index for agent navigation.
+
+    Returns the full contents of writ-docs-index -- an annotated treeview
+    of all documentation files in the project. Agents use this to understand
+    what knowledge exists and where to find it.
+
+    Args:
+        query: Reserved for future filtering (currently ignored).
+    """
+    cfg = store.load_instruction("writ-docs-index")
+    if cfg is None:
+        return "No documentation index found. Run writ_docs_init to create one."
+    return cfg.instructions
 
 
 # ---------------------------------------------------------------------------
