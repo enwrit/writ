@@ -178,6 +178,6 @@ class TestSyncCommand:
         )
 
         result = runner.invoke(app, ["sync", "--push"])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
         assert "failed" in result.output.lower()
         assert "error" in result.output.lower()

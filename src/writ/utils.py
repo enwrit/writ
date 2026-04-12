@@ -116,8 +116,10 @@ def slugify(text: str) -> str:
     """Convert a string to a URL/filename-safe slug.
 
     Example: "My Cool Agent!" -> "my-cool-agent"
+    Example: "@sanjeed5/go"   -> "sanjeed5-go"
     """
     text = text.lower().strip()
+    text = re.sub(r"[@/\\]", "-", text)
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_]+", "-", text)
     text = re.sub(r"-+", "-", text)
@@ -166,3 +168,64 @@ def read_text_safe(path: Path) -> str | None:
     if path.exists():
         return path.read_text(encoding="utf-8")
     return None
+
+
+def append_log(root: Path, entry: str) -> None:
+    """Append a timestamped entry to the writ-log instruction.
+
+    The log is stored as a writ instruction (writ-log) and written to IDE
+    dirs so agents and humans can access it directly.  On first call it
+    creates the instruction; subsequent calls append to the YAML and
+    re-write the IDE files.
+    """
+    from datetime import UTC, datetime
+
+    from writ.core import store
+    from writ.core.models import (
+        CompositionConfig,
+        CursorOverrides,
+        FormatOverrides,
+        InstructionConfig,
+    )
+
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    line = f"- [{timestamp}] {entry}"
+    header = (
+        "# writ log\n\n"
+        "Persistent knowledge log. Agents append findings, decisions,\n"
+        "and summaries here so ephemeral context survives across sessions.\n\n"
+    )
+
+    existing = store.load_instruction("writ-log")
+    if existing and existing.instructions:
+        new_instructions = existing.instructions.rstrip("\n") + "\n" + line + "\n"
+    else:
+        new_instructions = header + line + "\n"
+
+    cfg = InstructionConfig(
+        name="writ-log",
+        description="Knowledge persistence log -- decisions, findings, summaries across sessions",
+        task_type="context",
+        instructions=new_instructions,
+        tags=["writ", "log"],
+        composition=CompositionConfig(project_context=False),
+        format_overrides=FormatOverrides(
+            cursor=CursorOverrides(
+                description="Knowledge persistence log (writ)",
+                always_apply=False,
+            ),
+        ),
+    )
+    store.save_instruction(cfg)
+
+    _write_log_to_ides(cfg, new_instructions, root)
+
+
+def _write_log_to_ides(cfg, content: str, root: Path) -> None:  # type: ignore[type-arg]
+    """Write the log instruction to all detected IDE directories."""
+    from writ.core.formatter import IDE_PATHS, IDEFormatter
+
+    for key, ide_cfg in IDE_PATHS.items():
+        if (root / ide_cfg.detect).is_dir():
+            formatter = IDEFormatter(key)
+            formatter.write(cfg, content, root=root)

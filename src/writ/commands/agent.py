@@ -206,6 +206,16 @@ def add(
             return
 
     # 3. Create new instruction
+    if not instructions:
+        console.print(
+            f"[yellow]'{name}' not found in library or Hub.[/yellow] "
+            "Creating a blank instruction."
+        )
+        console.print(
+            "  [dim]Edit it in .writ/ or use: "
+            "writ add <name> -i \"your content\"[/dim]"
+        )
+
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
     inherit_list = (
         [i.strip() for i in inherits_from.split(",")]
@@ -396,6 +406,9 @@ def _add_from_source(name: str, source: str, *, format_flag: str | None = None) 
         )
         raise typer.Exit(1)
 
+    existing = store.load_instruction(cfg.name)
+    if existing:
+        console.print(f"  [yellow]Overwriting existing '{cfg.name}'[/yellow]")
     store.save_instruction(cfg)
     _print_added(cfg, source=source)
     _write_to_ide(cfg, cfg.instructions, formats=_resolve_formats(format_flag))
@@ -426,11 +439,11 @@ def list_agents(
         return
 
     table = Table(title="Project Instructions", show_lines=False)
-    table.add_column("Name", style="cyan", no_wrap=True)
-    table.add_column("Type", style="dim", justify="center")
-    table.add_column("Description", max_width=50)
-    table.add_column("Tags", style="dim")
-    table.add_column("Version", justify="center")
+    table.add_column("Name", style="cyan", no_wrap=True, max_width=28)
+    table.add_column("Type", style="dim", justify="center", min_width=5)
+    table.add_column("Description", min_width=20, max_width=50)
+    table.add_column("Tags", style="dim", min_width=8)
+    table.add_column("Version", justify="center", min_width=7)
 
     for inst in agents:
         desc = _safe_text(inst.description, max_len=80) if inst.description else "-"
@@ -530,7 +543,20 @@ def remove(
             raise typer.Exit()
 
     store.remove_instruction(name)
+
+    root = Path.cwd()
+    cleaned_from: list[str] = []
+    for fmt_key, cfg in IDE_PATHS.items():
+        if (root / cfg.detect).exists():
+            try:
+                formatter = get_formatter(fmt_key)
+                if formatter.clean(name, root=root):
+                    cleaned_from.append(cfg.name)
+            except Exception:  # noqa: BLE001
+                pass
     console.print(f"[green]Removed[/green] {name}")
+    if cleaned_from:
+        console.print(f"  [dim]Cleaned IDE files: {', '.join(cleaned_from)}[/dim]")
 
 
 # ---------------------------------------------------------------------------
@@ -559,6 +585,17 @@ def _print_added(cfg: InstructionConfig, source: str = "") -> None:
     type_label = cfg.task_type or "agent"
     src = f" from {source}" if source else ""
     console.print(f"[green]Added[/green] '{cfg.name}' ({type_label}, {token_str}){src}")
+
+    if cfg.name == "writ-docs-index":
+        return
+    try:
+        if store.load_instruction("writ-docs-index"):
+            console.print(
+                "  [dim]Tip: If this is permanent, update the docs index "
+                "for this file. Batch updates: writ docs update[/dim]"
+            )
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _import_from_file(

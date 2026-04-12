@@ -34,17 +34,22 @@ def _resolve_writ_command(slim: bool = True) -> dict:
     """Build the MCP server entry for IDE config files.
 
     Resolves the correct command so the IDE can spawn the MCP server process.
-    Handles venvs (where ``writ`` is on PATH inside the venv but not for the IDE).
+    When running inside a venv, always uses the venv's Python to ensure
+    the IDE finds writ and its dependencies correctly.
     Sets ``disabled: false`` so Cursor auto-enables on next full restart.
     """
     args_suffix = ["mcp", "serve"]
     if slim:
         args_suffix.append("--slim")
 
+    if sys.prefix != sys.base_prefix:
+        python_path = str(Path(sys.executable).resolve())
+        return {"command": python_path, "args": ["-m", "writ", *args_suffix], "disabled": False}
+
     if shutil.which("uvx"):
         return {"command": "uvx", "args": ["enwrit", *args_suffix], "disabled": False}
 
-    if sys.prefix == sys.base_prefix and shutil.which("writ"):
+    if shutil.which("writ"):
         return {"command": "writ", "args": args_suffix, "disabled": False}
 
     python_path = str(Path(sys.executable).resolve())
@@ -107,6 +112,10 @@ def _detect_ide_configs(root: Path) -> list[tuple[str, Path, str]]:
 
     if (root / ".vscode").is_dir():
         configs.append(("VS Code", root / ".vscode" / "mcp.json", "servers"))
+    elif (root / ".github").is_dir() and not any(n == "GitHub Copilot" for n, _, _ in configs):
+        vscode_dir = root / ".vscode"
+        vscode_dir.mkdir(exist_ok=True)
+        configs.append(("GitHub Copilot (VS Code)", vscode_dir / "mcp.json", "servers"))
 
     return configs
 

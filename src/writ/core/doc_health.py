@@ -65,40 +65,49 @@ _DIRECTIVE_RE = re.compile(
 )
 
 
+_IDE_DETECT_DIRS = [
+    ".cursor", ".claude", ".kiro", ".github", ".windsurf",
+    ".clinerules", ".roo", ".amazonq", ".gemini", ".codex", ".opencode",
+]
+
+_DOC_EXTENSIONS = {".md", ".mdc", ".yaml", ".yml", ".txt"}
+
+_SKIP_DIRS = {"node_modules", "venv", ".venv", ".git", "__pycache__", ".writ"}
+
+_ROOT_FILES = [
+    "AGENTS.md", "CLAUDE.md", "SKILL.md", "README.md",
+    "CONTRIBUTING.md", "CHANGELOG.md", "ARCHITECTURE.md",
+    ".cursorrules", ".windsurfrules",
+]
+
+
 def find_doc_files(root: Path | None = None) -> list[Path]:
-    """Find all documentation files that affect AI agent behavior."""
+    """Find documentation files in IDE folders and well-known root files.
+
+    Scans all detected IDE configuration directories (.cursor/, .claude/,
+    .kiro/, etc.) recursively for documentation files.  Also picks up
+    well-known root files (README.md, AGENTS.md, etc.).  Excludes .writ/
+    internals which are static YAML managed by writ itself.
+    """
     root = root or Path.cwd()
     files: list[Path] = []
 
-    single_files = [
-        "AGENTS.md", "CLAUDE.md", "SKILL.md", "README.md",
-        ".cursorrules", ".windsurfrules",
-    ]
-    for name in single_files:
+    for name in _ROOT_FILES:
         p = root / name
         if p.exists():
             files.append(p)
 
-    dir_patterns = [
-        (".cursor/rules", "*.mdc"),
-        (".cursor/rules", "*.md"),
-        (".claude/rules", "*.md"),
-        (".kiro/steering", "*.md"),
-        (".cursor/agents", "*.mdc"),
-        (".cursor/agents", "*.md"),
-        (".writ/agents", "*.yaml"),
-        (".writ/rules", "*.yaml"),
-        (".writ/context", "*.yaml"),
-        (".writ/programs", "*.yaml"),
-    ]
-    for dir_path, pattern in dir_patterns:
-        d = root / dir_path
-        if d.is_dir():
-            files.extend(sorted(d.glob(pattern)))
-
-    copilot = root / ".github" / "copilot-instructions.md"
-    if copilot.exists():
-        files.append(copilot)
+    for ide_dir in _IDE_DETECT_DIRS:
+        d = root / ide_dir
+        if not d.is_dir():
+            continue
+        for child in sorted(d.rglob("*")):
+            if not child.is_file():
+                continue
+            if any(skip in child.parts for skip in _SKIP_DIRS):
+                continue
+            if child.suffix.lower() in _DOC_EXTENSIONS:
+                files.append(child)
 
     return files
 
@@ -107,14 +116,34 @@ def extract_file_references(text: str) -> list[str]:
     """Extract file path references from instruction text."""
     refs: list[str] = []
     for match in _FILE_PATH_RE.finditer(text):
-        path = match.group(1) or match.group(2)
-        if path and not _is_noise_path(path):
-            refs.append(path)
+        backtick_content = match.group(1)
+        path = backtick_content or match.group(2)
+        if not path or _is_noise_path(path):
+            continue
+        if backtick_content and _SHELL_CMD_RE.search(backtick_content):
+            continue
+        refs.append(path)
     return list(dict.fromkeys(refs))
 
 
+_SHELL_CMD_RE = re.compile(
+    r'(grep|sed|awk|find|cat|echo|curl|wget|rm|cp|mv|mkdir|chmod|'
+    r'git|pip|npm|docker|tar|ssh|scp)\s',
+    re.IGNORECASE,
+)
+
+
+_PLACEHOLDER_PATTERNS = re.compile(
+    r'(?:src/foo|src/bar|foo/bar|path/to/|my[_-]|your[_-]|example[_-]|sample[_-])'
+    r'|(?:YY-MM-DD|YYYY-MM|MM-DD)'
+    r'|(?:<[^>]+>)'
+    r'|(?:\.\.\./)',
+    re.IGNORECASE,
+)
+
+
 def _is_noise_path(path: str) -> bool:
-    """Filter out common false positives (URLs, versions, dates, etc.)."""
+    """Filter out common false positives (URLs, versions, dates, placeholders)."""
     if path.startswith(("http://", "https://", "ftp://", "mailto:")):
         return True
     if re.match(r'^\d+[\.\-]\d+[\.\-]\d+', path):
@@ -133,6 +162,8 @@ def _is_noise_path(path: str) -> bool:
     if path.startswith(("--", "e.g.", "i.e.")):
         return True
     if "*" in path or "?" in path:
+        return True
+    if _PLACEHOLDER_PATTERNS.search(path):
         return True
     return False
 

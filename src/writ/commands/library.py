@@ -57,8 +57,12 @@ def save(
     )
 
     if not local and auth.is_logged_in():
+        from rich.status import Status
+
         client = RegistryClient()
-        if client.push_to_library(save_name, inst):
+        with Status("[dim]Syncing to enwrit.com...[/dim]", console=console):
+            synced = client.push_to_library(save_name, inst)
+        if synced:
             console.print("  [cyan]+ Synced to enwrit.com[/cyan] (access from any device)")
         else:
             console.print("  [dim]Cloud sync failed -- saved locally only[/dim]")

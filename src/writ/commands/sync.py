@@ -198,6 +198,9 @@ def sync_command(
 
     _print_summary(pushed, pulled, updated, skipped, errors, dry_run)
 
+    if errors and not dry_run:
+        raise typer.Exit(1)
+
 
 def _cfg_from_remote(data: dict) -> InstructionConfig | None:
     """Build an InstructionConfig from remote API response."""

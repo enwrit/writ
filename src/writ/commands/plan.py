@@ -51,17 +51,22 @@ def _display_streaming(token_gen) -> str:  # type: ignore[type-arg]
     return "".join(collected)
 
 
-def _display_review(review_text: str, model_label: str, file_path: str) -> None:
+def _display_review(review_text: str | list | dict, model_label: str, file_path: str) -> None:
     """Parse and display a plan review with Rich formatting."""
     from rich.panel import Panel
 
     header = f"[bold]Plan Review:[/bold] {file_path}\n[dim]Model: {model_label}[/dim]"
 
     try:
-        data = json.loads(review_text)
-    except json.JSONDecodeError:
+        if isinstance(review_text, dict):
+            data = review_text
+        elif isinstance(review_text, list):
+            data = review_text[0] if review_text and isinstance(review_text[0], dict) else {}
+        else:
+            data = json.loads(review_text)
+    except (json.JSONDecodeError, TypeError):
         console.print(Panel(header, border_style="cyan"))
-        console.print(review_text)
+        console.print(str(review_text))
         return
 
     console.print(Panel(header, border_style="cyan"))
@@ -210,9 +215,12 @@ def review_command(
 
     if output_json:
         try:
-            parsed = json.loads(review_text)
+            if isinstance(review_text, (dict, list)):
+                parsed = review_text
+            else:
+                parsed = json.loads(review_text)
             console.print_json(json.dumps(parsed))
-        except json.JSONDecodeError:
-            console.print(review_text)
+        except (json.JSONDecodeError, TypeError):
+            console.print(str(review_text))
     else:
         _display_review(review_text, model_label, file)

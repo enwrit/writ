@@ -23,7 +23,10 @@ _INSTRUCTION_GLOBS = (
     ".cursor/rules/*.md",
     ".cursor/agents/*.mdc",
     ".cursor/agents/*.md",
+    ".cursor/skills/*/*.mdc",
     ".claude/rules/*.md",
+    ".claude/agents/*.md",
+    ".claude/skills/*/*.md",
     ".kiro/steering/*.md",
     ".writ/agents/*.yaml",
     ".writ/rules/*.yaml",
@@ -33,6 +36,9 @@ _INSTRUCTION_GLOBS = (
     "CLAUDE.md",
     ".windsurfrules",
     ".github/copilot-instructions.md",
+    ".github/instructions/*.instructions.md",
+    ".github/agents/*.md",
+    ".github/skills/*/*.md",
 )
 
 

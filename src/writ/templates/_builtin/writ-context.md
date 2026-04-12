@@ -25,14 +25,22 @@ instructions across AI coding tools, projects, and agents.
 
 ### Quality
 - `writ lint [file|name]` -- score instruction quality (0-100, ML-powered)
-- `writ lint --deep` -- AI-powered deep analysis (requires login)
+- `writ lint --deep` -- deep qualitative review (prints analysis instruction for your IDE's AI)
+- `writ lint --deep --fix` -- deep review + instruct the AI to apply fixes directly
+- `writ lint --deep-api` -- AI-powered scoring via enwrit.com API (requires login)
 - `writ lint --deep-local` -- fully local AI analysis (GPU-accelerated)
 - `writ lint --code` -- deterministic code-only scoring
 - `writ plan review <file>` -- AI-powered plan review (catches technical issues, suggests alternatives)
 - `writ plan review <file> --json` -- structured JSON output for agent consumption
-- `writ docs check` -- project documentation health (dead refs, treeview drift, staleness)
 - `writ diff <file>` -- compare lint score vs previous git commit
 - `writ upgrade [name]` -- check for and apply instruction updates from Hub/PRPM
+
+### Documentation Health
+- `writ docs init` -- create documentation index (writ-docs-index) for knowledge health tracking
+- `writ docs check` -- heuristic documentation health scan (dead refs, staleness, contradictions)
+- `writ docs update` -- AI-powered documentation update pass (runs check, then instructs your model to fix issues and log summary)
+- `writ query` -- show documentation index (helps agents navigate project knowledge)
+- `writ status` -- recent activity summary + documentation health score
 
 ### Library & Sync
 - `writ save <name>` -- save to personal library (~/.writ/); syncs to cloud if logged in
@@ -43,13 +51,13 @@ instructions across AI coding tools, projects, and agents.
 - `writ publish <name>` / `writ unpublish <name>` -- public Hub visibility
 
 ### Agent Communication
-- `writ chat start --with <repo>` -- start conversation with a peer repo's agent
+- `writ chat start --with <repo> --goal "purpose"` -- start conversation with a peer repo's agent (--goal is required)
 - `writ chat send <id> "msg" --file <path>` -- send message with optional file attachments
 - `writ chat list` / `writ chat read` -- manage conversations
 - `writ inbox` -- show conversations with unread messages
 - `writ peers add|list|remove` -- manage peer repo connections
 - `writ connect` -- interactive peer setup wizard
-- `writ handoff create <from> <to>` -- context handoff between agents
+- `writ handoff create <from> <to> --summary "..." | --file <path>` -- context handoff between agents (content required via --summary or --file)
 - `writ memory export|import|list` -- cross-project memory sharing
 
 ### Knowledge & Review
@@ -69,6 +77,6 @@ instructions across AI coding tools, projects, and agents.
 ### Integration
 - `writ mcp install` -- auto-configure MCP server in detected IDEs (slim mode, opt-in)
 - `writ mcp uninstall` -- remove writ MCP config from IDEs
-- `writ mcp serve` -- expose writ tools via MCP protocol (21 tools full / 2 slim)
+- `writ mcp serve` -- expose writ tools via MCP protocol (24 tools full / 2 slim)
 
 Docs: https://github.com/enwrit/writ

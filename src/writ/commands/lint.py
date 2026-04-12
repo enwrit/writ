@@ -64,7 +64,11 @@ def _parse_file_to_config(file_path: Path) -> InstructionConfig:
     Supports YAML files, markdown with YAML frontmatter (via
     python-frontmatter), and plain markdown/text as instructions.
     """
-    content = file_path.read_text(encoding="utf-8")
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        console.print(f"[red]Cannot lint binary file:[/red] {file_path}")
+        raise typer.Exit(1) from None
     name = file_path.stem
 
     if file_path.suffix in (".yaml", ".yml"):
@@ -332,7 +336,69 @@ def _persist_lint_scores(
     _merge_write_lint_scores({rel_key: entry})
 
 
-def _run_deep_lint(
+_BUILTIN_PROMPTS = Path(__file__).resolve().parent.parent / "templates" / "_builtin" / "prompts"
+
+
+def _load_prompt(name: str) -> str:
+    """Load an injected instruction from the bundled prompts/ directory."""
+    path = _BUILTIN_PROMPTS / name
+    if not path.exists():
+        console.print(f"[red]Prompt file not found:[/red] {name}")
+        raise typer.Exit(1)
+    return path.read_text(encoding="utf-8")
+
+
+def _run_deep_review(
+    name: str | None,
+    file: Path | None,
+    fix: bool = False,
+) -> None:
+    """Print a qualitative review instruction for the IDE's AI agent."""
+    if file:
+        if not file.exists():
+            console.print(f"[red]File not found:[/red] {file}")
+            raise typer.Exit(1)
+        agent = _parse_file_to_config(file)
+        label = str(file)
+    elif name:
+        if not store.is_initialized():
+            console.print(
+                "[red]Not initialized.[/red] Run "
+                "[cyan]writ init[/cyan] first, or pass a file path.",
+            )
+            raise typer.Exit(1)
+        agent = store.load_instruction(name)
+        if not agent:
+            console.print(f"[red]Agent '{name}' not found.[/red]")
+            raise typer.Exit(1)
+        label = name
+    else:
+        console.print(
+            "[yellow]--deep requires a target.[/yellow] "
+            "Specify a file path or agent name.",
+        )
+        raise typer.Exit(1)
+
+    content = agent.instructions or ""
+    if not content.strip():
+        console.print("[yellow]Instruction content is empty.[/yellow]")
+        raise typer.Exit(1)
+
+    rubric = _load_prompt("lint-deep-v1.md")
+
+    console.print("[bold cyan]--- Deep Review Instruction ---[/bold cyan]")
+    console.print()
+    console.print(rubric)
+    if fix:
+        console.print()
+        console.print(_load_prompt("lint-fix-v1.md"))
+    console.print()
+    console.print(f"[bold cyan]--- Instruction to Review: {label} ---[/bold cyan]")
+    console.print()
+    console.print(content)
+
+
+def _run_deep_api_lint(
     name: str | None,
     file: Path | None,
     json_output: bool,
@@ -347,7 +413,7 @@ def _run_deep_lint(
     token = auth.get_token()
     if not token:
         console.print(
-            "[red]--deep requires an enwrit account.[/red] "
+            "[red]--deep-api requires an enwrit account.[/red] "
             "Run [cyan]writ register[/cyan] or [cyan]writ login[/cyan] first.",
         )
         raise typer.Exit(1)
@@ -370,7 +436,7 @@ def _run_deep_lint(
             raise typer.Exit(1)
     else:
         console.print(
-            "[yellow]--deep requires a target.[/yellow] "
+            "[yellow]--deep-api requires a target.[/yellow] "
             "Specify a file path or agent name.",
         )
         raise typer.Exit(1)
@@ -387,17 +453,19 @@ def _run_deep_lint(
     cfg = load_global_config()
     base_url = cfg.registry_url.rstrip("/")
 
-    console.print("[dim]Requesting AI-powered analysis...[/dim]")
+    from rich.status import Status
+
     try:
-        resp = httpx.post(
-            f"{base_url}/lint",
-            json={"content": content, "tier": "ai", "source": "cli"},
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            timeout=30,
-        )
+        with Status("[dim]Requesting AI-powered analysis...[/dim]", console=console):
+            resp = httpx.post(
+                f"{base_url}/lint",
+                json={"content": content, "tier": "ai", "source": "cli"},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
     except httpx.RequestError as exc:
         console.print(
             f"[red]Network error:[/red] {exc}. "
@@ -575,7 +643,7 @@ def _fallback_local_lint(
     ci: bool,
     min_score: int,
 ) -> None:
-    """Run local lint as fallback from --deep (uses ML when available)."""
+    """Run local lint as fallback from --deep-api (uses ML when available)."""
     results = lint_engine.lint(agent, source_path=file)
     lint_score = _maybe_ml_score(agent, results)
 
@@ -672,7 +740,21 @@ def lint_command(
         bool,
         typer.Option(
             "--deep",
-            help="AI-powered analysis via enwrit.com (requires login).",
+            help="Deep qualitative review -- prints analysis instruction for your IDE's AI agent.",
+        ),
+    ] = False,
+    fix: Annotated[
+        bool,
+        typer.Option(
+            "--fix",
+            help="With --deep: also instruct the AI to apply fixes directly.",
+        ),
+    ] = False,
+    deep_api: Annotated[
+        bool,
+        typer.Option(
+            "--deep-api",
+            help="AI-powered scoring via enwrit.com API (requires login).",
         ),
     ] = False,
     code: Annotated[
@@ -711,15 +793,17 @@ def lint_command(
     a 0-100 quality score across 6 dimensions.
 
     By default uses ML-predicted scores (Tier 2) when models
-    are available. Use --code for deterministic code-only scoring,
-    --deep for AI-powered analysis via enwrit.com, or --deep-local
-    for local AI analysis via a fine-tuned Qwen model.
+    are available. Use --deep for qualitative review via your
+    IDE's AI, --deep-api for API scoring via enwrit.com,
+    --deep-local for local Qwen model, or --code for Tier 1.
 
     Example:
         writ lint                         # lint all (ML or code)
         writ lint reviewer                # lint by store name
         writ lint AGENTS.md               # lint a file (auto-detected)
-        writ lint CLAUDE.md --deep        # AI analysis (API)
+        writ lint CLAUDE.md --deep        # qualitative review
+        writ lint CLAUDE.md --deep --fix  # review + auto-fix
+        writ lint CLAUDE.md --deep-api    # AI scoring (API)
         writ lint rules.mdc --json        # JSON output
         writ lint --code                  # force Tier 1 only
         writ lint --ci --min-score 60     # fail CI if < 60
@@ -751,7 +835,10 @@ def lint_command(
         )
         return
     if deep:
-        _run_deep_lint(
+        _run_deep_review(name=name, file=file, fix=fix)
+        return
+    if deep_api:
+        _run_deep_api_lint(
             name=name,
             file=file,
             json_output=json_output,
@@ -857,6 +944,10 @@ def lint_command(
 
     if name:
         agent = store.load_instruction(name)
+        if not agent and name.startswith("writ-"):
+            agent = store.load_instruction(name.removeprefix("writ-"))
+        if not agent and not name.startswith("writ-"):
+            agent = store.load_instruction(f"writ-{name}")
         if not agent:
             console.print(
                 f"[red]Agent '{name}' not found.[/red] "

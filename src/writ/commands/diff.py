@@ -98,10 +98,18 @@ def _git_show_blob(repo_root: Path, ref: str, git_path: str) -> str:
     )
     if proc.returncode != 0:
         err = (proc.stderr or "").strip()
-        console.print(
-            f"[red]Could not read file at ref[/red] ({spec}).\n"
-            f"{err}",
-        )
+        if "does not exist" in err or "bad revision" in err.lower():
+            console.print(
+                f"[yellow]No previous version to compare.[/yellow] "
+                f"The file may only exist in the current commit.\n"
+                f"  Try: [cyan]writ diff {git_path} --ref HEAD~2[/cyan] "
+                f"or a specific commit hash.",
+            )
+        else:
+            console.print(
+                f"[red]Could not read file at ref[/red] ({spec}).\n"
+                f"{err}",
+            )
         raise typer.Exit(1)
     return proc.stdout
 

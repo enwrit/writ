@@ -50,10 +50,11 @@ LANGUAGE_MAP: dict[str, str] = {
 
 # Directories to always skip when scanning
 SKIP_DIRS: set[str] = {
-    ".git", ".writ", "node_modules", "venv", ".venv", "env",
+    ".git", ".writ", "node_modules", "venv", ".venv", "env", ".env",
     "__pycache__", ".pytest_cache", ".ruff_cache", "dist", "build",
     ".next", ".nuxt", "target", ".cargo", "vendor", ".mypy_cache",
     "htmlcov", ".tox", ".eggs", "*.egg-info",
+    "site-packages", ".direnv", ".nox", "bower_components",
 }
 
 DEFAULT_IGNORE_PATTERNS: list[str] = [

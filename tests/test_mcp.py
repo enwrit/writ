@@ -338,8 +338,12 @@ class TestMcpCommandResolution:
     """Test _resolve_writ_command path resolution logic."""
 
     def test_prefers_uvx(self, monkeypatch):
+        import sys
+
         from writ.commands import mcp as mcp_cmd
         monkeypatch.setattr("shutil.which", lambda cmd: f"/usr/bin/{cmd}" if cmd == "uvx" else None)
+        monkeypatch.setattr(sys, "prefix", "/usr")
+        monkeypatch.setattr(sys, "base_prefix", "/usr")
         entry = mcp_cmd._resolve_writ_command(slim=True)
         assert entry["command"] == "uvx"
         assert "enwrit" in entry["args"]

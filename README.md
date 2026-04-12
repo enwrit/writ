@@ -10,11 +10,13 @@
 
 The quality and communication layer for AI coding agents. Lint instructions, review plans, check documentation health, and connect agents across repos, devices, and tools.
 
+> **Requires Python 3.11+.** On macOS, `brew install python@3.12` or use [pyenv](https://github.com/pyenv/pyenv). The default macOS Python (3.9) will show "no matching distribution" on install.
+
 ```bash
 pip install enwrit
 writ lint CLAUDE.md               # Instant quality score (0-100) for any instruction
 writ plan review plan.md          # AI-powered plan review before implementation
-writ init                         # Initialize + install 10 built-in skills
+writ init                         # Initialize + install 11 built-in skills
 writ search "code reviewer"       # Find from 6,000+ instructions on the Hub
 writ add code-review-agent        # Add to project + activate in your IDE
 ```
@@ -47,7 +49,9 @@ Three tiers depending on your needs:
 
 ```bash
 writ lint CLAUDE.md                     # Default: ML-powered, local, free (TF-IDF + LightGBM)
-writ lint AGENTS.md --deep              # AI analysis via enwrit.com (Gemini)
+writ lint AGENTS.md --deep              # Deep qualitative review (your IDE's AI)
+writ lint AGENTS.md --deep --fix        # Review + auto-fix
+writ lint AGENTS.md --deep-api          # AI scoring via enwrit.com (Gemini)
 writ lint AGENTS.md --deep-local        # Fully local AI (writ-lint-0.8B, GPU-accelerated)
 writ lint rules.mdc --json              # Machine-readable output for CI
 writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
@@ -87,7 +91,15 @@ Works with **LM Studio**, **Ollama**, **vLLM**, or any OpenAI-compatible local s
 
 ## Documentation Health
 
-`writ docs check` scans your project documentation for problems that degrade AI agent performance:
+Keep your agent's knowledge base accurate. `writ docs` provides schema-driven health-checking -- a documentation index tracks what exists, and heuristic scans detect when reality drifts.
+
+```bash
+writ docs init                     # Create documentation index (agents populate it)
+writ docs check                    # Heuristic scan: dead refs, treeview drift, staleness
+writ docs update                   # AI-powered fix pass (runs check + instructs your model)
+writ query                         # Show the docs index (agents use this to navigate)
+writ status                        # Activity log + health score at a glance
+```
 
 ```bash
 writ docs check
@@ -97,11 +109,13 @@ writ docs check
 # - 1 stale instruction (last modified 90+ days ago)
 ```
 
+The documentation index (`writ-docs-index`) acts as a schema for your project's knowledge -- agents read it to know what documentation exists and where. `writ docs update` feeds the health check findings to your IDE's model with a comprehensive instruction to fix issues, update the index, and log a summary of decisions to the `writ-log` instruction.
+
 ---
 
-## 10 Built-in Skills
+## 11 Built-in Skills
 
-`writ init` auto-installs 10 battle-tested skills into your IDE's skill directory (`.cursor/skills/writ/`, `.claude/skills/writ/`, etc.). Each is generalized from popular open-source repos:
+`writ init` auto-installs 11 battle-tested skills into your IDE's skill directory (`.cursor/skills/writ/`, `.claude/skills/writ/`, etc.). Each is generalized from popular open-source repos:
 
 | Skill | What it does | Inspired by |
 |-------|-------------|-------------|
@@ -115,6 +129,7 @@ writ docs check
 | tech-debt-fixer | Technical debt detection | [0xdarkmatter/claude-mods](https://github.com/0xdarkmatter/claude-mods) |
 | pre-commit-checks | Pre-commit verification | obra + community patterns |
 | doc-maintenance | Documentation health | Community patterns |
+| doc-health | Schema-driven doc maintenance | [Karpathy LLM Wiki](https://github.com/karpathy) |
 
 ---
 
@@ -144,11 +159,11 @@ When you run `writ add reviewer`, the tool composes all relevant context and wri
 |-----------|--------------|
 | **Instruction linting** | 6-dimension quality scoring (0-100). Code-based, ML-powered, or AI-powered. |
 | **Plan review** | AI analyzes your implementation plans before coding. Local or cloud models. |
-| **Docs health** | Dead reference detection, treeview drift, staleness checks across your project docs. |
+| **Docs health** | Schema-driven knowledge health: docs index, heuristic scan, AI-powered update pass, knowledge log. |
 | **Multi-format export** | One instruction, 11 auto-detected IDE formats + legacy opt-in formats. |
 | **Personal library + cloud sync** | `writ save` → `writ add --lib` on any device. Your instructions follow you. |
 | **Hub with 6,000+ instructions** | Semantic search across rules, agents, skills, programs. `writ search` / `writ add`. |
-| **Built-in skills** | 10 community-tested skills auto-installed on `writ init`. |
+| **Built-in skills** | 11 community-tested skills auto-installed on `writ init`. |
 | **Local model support** | LM Studio, Ollama, vLLM -- fully private, no data leaves your machine. |
 | **Agent communication** | Structured conversations between agents across repos and devices. |
 | **MCP server** | One config line and any agent can search, lint, and review via MCP. |
@@ -193,7 +208,7 @@ writ sync                          # Bulk bidirectional sync
 writ mcp install      # Auto-detects Cursor, VS Code, Claude Code, Kiro, Windsurf
 ```
 
-**Slim mode** (default): 2 MCP-exclusive tools. **Full mode**: 21 tools including `writ_lint_instruction`, `writ_plan_review`, and `writ_docs_check`.
+**Slim mode** (default): 2 MCP-exclusive tools. **Full mode**: 24 tools including `writ_lint_instruction`, `writ_plan_review`, `writ_docs_check`, and `writ_docs_update`.
 
 ```json
 {"mcpServers": {"writ": {"command": "uvx", "args": ["enwrit", "mcp", "serve"]}}}
@@ -219,7 +234,7 @@ writ inbox                          # Check for responses
 
 | Command | Description |
 |---------|-------------|
-| `writ init` | Initialize in repo, auto-install 10 built-in skills to IDE dirs |
+| `writ init` | Initialize in repo, auto-install 11 built-in skills to IDE dirs |
 | `writ add <name>` | Add instruction: project -> library -> Hub -> create new |
 | `writ add <name> --lib` | Force fetch from personal library |
 | `writ add <name> --from prpm` | Install from PRPM registry |
@@ -229,17 +244,19 @@ writ inbox                          # Check for responses
 | `writ remove <name>` | Remove instruction |
 | `writ save <name>` | Save to personal library (syncs to cloud if logged in) |
 | `writ search <query>` | Semantic search across Hub |
-| `writ lint [file] [--deep] [--deep-local]` | Quality score (0-100, 6 dimensions) |
+| `writ lint [file] [--deep] [--deep --fix] [--deep-api]` | Quality score, qualitative review, or auto-fix |
 | `writ lint --ci --min-score N` | CI gate: exit 1 if score below threshold |
 | `writ plan review <file>` | AI-powered plan review (configured model or free Gemini) |
 | `writ plan review <file> --json` | Structured JSON output for agents |
-| `writ docs check` | Documentation health (dead refs, treeview drift, staleness) |
+| `writ docs init / check / update` | Documentation health (index, scan, AI-powered fix pass) |
+| `writ query` | Show documentation index (agent navigation) |
+| `writ status` | Activity log + health score summary |
 | `writ model set / list / clear` | Configure LLM (openai, anthropic, gemini, local) |
 | `writ hook install / uninstall` | Git pre-commit hook for quality checks |
 | `writ diff <file>` | Compare lint score vs previous git commit |
 | `writ upgrade [name]` | Pull latest version from source |
 | `writ sync` | Bulk bidirectional library sync |
-| `writ mcp install / uninstall / serve` | MCP server (auto-detect IDE, 21 tools full / 2 slim) |
+| `writ mcp install / uninstall / serve` | MCP server (auto-detect IDE, 24 tools full / 2 slim) |
 | `writ publish / unpublish` | Make publicly discoverable on enwrit.com |
 | `writ login / logout / register` | Authentication for cloud sync |
 | `writ chat start / send / inbox` | Agent-to-agent conversations |
@@ -265,7 +282,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                    # 541+ tests
+pytest                    # 610+ tests
 ruff check src/ tests/
 ```
 
