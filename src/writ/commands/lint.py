@@ -38,18 +38,30 @@ def _maybe_ml_score(
         pass
     return tier1
 
-_CHANGED_PATTERNS = (
-    ".writ/agents/",
-    ".writ/rules/",
-    ".writ/context/",
-    ".writ/programs/",
-    "CLAUDE.md",
-    "AGENTS.md",
-    "SKILL.md",
-    ".windsurfrules",
-    ".cursorrules",
-    ".github/copilot-instructions.md",
-)
+def _build_changed_patterns() -> tuple[str, ...]:
+    """Instruction file path prefixes for git-based change detection.
+
+    Covers all 11 IDE config directories (derived from IDE_PATHS so new
+    IDEs are picked up automatically), .writ/ store dirs, and well-known
+    root instruction files.  Used by _get_changed_instruction_files() to
+    filter ``git diff --name-only HEAD`` output.
+    """
+    from writ.core.formatter import IDE_PATHS
+
+    patterns: list[str] = []
+    for ide_cfg in IDE_PATHS.values():
+        patterns.append(f"{ide_cfg.detect}/")
+    patterns.extend([
+        ".writ/agents/", ".writ/rules/", ".writ/context/", ".writ/programs/",
+    ])
+    patterns.extend([
+        "CLAUDE.md", "AGENTS.md", "SKILL.md",
+        ".windsurfrules", ".cursorrules",
+    ])
+    return tuple(dict.fromkeys(patterns))
+
+
+_CHANGED_PATTERNS = _build_changed_patterns()
 
 LEVEL_STYLES = {
     "error": "[bold red]ERROR[/bold red]",
@@ -348,12 +360,26 @@ def _load_prompt(name: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _load_type_hook(inferred_type: str) -> str | None:
+    """Load the type-specific hook prompt, falling back to 'other'."""
+    hook_dir = _BUILTIN_PROMPTS / "hooks"
+    path = hook_dir / f"hook-lint-{inferred_type}.md"
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    fallback = hook_dir / "hook-lint-other.md"
+    if fallback.exists():
+        return fallback.read_text(encoding="utf-8")
+    return None
+
+
 def _run_deep_review(
     name: str | None,
     file: Path | None,
     fix: bool = False,
 ) -> None:
     """Print a qualitative review instruction for the IDE's AI agent."""
+    from writ.core.type_inference import infer_instruction_type
+
     if file:
         if not file.exists():
             console.print(f"[red]File not found:[/red] {file}")
@@ -384,11 +410,23 @@ def _run_deep_review(
         console.print("[yellow]Instruction content is empty.[/yellow]")
         raise typer.Exit(1)
 
+    inferred_type = infer_instruction_type(
+        file_path=file, name=name, task_type=agent.task_type,
+    )
+
+    console.print(f"[dim]Target: {label} (type: {inferred_type})[/dim]")
+
     rubric = _load_prompt("lint-deep-v1.md")
 
     console.print("[bold cyan]--- Deep Review Instruction ---[/bold cyan]")
     console.print()
     console.print(rubric)
+
+    hook = _load_type_hook(inferred_type)
+    if hook:
+        console.print()
+        console.print(hook)
+
     if fix:
         console.print()
         console.print(_load_prompt("lint-fix-v1.md"))

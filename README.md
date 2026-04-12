@@ -49,7 +49,7 @@ Three tiers depending on your needs:
 
 ```bash
 writ lint CLAUDE.md                     # Default: ML-powered, local, free (TF-IDF + LightGBM)
-writ lint AGENTS.md --deep              # Deep qualitative review (your IDE's AI)
+writ lint AGENTS.md --deep              # Type-aware qualitative review (your IDE's AI)
 writ lint AGENTS.md --deep --fix        # Review + auto-fix
 writ lint AGENTS.md --deep-api          # AI scoring via enwrit.com (Gemini)
 writ lint AGENTS.md --deep-local        # Fully local AI (writ-lint-0.8B, GPU-accelerated)
@@ -65,6 +65,7 @@ writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
 
 ```bash
 writ plan review plan.md                # Review with your configured model
+writ plan review plan.md --local        # Print review rubric for IDE's AI (no API call)
 writ plan review plan.md --json         # Structured JSON for agent consumption
 writ plan review plan.md --no-context   # Skip project context injection
 ```
@@ -244,9 +245,10 @@ writ inbox                          # Check for responses
 | `writ remove <name>` | Remove instruction |
 | `writ save <name>` | Save to personal library (syncs to cloud if logged in) |
 | `writ search <query>` | Semantic search across Hub |
-| `writ lint [file] [--deep] [--deep --fix] [--deep-api]` | Quality score, qualitative review, or auto-fix |
+| `writ lint [file] [--deep] [--deep --fix] [--deep-api]` | Type-aware quality score, qualitative review, or auto-fix |
 | `writ lint --ci --min-score N` | CI gate: exit 1 if score below threshold |
 | `writ plan review <file>` | AI-powered plan review (configured model or free Gemini) |
+| `writ plan review <file> --local` | Print review rubric for IDE's AI (no API call) |
 | `writ plan review <file> --json` | Structured JSON output for agents |
 | `writ docs init / check / update` | Documentation health (index, scan, AI-powered fix pass) |
 | `writ query` | Show documentation index (agent navigation) |

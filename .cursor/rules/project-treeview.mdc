@@ -52,7 +52,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── ml_scorer.py            # Tier 2 ML scoring: compute_score_ml(), m2cgen + TF-IDF inference, template-based suggestions, label-aware issue gating
 │       │   ├── label_scorer.py         # TF-IDF+LGBM label classifier: positional TF-IDF + 26 structural features, 7 boolean labels (4-10ms inference)
 │       │   ├── setfit_scorer.py        # DEPRECATED: SetFit ONNX inference (superseded by label_scorer.py)
-│       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig, LintScore (tier: code|ml|ai), Conversation, Message, PeerConfig
+│       │   ├── models.py               # Pydantic models: InstructionConfig, CompositionConfig, ProjectConfig (with DocsConfig), LintScore (tier: code|ml|ai), Conversation, Message, PeerConfig
 │       │   ├── auth.py                 # Auth token management + persistent user identity (read/write API key to ~/.writ/config.yaml)
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding, _latest.md
 │       │   ├── peers.py                # Peer repository management -- read/write peers.yaml
@@ -61,7 +61,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── context_window.py       # Sliding window + token estimation for API invocations
 │       │   ├── file_io.py              # Cross-platform file locking + atomic append for conversation files
 │       │   ├── llm_client.py           # Multi-provider LLM client (OpenAI, Anthropic, Gemini, local/LM Studio) for plan review
-│       │   ├── doc_health.py           # Documentation health analysis: dead refs, treeview drift, staleness, contradictions
+│       │   ├── doc_health.py           # Documentation health analysis: dead refs, treeview drift, staleness, contradictions, reverse drift (missing-from-index)
+│       │   ├── type_inference.py       # Infer instruction type (agent/skill/rule/plan/context/other) from path, name, or store metadata -- used by lint --deep for type-aware hooks
 │       │   └── rubrics/                # Versioned rubric files for AI-powered features
 │       │       └── plan-review-v1.md   # Plan review rubric (system prompt for LLM analysis)
 │       ├── integrations/               # External registry integrations
@@ -115,15 +116,23 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │           └── _builtin/              # Auto-installed on writ init (not user-selectable templates)
 │               ├── writ-context.md    # CLI command reference, written to IDE rules dirs
 │               ├── prompts/           # Injected instructions for "commands as instructions" pattern (versioned .md files, loaded by commands at runtime)
-│               │   ├── docs-init-v1.md    # Instruction for writ docs init (LLM populates docs index)
-│               │   ├── docs-update-v1.md  # Instruction for writ docs update (LLM acts on health-check findings, updates docs, logs summary)
-│               │   ├── lint-deep-v1.md    # Qualitative review rubric for writ lint --deep (actionable feedback, not scoring)
-│               │   └── lint-fix-v1.md     # Fix hook for writ lint --deep --fix (instructs LLM to apply fixes directly)
+│               │   ├── docs-init-v1.md         # Instruction for writ docs init (LLM populates docs index)
+│               │   ├── docs-update-v1.md       # Instruction for writ docs update (LLM acts on health-check findings, updates docs, logs summary)
+│               │   ├── lint-deep-v1.md         # Qualitative review rubric for writ lint --deep (actionable feedback, not scoring)
+│               │   ├── lint-fix-v1.md          # Fix hook for writ lint --deep --fix (instructs LLM to apply fixes directly)
+│               │   ├── plan-review-local-v1.md # Wrapper for writ plan review --local (rubric injection for IDE's AI)
+│               │   └── hooks/                  # Type-specific supplement prompts, dynamically injected after base rubric by lint --deep
+│               │       ├── hook-lint-skill.md   # Skill-specific review criteria (procedure, triggers, self-containment)
+│               │       ├── hook-lint-agent.md   # Agent-specific review criteria (persona, scope, delegation)
+│               │       ├── hook-lint-rule.md    # Rule-specific review criteria (testability, contradictions, exceptions)
+│               │       ├── hook-lint-plan.md    # Plan-specific review criteria (ordering, dependencies, risks)
+│               │       ├── hook-lint-context.md # Context-specific review criteria (currency, minimality, accuracy)
+│               │       └── hook-lint-other.md   # Fallback for unknown document types (universal quality checks)
 │               └── skills/            # 11 battle-tested skills, auto-installed to IDE skill dirs on writ init
 │                   ├── autoresearch.md, plan-skill.md, doc-maintenance.md, doc-health.md, pre-commit-checks.md
 │                   ├── code-simplifier.md, security-scan.md, verify-skill.md, tech-debt-fixer.md
 │                   └── superpower-skill.md, skill-creator-skill.md
-├── tests/                              # pytest test suite (610+ tests)
+├── tests/                              # pytest test suite (650+ tests)
 │   ├── conftest.py                     # Shared fixtures (temp dirs, sample configs, monkeypatched cwd)
 │   ├── test_cli.py                     # CLI command tests (init, add, search, templates, import, publish/unpublish)
 │   ├── test_compose.py                 # Composition engine tests
@@ -146,7 +155,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   ├── test_knowledge_cli.py          # Review + threads CLI tests (17 tests)
 │   ├── test_memory_cli.py             # Memory export/import/list CLI tests (9 tests)
 │   ├── test_upgrade.py               # Upgrade command tests (10 tests)
-│   └── test_docs.py                  # Documentation health commands tests (docs init/check/update, query, status, log)
+│   ├── test_docs.py                  # Documentation health commands tests (docs init/check/update, query, status, log)
+│   └── test_type_inference.py        # Type inference, changed patterns, plan --local, lint type hooks, reverse drift, core files, staleness config (37 tests)
 ├── action/                             # GitHub Action for writ lint (composite action, enwrit/writ@main)
 │   └── action.yml                     # Composite action: install enwrit, lint specified files, optional quality gate
 ├── .cursor/                            # See .cursor-treeview.mdc for full breakdown

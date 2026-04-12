@@ -80,6 +80,19 @@ class InstructionConfig(BaseModel):
     format_overrides: FormatOverrides = Field(default_factory=FormatOverrides)
 
 
+class DocsConfig(BaseModel):
+    """Configuration for documentation health checks."""
+
+    stale_threshold: int = Field(
+        default=30,
+        description="Commits since last edit before a file is 'stale'.",
+    )
+    critical_threshold: int = Field(
+        default=100,
+        description="Commits since last edit before a file is 'STALE' (critical).",
+    )
+
+
 class ProjectConfig(BaseModel):
     """Project-level writ configuration stored in .writ/config.yaml."""
 
@@ -94,6 +107,10 @@ class ProjectConfig(BaseModel):
     auto_export: bool = Field(
         default=True,
         description="Automatically write to IDE files on 'writ use'.",
+    )
+    docs: DocsConfig = Field(
+        default_factory=DocsConfig,
+        description="Documentation health check settings.",
     )
 
 

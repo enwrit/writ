@@ -45,7 +45,7 @@ src/writ/
 
 ## How It Works
 
-The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --deep` (backend Gemini) and `writ plan review` (user-configured model or backend). `writ docs update` uses the "commands as injected instructions" pattern -- it prints instructions for the IDE's own LLM to execute, no API cost to writ. Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
+The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --deep-api` (backend Gemini) and `writ plan review` (user-configured model or backend). `writ lint --deep`, `writ plan review --local`, and `writ docs update` use the "commands as injected instructions" pattern -- they print instructions for the IDE's own LLM to execute, no API cost to writ. `writ lint --deep` is type-aware: it infers the file type (skill/agent/rule/plan/context/other) from its path and injects a type-specific review hook via modular prompts in `prompts/hooks/`. Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
 
 11 tools auto-detected via `IDE_PATHS` in `formatter.py`. Instructions routed to `rules/`, `skills/writ/`, or `agents/` based on `task_type`:
 
@@ -89,7 +89,7 @@ writ lint <name|file>           Validate quality (auto-detects file vs store nam
 writ lint --code                Force Tier 1 code-only scoring (deterministic)
 writ lint --score               Output headline score only (machine-readable)
 writ lint --quiet               Output score + dimension table only (no issues/suggestions)
-writ lint <file> --deep         Deep qualitative review (prints analysis instruction for IDE's AI)
+writ lint <file> --deep         Type-aware deep qualitative review (auto-detects skill/agent/rule/plan/context; injects type-specific hook prompt)
 writ lint <file> --deep --fix  Deep review + instruct the AI to apply fixes directly
 writ lint <file> --deep-api    AI-powered Tier 3 scoring via enwrit.com API (requires login)
 writ connect                    Interactive peer setup wizard for real repos
@@ -114,6 +114,7 @@ writ peers add/list/remove      Manage peer repo connections (local or remote)
 writ diff <file>                Compare current lint score vs previous git commit
 writ upgrade [name]             Check for and apply instruction updates from Hub/PRPM
 writ plan review <file>         AI-powered plan review (uses writ model config or backend Gemini)
+writ plan review <file> --local Print review rubric for IDE's AI (no API call, zero context bloat)
 writ docs init                  Create documentation index for knowledge health tracking
 writ docs check                 Heuristic documentation health scan (dead refs, treeview drift, staleness)
 writ docs update                AI-powered documentation update pass (check + injected instruction for LLM)

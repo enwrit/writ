@@ -20,6 +20,10 @@ Do NOT blindly read every file in the documentation index. Prioritize:
    check specifically flags them (e.g., a dead reference pointing to a cold
    file).
 
+**Non-git fallback**: If git is not available (not a git repo, or git not
+installed), skip the git-based steps above and focus entirely on the health
+check findings and the documentation index.
+
 ## Step 1: Review Health Check Findings
 
 Read through the health check results provided below this instruction. For each

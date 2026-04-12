@@ -50,7 +50,74 @@ def _build_index_treeview(root: Path) -> str:
     _render_tree(tree, lines, indent=0)
     lines.append("```")
 
-    return _INDEX_HEADER + "\n".join(lines) + "\n"
+    core_section = _build_core_files_section(root, doc_files)
+    body = "\n".join(lines) + "\n"
+    if core_section:
+        body += "\n" + core_section
+
+    return _INDEX_HEADER + body
+
+
+def _build_core_files_section(root: Path, doc_files: list[Path]) -> str:
+    """Generate a '## Core files' section from relative git commit frequency.
+
+    Files whose commit count exceeds 30 % of total repo commits are
+    considered "core".  If fewer than 2 qualify, the top-3 by ratio are
+    shown instead.  Returns empty string if git is unavailable.
+    """
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            capture_output=True, text=True, check=True, timeout=10, cwd=root,
+        )
+        total_commits = int(out.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError, ValueError):
+        return ""
+
+    if total_commits < 1:
+        return ""
+
+    ratios: list[tuple[str, int, float]] = []
+    for fp in doc_files:
+        try:
+            out = subprocess.run(
+                ["git", "log", "--oneline", "--follow", "--", str(fp)],
+                capture_output=True, text=True, check=True,
+                timeout=10, cwd=root,
+            )
+            file_commits = len(out.stdout.strip().splitlines())
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+            continue
+        if file_commits < 1:
+            continue
+        try:
+            rel = fp.relative_to(root).as_posix()
+        except ValueError:
+            rel = str(fp)
+        ratio = file_commits / total_commits
+        ratios.append((rel, file_commits, ratio))
+
+    if not ratios:
+        return ""
+
+    ratios.sort(key=lambda r: r[2], reverse=True)
+
+    core = [r for r in ratios if r[2] >= 0.30]
+    if len(core) < 2:
+        core = ratios[:3]
+
+    lines = [
+        "## Core files",
+        "",
+        "Files frequently updated alongside code changes (by git commit frequency):",
+    ]
+    for rel_path, commits, ratio in core:
+        pct = round(ratio * 100)
+        lines.append(f"- {rel_path}  [{commits} commits, {pct}%]")
+
+    return "\n".join(lines) + "\n"
 
 
 def _render_tree(node: dict, lines: list[str], indent: int) -> None:

@@ -80,14 +80,17 @@ _ROOT_FILES = [
     ".cursorrules", ".windsurfrules",
 ]
 
+_EXTRA_DOC_DIRS = ["docs", "doc"]
+
 
 def find_doc_files(root: Path | None = None) -> list[Path]:
-    """Find documentation files in IDE folders and well-known root files.
+    """Find documentation files in IDE folders, docs dirs, and root files.
 
     Scans all detected IDE configuration directories (.cursor/, .claude/,
-    .kiro/, etc.) recursively for documentation files.  Also picks up
-    well-known root files (README.md, AGENTS.md, etc.).  Excludes .writ/
-    internals which are static YAML managed by writ itself.
+    .kiro/, etc.) and common documentation directories (docs/, doc/)
+    recursively for documentation files.  Also picks up well-known root
+    files (README.md, AGENTS.md, etc.).  Excludes .writ/ internals which
+    are static YAML managed by writ itself.
     """
     root = root or Path.cwd()
     files: list[Path] = []
@@ -97,7 +100,8 @@ def find_doc_files(root: Path | None = None) -> list[Path]:
         if p.exists():
             files.append(p)
 
-    for ide_dir in _IDE_DETECT_DIRS:
+    scan_dirs = list(_IDE_DETECT_DIRS) + _EXTRA_DOC_DIRS
+    for ide_dir in scan_dirs:
         d = root / ide_dir
         if not d.is_dir():
             continue
@@ -352,14 +356,58 @@ def check_contradictions(
     return issues
 
 
+def _check_missing_from_index(
+    root: Path,
+    doc_files: list[Path],
+    file_reports: dict[str, DocFileReport],
+) -> None:
+    """Report doc files on disk that are not mentioned in writ-docs-index."""
+    from writ.core import store
+
+    idx_cfg = store.load_instruction("writ-docs-index")
+    if not idx_cfg or not idx_cfg.instructions:
+        return
+
+    index_text = idx_cfg.instructions.lower()
+    for fp in doc_files:
+        try:
+            rel = fp.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        filename = fp.name.lower()
+        if filename not in index_text and rel.lower() not in index_text:
+            fr = file_reports.get(str(fp.relative_to(root)))
+            if fr is None:
+                fr = DocFileReport(path=str(fp.relative_to(root)))
+                file_reports[str(fp.relative_to(root))] = fr
+            fr.issues.append(DocIssue(
+                kind="missing_from_index",
+                message=f"File exists on disk but is not in the docs index: {rel}",
+                severity="info",
+            ))
+
+
 def run_health_check(root: Path | None = None) -> DocHealthReport:
     """Run a full documentation health check.
 
     Returns a DocHealthReport with per-file reports and aggregate score.
+    Staleness thresholds can be configured in ``.writ/config.yaml`` via
+    the ``docs.stale_threshold`` and ``docs.critical_threshold`` keys.
     """
     root = root or Path.cwd()
     doc_files = find_doc_files(root)
     report = DocHealthReport()
+
+    stale_t = 30
+    critical_t = 100
+    try:
+        from writ.core import store
+        if store.is_initialized():
+            cfg = store.load_config()
+            stale_t = cfg.docs.stale_threshold
+            critical_t = cfg.docs.critical_threshold
+    except Exception:  # noqa: BLE001
+        pass
 
     files_with_text: list[tuple[Path, str]] = []
     for fp in doc_files:
@@ -377,11 +425,15 @@ def run_health_check(root: Path | None = None) -> DocHealthReport:
         dead_refs = check_dead_references(text, root, fp)
         fr.issues.extend(dead_refs)
 
-        if "├" in text or "└" in text or "│" in text:
+        if "\u251c" in text or "\u2514" in text or "\u2502" in text:
             drift = check_treeview_drift(text, root)
             fr.issues.extend(drift)
 
-        freshness, commits = check_staleness(fp, root)
+        freshness, commits = check_staleness(
+            fp, root,
+            stale_threshold=stale_t,
+            critical_threshold=critical_t,
+        )
         fr.freshness = freshness
         fr.last_commit_ago = commits
 
@@ -394,6 +446,8 @@ def run_health_check(root: Path | None = None) -> DocHealthReport:
                 if not any(i.message == issue.message for i in fr.issues):
                     fr.issues.append(issue)
                 break
+
+    _check_missing_from_index(root, doc_files, file_reports)
 
     total_issues = 0
     penalty = 0

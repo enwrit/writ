@@ -113,9 +113,21 @@ def _call_anthropic(
     user_prompt: str,
     *,
     stream: bool = False,
+    json_mode: bool = False,
 ) -> str | Generator[str, None, None]:
-    """Call the Anthropic Messages API."""
+    """Call the Anthropic Messages API.
+
+    Anthropic has no native JSON mode flag. When *json_mode* is True we
+    append a JSON-only instruction to the system prompt as a workaround.
+    """
     import httpx
+
+    if json_mode:
+        system_prompt = (
+            system_prompt
+            + "\n\nIMPORTANT: Respond with valid JSON only."
+            " No markdown fences, no explanation outside the JSON structure."
+        )
 
     base_url = (cfg.base_url or "https://api.anthropic.com").rstrip("/")
     headers = {
@@ -264,7 +276,7 @@ def call_llm(
         )
     if cfg.provider == "anthropic":
         return _call_anthropic(
-            cfg, system_prompt, user_prompt, stream=stream,
+            cfg, system_prompt, user_prompt, stream=stream, json_mode=json_mode,
         )
     if cfg.provider == "gemini":
         return _call_gemini(

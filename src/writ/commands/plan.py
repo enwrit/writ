@@ -51,11 +51,41 @@ def _display_streaming(token_gen) -> str:  # type: ignore[type-arg]
     return "".join(collected)
 
 
+_BUILTIN_PROMPTS = Path(__file__).resolve().parent.parent / "templates" / "_builtin" / "prompts"
+
+
+def _run_local_review(plan_path: Path, with_plan: bool) -> None:
+    """Print plan review rubric as an injected instruction for the IDE's AI."""
+    wrapper_path = _BUILTIN_PROMPTS / "plan-review-local-v1.md"
+    if not wrapper_path.exists():
+        console.print("[red]Local review prompt not found.[/red]")
+        raise typer.Exit(1)
+    wrapper = wrapper_path.read_text(encoding="utf-8")
+    rubric = _load_rubric()
+
+    console.print("[bold cyan]--- Plan Review Instruction ---[/bold cyan]")
+    console.print()
+    console.print(wrapper)
+    console.print(rubric)
+
+    if with_plan:
+        plan_text = plan_path.read_text(encoding="utf-8").strip()
+        console.print()
+        console.print(
+            f"[bold cyan]--- Plan to Review: {plan_path} ---[/bold cyan]",
+        )
+        console.print()
+        console.print(plan_text)
+
+
 def _display_review(review_text: str | list | dict, model_label: str, file_path: str) -> None:
     """Parse and display a plan review with Rich formatting."""
     from rich.panel import Panel
 
-    header = f"[bold]Plan Review:[/bold] {file_path}\n[dim]Model: {model_label}[/dim]"
+    header = (
+        f"[bold]Plan Review:[/bold] {file_path}\n"
+        f"[dim]Model: {model_label} | Rubric: plan-review-v1[/dim]"
+    )
 
     try:
         if isinstance(review_text, dict):
@@ -112,6 +142,20 @@ def review_command(
         str,
         typer.Argument(help="Path to the plan file (.md, .mdc, .txt)."),
     ],
+    local: Annotated[
+        bool,
+        typer.Option(
+            "--local",
+            help="Print review rubric for your IDE's AI (no API call).",
+        ),
+    ] = False,
+    with_plan: Annotated[
+        bool,
+        typer.Option(
+            "--with-plan",
+            help="With --local: also print the plan content (if not already in context).",
+        ),
+    ] = False,
     no_context: Annotated[
         bool,
         typer.Option("--no-context", help="Skip project context (faster)."),
@@ -126,18 +170,29 @@ def review_command(
     Sends your plan to a configured AI model (or enwrit.com backend) along
     with your project context. Returns actionable technical critique.
 
+    Use --local to print the review rubric for your IDE's built-in AI
+    instead of calling an API. By default --local prints only the rubric
+    (the plan is already in your IDE's context). Add --with-plan to
+    include the plan content explicitly.
+
     \b
     Examples:
       writ plan review plan.md
+      writ plan review plan.md --local
+      writ plan review plan.md --local --with-plan
       writ plan review .cursor/plans/my-plan.md --no-context
       writ plan review plan.md --json
     """
-    from writ.core import llm_client
-
     plan_path = Path(file)
     if not plan_path.exists():
         console.print(f"[red]File not found:[/red] {file}")
         raise typer.Exit(1)
+
+    if local:
+        _run_local_review(plan_path, with_plan=with_plan)
+        return
+
+    from writ.core import llm_client
 
     plan_text = plan_path.read_text(encoding="utf-8").strip()
     if not plan_text:

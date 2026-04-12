@@ -25,12 +25,14 @@ instructions across AI coding tools, projects, and agents.
 
 ### Quality
 - `writ lint [file|name]` -- score instruction quality (0-100, ML-powered)
-- `writ lint --deep` -- deep qualitative review (prints analysis instruction for your IDE's AI)
+- `writ lint --deep` -- type-aware deep qualitative review (prints analysis instruction for your IDE's AI; auto-detects skill/agent/rule/plan/context type and injects specialized review criteria)
 - `writ lint --deep --fix` -- deep review + instruct the AI to apply fixes directly
 - `writ lint --deep-api` -- AI-powered scoring via enwrit.com API (requires login)
 - `writ lint --deep-local` -- fully local AI analysis (GPU-accelerated)
 - `writ lint --code` -- deterministic code-only scoring
 - `writ plan review <file>` -- AI-powered plan review (catches technical issues, suggests alternatives)
+- `writ plan review <file> --local` -- print review rubric for your IDE's AI (no API call, zero bloat)
+- `writ plan review <file> --local --with-plan` -- include plan content with the rubric (for old/external plans)
 - `writ plan review <file> --json` -- structured JSON output for agent consumption
 - `writ diff <file>` -- compare lint score vs previous git commit
 - `writ upgrade [name]` -- check for and apply instruction updates from Hub/PRPM

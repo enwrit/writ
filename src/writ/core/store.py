@@ -178,8 +178,20 @@ def save_project_context(content: str) -> None:
 
 
 def load_project_context() -> str | None:
-    """Load .writ/project-context.md, returns None if not found."""
-    return read_text_safe(project_writ_dir() / "project-context.md")
+    """Load .writ/project-context.md, enriched with docs index if available.
+
+    The docs index is appended so that external reviewers (API-based plan
+    review, remote agents) get structural context about what documentation,
+    rules, and plans exist in the repo.  For local/IDE usage the index is
+    already available via ``alwaysApply``, so this only matters for the
+    API path.
+    """
+    ctx = read_text_safe(project_writ_dir() / "project-context.md")
+    idx = load_instruction("writ-docs-index")
+    if idx and idx.instructions:
+        suffix = f"\n\n## Documentation Index\n\n{idx.instructions}"
+        return (ctx or "") + suffix
+    return ctx
 
 
 def save_handoff(from_agent: str, to_agent: str, content: str) -> None:
