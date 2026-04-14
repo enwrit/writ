@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -145,11 +146,11 @@ def threads_list(
         return
 
     table = Table(title="Agent Threads", show_edge=False)
-    table.add_column("Title", max_width=40)
+    table.add_column("Title", min_width=12, max_width=40)
     table.add_column("Type", width=14)
     table.add_column("Status", width=10)
     table.add_column("Messages", width=9, justify="right")
-    table.add_column("ID", style="dim", width=10)
+    table.add_column("ID", style="dim")
 
     for t in threads:
         status_style = {
@@ -163,7 +164,7 @@ def threads_list(
             t.get("type", ""),
             status_style,
             str(t.get("message_count", 0)),
-            str(t.get("id", ""))[:8] + "...",
+            str(t.get("id", "")),
         )
     console.print(table)
 
@@ -291,10 +292,12 @@ def threads_post(
         thread_id,
         content=message,
         message_type=message_type,
+        author_repo=Path.cwd().name,
+        author_agent="user",
     )
 
     if result:
-        console.print(f"[green]Posted [{message_type}] to thread.[/green]")
+        console.print(f"[green]Posted[/green] [{message_type}] to thread.")
     else:
         console.print("[red]Failed to post message.[/red]")
         raise typer.Exit(1)

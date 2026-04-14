@@ -345,6 +345,7 @@ class TestMcpCommandResolution:
         monkeypatch.setattr(sys, "prefix", "/usr")
         monkeypatch.setattr(sys, "base_prefix", "/usr")
         monkeypatch.setattr(sys, "executable", "/usr/bin/python3")
+        monkeypatch.delenv("VIRTUAL_ENV", raising=False)
         entry = mcp_cmd._resolve_writ_command(slim=True)
         assert entry["command"] == "uvx"
         assert "enwrit" in entry["args"]
@@ -358,6 +359,7 @@ class TestMcpCommandResolution:
         monkeypatch.setattr(sys, "prefix", "/usr")
         monkeypatch.setattr(sys, "base_prefix", "/usr")
         monkeypatch.setattr(sys, "executable", "/usr/bin/python3")
+        monkeypatch.delenv("VIRTUAL_ENV", raising=False)
         entry = mcp_cmd._resolve_writ_command(slim=False)
         assert entry["command"] == "writ"
         assert "--slim" not in entry["args"]
@@ -369,7 +371,9 @@ class TestMcpCommandResolution:
         monkeypatch.setattr("shutil.which", lambda cmd: None)
         monkeypatch.setattr(sys, "prefix", "/home/user/myenv")
         monkeypatch.setattr(sys, "base_prefix", "/usr")
+        monkeypatch.setattr(sys, "executable", "/home/user/myenv/bin/python3")
         entry = mcp_cmd._resolve_writ_command(slim=True)
+        assert entry["command"] == "/home/user/myenv/bin/python3"
         assert entry["args"][0] == "-m"
         assert "writ" in entry["args"]
         assert "--slim" in entry["args"]

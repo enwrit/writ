@@ -76,7 +76,7 @@ def upgrade_command(
             skipped += 1
             continue
 
-        if remote_cfg.version == inst.version and remote_cfg.instructions == inst.instructions:
+        if remote_cfg.version == inst.version:
             table.add_row(
                 inst.name, source, inst.version, remote_cfg.version, "[green]up to date[/green]",
             )

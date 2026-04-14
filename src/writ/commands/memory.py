@@ -48,7 +48,10 @@ def export_memory(
     elif content:
         data = content
     else:
-        # Export project context + any handoffs as a bundle
+        console.print(
+            f"[dim]No --from or --content specified. "
+            f"Exporting project context + handoffs as '{name}'.[/dim]"
+        )
         data = _bundle_project_memory()
 
     # Add metadata header

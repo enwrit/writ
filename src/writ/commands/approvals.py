@@ -29,7 +29,13 @@ def _require_login() -> None:
 
 @approvals_app.command(name="create")
 def create_approval(
-    action_type: Annotated[str, typer.Argument(help="Action type (e.g. deploy, delete, refactor)")],
+    action_type: Annotated[
+        str,
+        typer.Argument(
+            help="Action type (deploy, install, refactor, "
+            "file_write, file_delete, shell_command, custom)",
+        ),
+    ],
     description: Annotated[str, typer.Argument(help="What the agent wants to do")],
     reasoning: Annotated[
         str, typer.Option("--reasoning", "-r", help="Why this action is needed"),

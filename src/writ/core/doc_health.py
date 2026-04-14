@@ -425,7 +425,10 @@ def run_health_check(root: Path | None = None) -> DocHealthReport:
         dead_refs = check_dead_references(text, root, fp)
         fr.issues.extend(dead_refs)
 
-        if "\u251c" in text or "\u2514" in text or "\u2502" in text:
+        is_builtin_skill = "skills/writ/" in rel or "skills\\writ\\" in rel
+        if not is_builtin_skill and (
+            "\u251c" in text or "\u2514" in text or "\u2502" in text
+        ):
             drift = check_treeview_drift(text, root)
             fr.issues.extend(drift)
 

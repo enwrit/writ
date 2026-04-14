@@ -10,6 +10,7 @@ Supports: Cursor, VS Code/Copilot, Claude Code, Kiro, Windsurf.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -45,13 +46,13 @@ def _resolve_writ_command(slim: bool = True) -> dict:
     def _in_venv() -> bool:
         if sys.prefix != sys.base_prefix:
             return True
-        exe = Path(sys.executable).resolve()
-        parts = [p.lower() for p in exe.parts]
+        if os.environ.get("VIRTUAL_ENV"):
+            return True
+        parts = [p.lower() for p in Path(sys.executable).parts]
         return any(v in parts for v in ("venv", ".venv", "env", ".env", "virtualenv"))
 
     if _in_venv():
-        python_path = str(Path(sys.executable).resolve())
-        return {"command": python_path, "args": ["-m", "writ", *args_suffix], "disabled": False}
+        return {"command": sys.executable, "args": ["-m", "writ", *args_suffix], "disabled": False}
 
     if shutil.which("uvx"):
         return {"command": "uvx", "args": ["enwrit", *args_suffix], "disabled": False}
@@ -59,8 +60,7 @@ def _resolve_writ_command(slim: bool = True) -> dict:
     if shutil.which("writ"):
         return {"command": "writ", "args": args_suffix, "disabled": False}
 
-    python_path = str(Path(sys.executable).resolve())
-    return {"command": python_path, "args": ["-m", "writ", *args_suffix], "disabled": False}
+    return {"command": sys.executable, "args": ["-m", "writ", *args_suffix], "disabled": False}
 
 
 def _merge_mcp_json(
