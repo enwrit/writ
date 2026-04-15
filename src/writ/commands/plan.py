@@ -144,14 +144,21 @@ def review_command(
         bool,
         typer.Option(
             "--local",
-            help="Print review rubric for your IDE's AI (no API call).",
+            help="Review via your configured local model (writ model set local).",
+        ),
+    ] = False,
+    cloud: Annotated[
+        bool,
+        typer.Option(
+            "--cloud",
+            help="Review via enwrit.com API only (requires login).",
         ),
     ] = False,
     with_plan: Annotated[
         bool,
         typer.Option(
             "--with-plan",
-            help="With --local: also print the plan content (if not already in context).",
+            help="Include plan content inline in the prompt output.",
         ),
     ] = False,
     no_context: Annotated[
@@ -162,24 +169,37 @@ def review_command(
         bool,
         typer.Option("--json", help="Output raw JSON (for agents/scripts)."),
     ] = False,
+    subagent: Annotated[
+        bool,
+        typer.Option(
+            "--subagent",
+            help="Instruct the IDE to launch a subagent for the review.",
+        ),
+    ] = False,
+    # LEGACY aliases (hidden) -------------------------------------------------
+    prompt: Annotated[
+        bool,
+        typer.Option(
+            "--prompt", hidden=True,
+            help="LEGACY: prompt is now the default.",
+        ),
+    ] = False,
 ) -> None:
     """Review an implementation plan with AI.
 
-    Sends your plan to a configured AI model (or enwrit.com backend) along
-    with your project context. Returns actionable technical critique.
+    By default, prints the review rubric for your IDE's AI agent to
+    analyze the plan (prompt injection). Use --local to send to your
+    configured local model (e.g. LM Studio), or --cloud for the
+    enwrit.com API.
 
-    Use --local to print the review rubric for your IDE's built-in AI
-    instead of calling an API. By default --local prints only the rubric
-    (the plan is already in your IDE's context). Add --with-plan to
-    include the plan content explicitly.
-
-    \b
+    \\b
     Examples:
-      writ plan review plan.md
-      writ plan review plan.md --local
-      writ plan review plan.md --local --with-plan
-      writ plan review .cursor/plans/my-plan.md --no-context
-      writ plan review plan.md --json
+      writ plan review plan.md                 # prompt for IDE agent (default)
+      writ plan review plan.md --with-plan     # prompt + inline plan content
+      writ plan review plan.md --local         # your local model
+      writ plan review plan.md --cloud         # enwrit.com API
+      writ plan review plan.md --cloud --json  # API with JSON output
+      writ plan review plan.md --no-context    # skip project context
     """
     plan_path = Path(file)
     if not plan_path.exists():
@@ -187,10 +207,45 @@ def review_command(
         raise typer.Exit(1)
 
     if local:
-        _run_local_review(plan_path, with_plan=with_plan)
+        _run_model_review(plan_path, no_context, output_json)
         return
 
+    if cloud:
+        _run_cloud_review(plan_path, no_context, output_json, file)
+        return
+
+    # Default: prompt injection for IDE agent
+    if subagent:
+        console.print("[bold cyan]--- Subagent Task ---[/bold cyan]")
+        console.print()
+        console.print(
+            f"Launch a subagent and have it run:\n\n"
+            f"  writ plan review {file}\n\n"
+            f"The subagent will receive the review rubric and analyze "
+            f"the plan. It should follow the rubric and report its "
+            f"findings back to you."
+        )
+        return
+    _run_local_review(plan_path, with_plan=with_plan)
+
+
+def _run_model_review(
+    plan_path: Path,
+    no_context: bool,
+    output_json: bool,
+) -> None:
+    """Review plan via the user's configured model (writ model set)."""
     from writ.core import llm_client
+
+    model_cfg = llm_client.get_model_config()
+    if model_cfg is None:
+        console.print(
+            "[red]No model configured.[/red]\n\n"
+            "Set up a local model first:\n"
+            "  [cyan]writ model set local "
+            "--url http://127.0.0.1:1234/v1[/cyan]",
+        )
+        raise typer.Exit(1)
 
     plan_text = plan_path.read_text(encoding="utf-8").strip()
     if not plan_text:
@@ -200,73 +255,37 @@ def review_command(
     project_context: str | None = None
     if not no_context:
         from writ.core import store
-
         project_context = store.load_project_context()
 
     rubric = _load_rubric()
     user_prompt = _build_user_prompt(plan_text, project_context)
 
-    model_cfg = llm_client.get_model_config()
+    model_label = (
+        f"{model_cfg.provider} "
+        f"({llm_client._resolve_model(model_cfg)})"
+    )
     interactive = llm_client.is_interactive() and not output_json
 
-    if model_cfg is not None:
-        model_label = f"{model_cfg.provider} ({llm_client._resolve_model(model_cfg)})"
+    if interactive:
+        console.print(
+            f"[dim]Reviewing plan with {model_label}...[/dim]",
+        )
+    try:
         if interactive:
-            console.print(
-                f"[dim]Reviewing plan with {model_label}...[/dim]",
+            token_gen = llm_client.call_llm(
+                rubric, user_prompt, stream=True, json_mode=True,
             )
-        try:
-            if interactive:
-                token_gen = llm_client.call_llm(
-                    rubric, user_prompt, stream=True, json_mode=True,
-                )
-                review_text = _display_streaming(token_gen)
-            else:
-                result = llm_client.call_llm(
-                    rubric, user_prompt, stream=False, json_mode=True,
-                )
-                if not isinstance(result, str):
-                    result = "".join(result)
-                review_text = result
-        except llm_client.LLMError as exc:
-            console.print(f"[red]Model error:[/red] {exc}")
-            raise typer.Exit(1) from None
-    else:
-        from writ.core import auth as auth_mod
-
-        if not auth_mod.is_logged_in():
-            console.print(
-                "[yellow]No model configured.[/yellow]\n\n"
-                "Configure a model with:\n"
-                "  [cyan]writ model set openai --api-key <key>[/cyan]\n"
-                "  [cyan]writ model set local --url http://localhost:1234/v1[/cyan]\n\n"
-                "Or run [cyan]writ login[/cyan] for 5 free daily plan reviews via Gemini.",
-            )
-            raise typer.Exit(1)
-
-        model_label = "enwrit.com (Gemini)"
-        if interactive:
-            from rich.status import Status
-
-            with Status("[dim]Reviewing plan via enwrit.com...[/dim]", console=console):
-                t0 = time.monotonic()
-                try:
-                    review_text = llm_client.call_backend_plan_review(
-                        plan_text, project_context,
-                    )
-                except llm_client.LLMError as exc:
-                    console.print(f"[red]Error:[/red] {exc}")
-                    raise typer.Exit(1) from None
-                elapsed = time.monotonic() - t0
-            console.print(f"[dim]Completed in {elapsed:.1f}s[/dim]")
+            review_text = _display_streaming(token_gen)
         else:
-            try:
-                review_text = llm_client.call_backend_plan_review(
-                    plan_text, project_context,
-                )
-            except llm_client.LLMError as exc:
-                console.print(f"[red]Error:[/red] {exc}")
-                raise typer.Exit(1) from None
+            result = llm_client.call_llm(
+                rubric, user_prompt, stream=False, json_mode=True,
+            )
+            if not isinstance(result, str):
+                result = "".join(result)
+            review_text = result
+    except llm_client.LLMError as exc:
+        console.print(f"[red]Model error:[/red] {exc}")
+        raise typer.Exit(1) from None
 
     if output_json:
         try:
@@ -278,4 +297,74 @@ def review_command(
         except (json.JSONDecodeError, TypeError):
             console.print(str(review_text))
     else:
-        _display_review(review_text, model_label, file)
+        _display_review(review_text, model_label, str(plan_path))
+
+
+def _run_cloud_review(
+    plan_path: Path,
+    no_context: bool,
+    output_json: bool,
+    file_label: str,
+) -> None:
+    """Review plan via enwrit.com API only (never uses configured model)."""
+    from writ.core import auth as auth_mod
+    from writ.core import llm_client
+
+    if not auth_mod.is_logged_in():
+        console.print(
+            "[red]--cloud requires an enwrit account.[/red]\n"
+            "Run [cyan]writ register[/cyan] or "
+            "[cyan]writ login[/cyan] first.",
+        )
+        raise typer.Exit(1)
+
+    plan_text = plan_path.read_text(encoding="utf-8").strip()
+    if not plan_text:
+        console.print("[red]Plan file is empty.[/red]")
+        raise typer.Exit(1)
+
+    project_context: str | None = None
+    if not no_context:
+        from writ.core import store
+        project_context = store.load_project_context()
+
+    model_label = "enwrit.com (Gemini)"
+    interactive = llm_client.is_interactive() and not output_json
+
+    if interactive:
+        from rich.status import Status
+
+        with Status(
+            "[dim]Reviewing plan via enwrit.com...[/dim]",
+            console=console,
+        ):
+            t0 = time.monotonic()
+            try:
+                review_text = llm_client.call_backend_plan_review(
+                    plan_text, project_context,
+                )
+            except llm_client.LLMError as exc:
+                console.print(f"[red]Error:[/red] {exc}")
+                raise typer.Exit(1) from None
+            elapsed = time.monotonic() - t0
+        console.print(f"[dim]Completed in {elapsed:.1f}s[/dim]")
+    else:
+        try:
+            review_text = llm_client.call_backend_plan_review(
+                plan_text, project_context,
+            )
+        except llm_client.LLMError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1) from None
+
+    if output_json:
+        try:
+            if isinstance(review_text, (dict, list)):
+                parsed = review_text
+            else:
+                parsed = json.loads(review_text)
+            console.print_json(json.dumps(parsed))
+        except (json.JSONDecodeError, TypeError):
+            console.print(str(review_text))
+    else:
+        _display_review(review_text, model_label, file_label)

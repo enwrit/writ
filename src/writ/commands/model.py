@@ -1,4 +1,4 @@
-"""writ model set/list/clear -- configure AI model for plan review."""
+"""writ model set/list/clear -- configure AI model for --local features."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ _DEFAULT_URLS: dict[str, str] = {
 
 model_app = typer.Typer(
     name="model",
-    help="Configure AI model for plan review and other AI features.",
+    help="Configure AI model for --local lint, plan review, and other AI features.",
     no_args_is_help=True,
 )
 
@@ -51,14 +51,14 @@ def model_set(
         typer.Option("--url", "-u", help="Custom endpoint URL (required for local)."),
     ] = None,
 ) -> None:
-    """Set the AI model for plan review.
+    """Set the AI model for --local features (lint, plan review).
 
     \b
     Examples:
+      writ model set local --url http://localhost:1234/v1   # LM Studio, Ollama
       writ model set openai --api-key sk-...
       writ model set anthropic --api-key sk-ant-... --model claude-sonnet-4-20250514
       writ model set gemini --api-key AIza...
-      writ model set local --url http://localhost:1234/v1
     """
     provider = provider.lower().strip()
     valid_providers = ("openai", "anthropic", "gemini", "local")
@@ -96,7 +96,10 @@ def model_set(
     console.print(f"[green]Model configured:[/green] {provider} ({display_model})")
     if provider == "local":
         console.print(f"[dim]Endpoint: {url}[/dim]")
-    console.print("[dim]Run [cyan]writ plan review <file>[/cyan] to use it.[/dim]")
+    console.print(
+        "[dim]Use with [cyan]writ lint <file> --local[/cyan] or "
+        "[cyan]writ plan review <file> --local[/cyan][/dim]",
+    )
 
 
 @model_app.command(name="list")
@@ -108,8 +111,8 @@ def model_list() -> None:
     if config.model is None:
         console.print(
             "[dim]No model configured.[/dim]\n"
-            "Set one with [cyan]writ model set <provider> --api-key <key>[/cyan]\n"
-            "Or run [cyan]writ login[/cyan] for 5 free daily plan reviews via Gemini.",
+            "Set one with [cyan]writ model set local --url http://...[/cyan]\n"
+            "Or run [cyan]writ login[/cyan] to use enwrit.com via --cloud.",
         )
         return
 
@@ -127,7 +130,7 @@ def model_list() -> None:
 
 @model_app.command(name="clear")
 def model_clear() -> None:
-    """Remove model configuration. Falls back to enwrit.com backend."""
+    """Remove model configuration. --local will require reconfiguration."""
     config = store.load_global_config()
     if config.model is None:
         console.print("[dim]No model configured.[/dim]")
@@ -136,5 +139,6 @@ def model_clear() -> None:
     store.save_global_config(config)
     console.print(
         "[green]Model configuration removed.[/green]\n"
-        "[dim]Plan review will use enwrit.com backend (requires [cyan]writ login[/cyan]).[/dim]",
+        "[dim]--local features disabled until reconfigured. "
+        "Use --cloud for enwrit.com API.[/dim]",
     )

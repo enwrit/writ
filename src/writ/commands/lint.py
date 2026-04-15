@@ -372,10 +372,41 @@ def _load_type_hook(inferred_type: str) -> str | None:
     return None
 
 
+def _print_subagent_instruction(
+    command: str,
+    name: str | None = None,
+    file: Path | None = None,
+    fix: bool = False,
+) -> None:
+    """Print instruction for the main agent to launch a subagent."""
+    target = str(file) if file else (name or "")
+    cmd_parts = ["writ", command, "--prompt"]
+    if target:
+        if command == "lint":
+            cmd_parts.insert(2, target)
+        else:
+            cmd_parts.append(target)
+    if fix:
+        cmd_parts.append("--fix")
+
+    cmd_str = " ".join(cmd_parts)
+    console.print("[bold cyan]--- Subagent Task ---[/bold cyan]")
+    console.print()
+    console.print(
+        f"Launch a subagent and have it run:\n\n"
+        f"  {cmd_str}\n\n"
+        f"The subagent will receive the review rubric and target. "
+        f"It should follow the rubric, perform the review"
+        f"{' and apply fixes' if fix else ''}, "
+        f"then report its findings back to you."
+    )
+
+
 def _run_deep_review(
     name: str | None,
     file: Path | None,
     fix: bool = False,
+    with_file: bool = False,
 ) -> None:
     """Print a qualitative review instruction for the IDE's AI agent."""
     from writ.core.type_inference import infer_instruction_type
@@ -400,7 +431,7 @@ def _run_deep_review(
         label = name
     else:
         console.print(
-            "[yellow]--deep requires a target.[/yellow] "
+            "[yellow]--prompt requires a target.[/yellow] "
             "Specify a file path or agent name.",
         )
         raise typer.Exit(1)
@@ -430,10 +461,20 @@ def _run_deep_review(
     if fix:
         console.print()
         console.print(_load_prompt("lint-fix-v1.md"))
+
+    inline_content = with_file or file is None
     console.print()
-    console.print(f"[bold cyan]--- Instruction to Review: {label} ---[/bold cyan]")
-    console.print()
-    console.print(content)
+    if inline_content:
+        console.print(
+            f"[bold cyan]--- Instruction to Review: {label} ---[/bold cyan]"
+        )
+        console.print()
+        console.print(content)
+    else:
+        abs_path = file.resolve()
+        console.print("[bold cyan]--- Target File ---[/bold cyan]")
+        console.print()
+        console.print(f"Read and review this file: {abs_path}")
 
 
 def _run_deep_api_lint(
@@ -451,7 +492,7 @@ def _run_deep_api_lint(
     token = auth.get_token()
     if not token:
         console.print(
-            "[red]--deep-api requires an enwrit account.[/red] "
+            "[red]--cloud requires an enwrit account.[/red] "
             "Run [cyan]writ register[/cyan] or [cyan]writ login[/cyan] first.",
         )
         raise typer.Exit(1)
@@ -474,7 +515,7 @@ def _run_deep_api_lint(
             raise typer.Exit(1)
     else:
         console.print(
-            "[yellow]--deep-api requires a target.[/yellow] "
+            "[yellow]--cloud requires a target.[/yellow] "
             "Specify a file path or agent name.",
         )
         raise typer.Exit(1)
@@ -617,7 +658,7 @@ def _run_deep_local_lint(
             raise typer.Exit(1)
     else:
         console.print(
-            "[yellow]--deep-local requires a target.[/yellow] "
+            "[yellow]--local-model requires a target.[/yellow] "
             "Specify a file path or agent name.",
         )
         raise typer.Exit(1)
@@ -672,6 +713,127 @@ def _run_deep_local_lint(
 
     if ci and lint_score.score < min_score:
         raise typer.Exit(1)
+
+
+def _run_configured_local_lint(
+    name: str | None,
+    file: Path | None,
+    json_output: bool,
+    ci: bool,
+    min_score: int,
+    score_only: bool = False,
+    quiet: bool = False,
+) -> None:
+    """Run AI lint review via the user's configured local model (writ model set local)."""
+    from writ.core import llm_client
+    from writ.core.type_inference import infer_instruction_type
+
+    model_cfg = llm_client.get_model_config()
+    if model_cfg is None:
+        console.print(
+            "[red]No local model configured.[/red]\n\n"
+            "Set up a local model first:\n"
+            "  [cyan]writ model set local "
+            "--url http://127.0.0.1:1234/v1[/cyan]",
+        )
+        raise typer.Exit(1)
+
+    if file:
+        if not file.exists():
+            console.print(f"[red]File not found:[/red] {file}")
+            raise typer.Exit(1)
+        agent = _parse_file_to_config(file)
+        label = str(file)
+    elif name:
+        if not store.is_initialized():
+            console.print(
+                "[red]Not initialized.[/red] Run "
+                "[cyan]writ init[/cyan] first, or pass a file path.",
+            )
+            raise typer.Exit(1)
+        agent = store.load_instruction(name)
+        if not agent:
+            console.print(f"[red]Agent '{name}' not found.[/red]")
+            raise typer.Exit(1)
+        label = name
+    else:
+        console.print(
+            "[yellow]--local requires a target.[/yellow] "
+            "Specify a file path or agent name.",
+        )
+        raise typer.Exit(1)
+
+    content = agent.instructions or ""
+    if not content.strip():
+        console.print("[yellow]Instruction content is empty.[/yellow]")
+        raise typer.Exit(1)
+
+    inferred_type = infer_instruction_type(
+        file_path=file, name=name, task_type=agent.task_type,
+    )
+
+    rubric = _load_prompt("lint-deep-v1.md")
+    hook = _load_type_hook(inferred_type)
+    system_prompt = rubric
+    if hook:
+        system_prompt += "\n\n" + hook
+
+    user_prompt = (
+        f"## Instruction to review ({inferred_type}): {label}\n\n"
+        f"{content}"
+    )
+
+    model_label = (
+        f"{model_cfg.provider} "
+        f"({llm_client._resolve_model(model_cfg)})"
+    )
+    interactive = llm_client.is_interactive() and not json_output
+
+    if interactive:
+        console.print(
+            f"[dim]Reviewing with {model_label}...[/dim]",
+        )
+
+    try:
+        if interactive:
+            token_gen = llm_client.call_llm(
+                system_prompt, user_prompt, stream=True,
+            )
+            from rich.live import Live
+            from rich.markdown import Markdown
+
+            full_text = ""
+            with Live(console=console, refresh_per_second=8) as live:
+                for chunk in token_gen:
+                    full_text += chunk
+                    live.update(Markdown(full_text))
+            review_text = full_text
+        else:
+            result = llm_client.call_llm(
+                system_prompt, user_prompt, stream=False,
+            )
+            if not isinstance(result, str):
+                result = "".join(result)
+            review_text = result
+    except llm_client.LLMError as exc:
+        console.print(f"[red]Local model error:[/red] {exc}")
+        raise typer.Exit(1) from None
+
+    if json_output:
+        import json as json_mod
+        sys.stdout.write(json_mod.dumps({
+            "review": review_text,
+            "model": model_label,
+            "target": label,
+            "type": inferred_type,
+        }, indent=2) + "\n")
+    elif not interactive:
+        from rich.markdown import Markdown
+        console.print(Markdown(review_text))
+
+    console.print(
+        f"\n  [dim](reviewed by {model_label})[/dim]",
+    )
 
 
 def _fallback_local_lint(
@@ -774,25 +936,53 @@ def lint_command(
             help="Only lint files modified since last commit.",
         ),
     ] = False,
-    deep: Annotated[
+    prompt: Annotated[
         bool,
         typer.Option(
-            "--deep",
-            help="Deep qualitative review -- prints analysis instruction for your IDE's AI agent.",
+            "--prompt",
+            help="Qualitative review via prompt injection for your IDE's AI agent.",
         ),
     ] = False,
     fix: Annotated[
         bool,
         typer.Option(
             "--fix",
-            help="With --deep: also instruct the AI to apply fixes directly.",
+            help="With --prompt: also instruct the AI to apply fixes directly.",
         ),
     ] = False,
-    deep_api: Annotated[
+    with_file: Annotated[
         bool,
         typer.Option(
-            "--deep-api",
-            help="AI-powered scoring via enwrit.com API (requires login).",
+            "--with-file",
+            help="With --prompt: inline file content instead of asking the agent to read it.",
+        ),
+    ] = False,
+    subagent: Annotated[
+        bool,
+        typer.Option(
+            "--subagent",
+            help="Instruct the IDE to launch a subagent for the review (keeps main context clean).",
+        ),
+    ] = False,
+    cloud: Annotated[
+        bool,
+        typer.Option(
+            "--cloud",
+            help="AI scoring via enwrit.com API only (requires login).",
+        ),
+    ] = False,
+    local: Annotated[
+        bool,
+        typer.Option(
+            "--local",
+            help="AI scoring via your configured local model (writ model set local).",
+        ),
+    ] = False,
+    local_model: Annotated[
+        bool,
+        typer.Option(
+            "--local-model",
+            help="Bundled writ-lint-0.8B model (auto-downloaded, no setup needed).",
         ),
     ] = False,
     code: Annotated[
@@ -802,11 +992,26 @@ def lint_command(
             help="Force code-based Tier 1 scoring (skip ML models).",
         ),
     ] = False,
+    ml: Annotated[
+        bool,
+        typer.Option(
+            "--ml",
+            help="ML-predicted scoring (Tier 2) -- this is the default.",
+        ),
+    ] = False,
+    # LEGACY aliases (hidden) -------------------------------------------------
+    deep: Annotated[
+        bool,
+        typer.Option("--deep", hidden=True, help="LEGACY: use --prompt."),
+    ] = False,
+    deep_api: Annotated[
+        bool,
+        typer.Option("--deep-api", hidden=True, help="LEGACY: use --cloud."),
+    ] = False,
     deep_local: Annotated[
         bool,
         typer.Option(
-            "--deep-local",
-            help="Local AI analysis via fine-tuned Qwen model (no API needed).",
+            "--deep-local", hidden=True, help="LEGACY: use --local-model.",
         ),
     ] = False,
     stop_server: Annotated[
@@ -831,24 +1036,26 @@ def lint_command(
     a 0-100 quality score across 6 dimensions.
 
     By default uses ML-predicted scores (Tier 2) when models
-    are available. Use --deep for qualitative review via your
-    IDE's AI, --deep-api for API scoring via enwrit.com,
-    --deep-local for local Qwen model, or --code for Tier 1.
+    are available. Use --prompt for qualitative review via your
+    IDE's AI, --cloud for enwrit.com API scoring, --local for
+    your configured local model, --local-model for the bundled
+    writ-lint-0.8B, or --code for Tier 1.
 
-    Example:
-        writ lint                         # lint all (ML or code)
-        writ lint reviewer                # lint by store name
-        writ lint AGENTS.md               # lint a file (auto-detected)
-        writ lint CLAUDE.md --deep        # qualitative review
-        writ lint CLAUDE.md --deep --fix  # review + auto-fix
-        writ lint CLAUDE.md --deep-api    # AI scoring (API)
-        writ lint rules.mdc --json        # JSON output
-        writ lint --code                  # force Tier 1 only
-        writ lint --ci --min-score 60     # fail CI if < 60
-        writ lint --changed               # only modified files
-        writ lint --badge                 # print badge URL
-        writ lint CLAUDE.md --deep-local  # AI analysis (local)
-        writ lint --stop-server           # free GPU memory
+    \\b
+    Examples:
+        writ lint                           # lint all (ML or code)
+        writ lint reviewer                  # lint by store name
+        writ lint AGENTS.md                 # lint a file
+        writ lint CLAUDE.md --prompt        # qualitative review
+        writ lint CLAUDE.md --prompt --fix  # review + auto-fix
+        writ lint CLAUDE.md --cloud         # AI scoring (enwrit.com)
+        writ lint CLAUDE.md --local         # your local model
+        writ lint CLAUDE.md --local-model   # bundled writ-lint-0.8B
+        writ lint rules.mdc --json          # JSON output
+        writ lint --code                    # force Tier 1 only
+        writ lint --ci --min-score 60       # fail CI if < 60
+        writ lint --changed                 # only modified files
+        writ lint --stop-server             # free GPU memory
     """
     if stop_server:
         from writ.core.local_llm import stop_server as _stop
@@ -861,7 +1068,13 @@ def lint_command(
     if file is None and name is not None and _looks_like_file(name):
         file = Path(name)
         name = None
-    if deep_local:
+
+    # Resolve LEGACY aliases to canonical flags
+    use_prompt = prompt or deep
+    use_cloud = cloud or deep_api
+    use_local_model = local_model or deep_local
+
+    if use_local_model:
         _run_deep_local_lint(
             name=name,
             file=file,
@@ -872,10 +1085,26 @@ def lint_command(
             quiet=quiet,
         )
         return
-    if deep:
-        _run_deep_review(name=name, file=file, fix=fix)
+    if local:
+        _run_configured_local_lint(
+            name=name,
+            file=file,
+            json_output=json_output,
+            ci=ci,
+            min_score=min_score,
+            score_only=score_only,
+            quiet=quiet,
+        )
         return
-    if deep_api:
+    if use_prompt:
+        if subagent:
+            _print_subagent_instruction(
+                "lint", name=name, file=file, fix=fix,
+            )
+            return
+        _run_deep_review(name=name, file=file, fix=fix, with_file=with_file)
+        return
+    if use_cloud:
         _run_deep_api_lint(
             name=name,
             file=file,

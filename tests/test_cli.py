@@ -347,17 +347,24 @@ class TestLint:
     def test_lint_deep_review_file(self, initialized_project: Path):
         md = initialized_project / "test-rule.md"
         md.write_text("# My Rule\nAlways use type hints.\n", encoding="utf-8")
-        result = runner.invoke(app, ["lint", str(md), "--deep"])
+        result = runner.invoke(app, ["lint", str(md), "--prompt"])
         assert result.exit_code == 0
         assert "Deep Review Instruction" in result.output
         assert "Specificity Audit" in result.output
+        assert "Read and review this file" in result.output
+
+    def test_lint_prompt_with_file(self, initialized_project: Path):
+        md = initialized_project / "test-rule.md"
+        md.write_text("# My Rule\nAlways use type hints.\n", encoding="utf-8")
+        result = runner.invoke(app, ["lint", str(md), "--prompt", "--with-file"])
+        assert result.exit_code == 0
         assert "Always use type hints" in result.output
 
     def test_lint_deep_review_store_name(self, initialized_project: Path):
         runner.invoke(app, [
             "add", "reviewer", "--instructions", "Review code carefully.",
         ])
-        result = runner.invoke(app, ["lint", "reviewer", "--deep"])
+        result = runner.invoke(app, ["lint", "reviewer", "--prompt"])
         assert result.exit_code == 0
         assert "Deep Review Instruction" in result.output
         assert "Review code carefully" in result.output
@@ -365,26 +372,26 @@ class TestLint:
     def test_lint_deep_review_with_fix(self, initialized_project: Path):
         md = initialized_project / "test-rule.md"
         md.write_text("# My Rule\nTry to write clean code.\n", encoding="utf-8")
-        result = runner.invoke(app, ["lint", str(md), "--deep", "--fix"])
+        result = runner.invoke(app, ["lint", str(md), "--prompt", "--fix", "--with-file"])
         assert result.exit_code == 0
         assert "Specificity Audit" in result.output
         assert "Fix Instruction" in result.output
         assert "Try to write clean code" in result.output
 
     def test_lint_deep_review_no_target(self, initialized_project: Path):
-        result = runner.invoke(app, ["lint", "--deep"])
+        result = runner.invoke(app, ["lint", "--prompt"])
         assert result.exit_code == 1
         assert "requires a target" in result.output
 
-    def test_lint_deep_api_requires_login(
+    def test_lint_cloud_requires_login(
         self, initialized_project: Path, monkeypatch,
     ):
         md = initialized_project / "test-rule.md"
         md.write_text("# Rule\nDo things.\n", encoding="utf-8")
         monkeypatch.setattr("writ.core.auth.get_token", lambda: None)
-        result = runner.invoke(app, ["lint", str(md), "--deep-api"])
+        result = runner.invoke(app, ["lint", str(md), "--cloud"])
         assert result.exit_code == 1
-        assert "--deep-api requires" in result.output
+        assert "--cloud requires" in result.output
 
 
 class TestPublish:

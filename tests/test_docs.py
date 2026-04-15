@@ -174,7 +174,7 @@ def test_query_with_search_arg(initialized_project: Path) -> None:
     runner.invoke(app, ["docs", "init"])
     result = runner.invoke(app, ["query", "architecture"])
     assert result.exit_code == 0
-    assert "coming soon" in result.output
+    assert "No matches" in result.output or "Matches for" in result.output
     assert "Documentation Index" in result.output
 
 

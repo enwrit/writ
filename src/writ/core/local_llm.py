@@ -9,7 +9,7 @@ LLM backends (tried in order):
   1. llama.cpp binary (auto-downloaded from GitHub releases, GPU via Vulkan)
   2. llama-cpp-python pip package (CPU fallback)
 
-Activated via: writ lint --deep-local
+Activated via: writ lint --local-model
 """
 from __future__ import annotations
 

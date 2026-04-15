@@ -12,18 +12,20 @@ from writ.utils import console
 def query_command(
     query: Annotated[
         str | None,
-        typer.Argument(help="Search query (reserved for future filtering)."),
+        typer.Argument(help="Search string to filter the documentation index."),
     ] = None,
 ) -> None:
-    """Show the documentation index for agent navigation.
+    """Search the documentation index for agent navigation.
 
-    Returns the full contents of writ-docs-index to stdout. Agents use
-    this to understand what documentation exists and where it lives.
+    Without a query, returns the full docs index. With a query string,
+    filters to lines matching the query and shows relevant file paths
+    the agent can read.
 
     \\b
     Examples:
-      writ query
-      writ query "architecture"
+      writ query                    # show full index
+      writ query "frontend"         # filter index by keyword
+      writ query "where is auth"    # find relevant docs
     """
     from writ.core import store
 
@@ -35,8 +37,42 @@ def query_command(
         )
         raise typer.Exit(1)
 
-    if query:
-        console.print(f"[dim]Filtering by '{query}' coming soon -- showing full index.[/dim]")
-        console.print()
+    content = cfg.instructions or ""
 
-    console.print(cfg.instructions)
+    if not query:
+        console.print(content)
+        return
+
+    query_lower = query.lower()
+    lines = content.splitlines()
+    matched: list[str] = []
+    file_paths: list[str] = []
+
+    for line in lines:
+        if query_lower in line.lower():
+            matched.append(line)
+            stripped = line.strip().lstrip("- ").strip("`")
+            if "/" in stripped or "\\" in stripped or stripped.endswith((".md", ".mdc")):
+                path = stripped.split(" ")[0].strip("`")
+                if path and not path.startswith("#"):
+                    file_paths.append(path)
+
+    if not matched:
+        console.print(
+            f"[yellow]No matches for '{query}'.[/yellow] "
+            "Showing full index.\n",
+        )
+        console.print(content)
+        return
+
+    console.print(f"[dim]Matches for '{query}':[/dim]\n")
+    for line in matched:
+        highlighted = line.replace(
+            query, f"[bold yellow]{query}[/bold yellow]",
+        )
+        console.print(highlighted)
+
+    if file_paths:
+        console.print("\n[dim]Relevant files:[/dim]")
+        for fp in dict.fromkeys(file_paths):
+            console.print(f"  {fp}")

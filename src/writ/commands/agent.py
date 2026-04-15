@@ -422,6 +422,12 @@ def list_agents(
     library: Annotated[
         bool, typer.Option("--library", "-L", help="List personal library instead of project.")
     ] = False,
+    user_only: Annotated[
+        bool, typer.Option("--user", help="Show only user instructions (hide built-in).")
+    ] = False,
+    show_all: Annotated[
+        bool, typer.Option("--all", "-A", help="Show all instructions including built-in.")
+    ] = False,
 ) -> None:
     """List instructions in this project (or personal library with --library)."""
     if library:
@@ -429,6 +435,8 @@ def list_agents(
         return
 
     _require_init()
+
+    from writ.utils import is_writ_managed
 
     agents = store.list_instructions()
     if not agents:
@@ -438,25 +446,55 @@ def list_agents(
         )
         return
 
-    table = Table(title="Project Instructions", show_lines=False)
-    table.add_column("Name", style="cyan", no_wrap=True, max_width=28)
-    table.add_column("Type", style="dim", justify="center", min_width=5)
-    table.add_column("Description", min_width=20, max_width=50)
-    table.add_column("Tags", style="dim", min_width=8)
-    table.add_column("Version", justify="center", min_width=7)
+    user_insts = [a for a in agents if not is_writ_managed(a.name, a.tags)]
+    builtin_insts = [a for a in agents if is_writ_managed(a.name, a.tags)]
 
-    for inst in agents:
-        desc = _safe_text(inst.description, max_len=80) if inst.description else "-"
-        table.add_row(
-            inst.name,
-            inst.task_type or "agent",
-            desc,
-            ", ".join(inst.tags) if inst.tags else "-",
-            inst.version,
+    if user_only:
+        display = user_insts
+    elif show_all:
+        display = agents
+    else:
+        display = user_insts
+
+    if display:
+        table = Table(title="Project Instructions", show_lines=False)
+        table.add_column("Name", style="cyan", no_wrap=True, max_width=28)
+        table.add_column("Type", style="dim", justify="center", min_width=5)
+        table.add_column("Description", min_width=20, max_width=50)
+        table.add_column("Tags", style="dim", min_width=8)
+        table.add_column("Version", justify="center", min_width=7)
+
+        for inst in display:
+            desc = _safe_text(inst.description, max_len=80) if inst.description else "-"
+            table.add_row(
+                inst.name,
+                inst.task_type or "agent",
+                desc,
+                ", ".join(inst.tags) if inst.tags else "-",
+                inst.version,
+            )
+
+        console.print(table)
+
+    shown = len(display)
+    parts: list[str] = []
+    if shown:
+        parts.append(f"{shown} instruction(s)")
+    if builtin_insts and not show_all and not user_only:
+        parts.append(
+            f"{len(builtin_insts)} built-in hidden (use --all to show)"
         )
-
-    console.print(table)
-    console.print(f"\n[dim]{len(agents)} instruction(s) total[/dim]")
+    elif not display:
+        console.print(
+            "[yellow]No user instructions found.[/yellow] "
+            "Run [cyan]writ add <name>[/cyan] to add one."
+        )
+        if builtin_insts:
+            parts.append(
+                f"{len(builtin_insts)} built-in (use --all to show)"
+            )
+    if parts:
+        console.print(f"\n[dim]{' | '.join(parts)}[/dim]")
 
 
 def _list_library() -> None:

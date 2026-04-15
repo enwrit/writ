@@ -1,6 +1,6 @@
 # Fix Instruction
 
-Based on the review above, now UPDATE the file directly. Apply every fix from "Critical Issues" and "Improvements". Apply "Quick Wins" if trivial.
+Based on the instruction to review below, first analyze it for quality issues, then UPDATE the file directly. Apply every fix from "Critical Issues" and "Improvements". Apply "Quick Wins" if trivial.
 
 Rules:
 - Make surgical edits -- fix inaccuracies, don't rewrite the author's style

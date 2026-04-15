@@ -117,6 +117,9 @@ def init_command(
     # 6. Install built-in skills to detected IDEs
     skills_installed = _install_builtin_skills(detected_formats)
 
+    # 6b. Install writ-agent to detected IDE agent dirs
+    _install_builtin_agents(detected_formats)
+
     # 7. Load template if specified
     if template:
         load_template(template)
@@ -142,6 +145,7 @@ def init_command(
         "  [cyan]writ plan review <file>[/cyan] AI-powered plan review\n"
         "  [cyan]writ docs init[/cyan]         Set up documentation health tracking\n"
         "  [cyan]writ docs check[/cyan]        Documentation health scan\n"
+        "  [cyan]writ docs update[/cyan]       Review and fix documentation issues\n"
         "\n"
         "  [dim]writ save <name>[/dim]       [dim]Save to personal library (cross-device)[/dim]\n"
         "  [dim]writ connect / chat[/dim]    [dim]Agent-to-agent communication[/dim]\n"
@@ -299,7 +303,7 @@ def _install_builtin_skills(detected_formats: list[str]) -> int:
         cfg = InstructionConfig(
             name=writ_name,
             description=f"Built-in skill: {skill_name.replace('-', ' ')}",
-            task_type="rule",
+            task_type="skill",
             instructions=content,
             tags=["writ", "skill", "builtin"],
             composition=CompositionConfig(project_context=False),
@@ -345,6 +349,70 @@ def _install_builtin_skills(detected_formats: list[str]) -> int:
         console.print(
             f"[green]Installed {count} built-in skill(s):[/green] {skill_names}",
         )
+
+    return count
+
+
+def _install_builtin_agents(detected_formats: list[str]) -> int:
+    """Install built-in agent templates to IDE agent directories.
+
+    Agents go to {IDE}/agents/ (e.g. .cursor/agents/writ-agent.mdc).
+    Returns the number of agents installed.
+    """
+    agents_dir = _BUILTIN_ROOT / "agents"
+    if not agents_dir.is_dir():
+        return 0
+
+    agent_files = sorted(agents_dir.glob("*.md"))
+    if not agent_files:
+        return 0
+
+    root = Path.cwd()
+    count = 0
+
+    from writ.utils import yaml_dumps
+
+    for agent_file in agent_files:
+        agent_name = agent_file.stem
+        content = agent_file.read_text(encoding="utf-8").strip()
+
+        cfg = InstructionConfig(
+            name=agent_name,
+            description=f"Built-in agent: {agent_name.replace('-', ' ')}",
+            task_type="agent",
+            instructions=content,
+            tags=["writ", "agent", "builtin"],
+            composition=CompositionConfig(project_context=False),
+        )
+        store.save_instruction(cfg)
+
+        wrote_to_ide = False
+        for fmt in detected_formats:
+            if fmt not in IDE_PATHS:
+                continue
+            ide_config = IDE_PATHS[fmt]
+            agents_entry = ide_config.agents
+            agent_dir = root / agents_entry.directory
+            agent_dir.mkdir(parents=True, exist_ok=True)
+            filename = _build_filename(agents_entry, agent_name)
+            path = agent_dir / filename
+
+            if agents_entry.frontmatter_fn:
+                fm_dict = agents_entry.frontmatter_fn(cfg)
+                if fm_dict:
+                    fm_str = yaml_dumps(fm_dict).strip()
+                    path.write_text(
+                        f"---\n{fm_str}\n---\n\n{content}\n",
+                        encoding="utf-8",
+                    )
+                else:
+                    path.write_text(content + "\n", encoding="utf-8")
+            else:
+                path.write_text(content + "\n", encoding="utf-8")
+            wrote_to_ide = True
+
+        if wrote_to_ide:
+            count += 1
 
     return count
 

@@ -45,7 +45,7 @@ src/writ/
 
 ## How It Works
 
-The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --deep-api` (backend Gemini) and `writ plan review` (user-configured model or backend). `writ lint --deep`, `writ plan review --local`, and `writ docs update` use the "commands as injected instructions" pattern -- they print instructions for the IDE's own LLM to execute, no API cost to writ. `writ lint --deep` is type-aware: it infers the file type (skill/agent/rule/plan/context/other) from its path and injects a type-specific review hook via modular prompts in `prompts/hooks/`. Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
+The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --cloud` (enwrit.com Gemini), `writ lint --local` / `writ plan review --local` (user's configured model), and `writ lint --local-model` (bundled Qwen). `writ lint --prompt`, `writ plan review` (default), and `writ docs update` use the "commands as injected instructions" pattern -- they print instructions for the IDE's own LLM to execute, no API cost. `writ lint --prompt` is type-aware: it infers the file type (skill/agent/rule/plan/context/other) from its path and injects a type-specific review hook via modular prompts in `prompts/hooks/`. Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
 
 11 tools auto-detected via `IDE_PATHS` in `formatter.py`. Instructions routed to `rules/`, `skills/writ/`, or `agents/` based on `task_type`:
 
@@ -76,7 +76,9 @@ writ add <name> --from prpm    Install directly from PRPM registry
 writ add <name> --format cursor Export to a specific format
 writ add --file <path>          Import markdown file(s) or directory into .writ/
 writ add --template rules       Load rule templates into existing project
-writ list                       Show all instructions in project
+writ list                       Show user instructions (built-in hidden by default)
+writ list --all                 Show all instructions including built-in
+writ list --user                Show only user instructions
 writ list --library             Show personal library contents (local + remote)
 writ remove <name>              Remove instruction from project
 writ save <name>                Save to personal library (~/.writ/); syncs to cloud if logged in
@@ -86,12 +88,16 @@ writ register                   Interactive account creation + auto-login
 writ login                      Authenticate with enwrit.com (cross-device sync)
 writ logout                     Remove stored API key
 writ lint <name|file>           Validate quality (auto-detects file vs store name)
+writ lint --prompt              Qualitative review via prompt injection for IDE's AI
+writ lint --prompt --fix        Review + instruct AI to apply fixes directly
+writ lint --prompt --with-file  Inline file content in the prompt output
+writ lint --prompt --subagent   Launch a subagent for the review
+writ lint --cloud               AI scoring via enwrit.com API only (requires login)
+writ lint --local               AI scoring via your configured local model (writ model set local)
+writ lint --local-model         Bundled writ-lint-0.8B model (auto-downloaded, no setup needed)
 writ lint --code                Force Tier 1 code-only scoring (deterministic)
 writ lint --score               Output headline score only (machine-readable)
 writ lint --quiet               Output score + dimension table only (no issues/suggestions)
-writ lint <file> --deep         Type-aware deep qualitative review (auto-detects skill/agent/rule/plan/context; injects type-specific hook prompt)
-writ lint <file> --deep --fix  Deep review + instruct the AI to apply fixes directly
-writ lint <file> --deep-api    AI-powered Tier 3 scoring via enwrit.com API (requires login)
 writ connect                    Interactive peer setup wizard for real repos
 writ publish <name>             Make instruction publicly discoverable on enwrit.com
 writ sync                       Bulk bidirectional library sync (confirmation prompt for >5 ops)
@@ -113,12 +119,15 @@ writ inbox                      Show conversations with unread messages
 writ peers add/list/remove      Manage peer repo connections (local or remote)
 writ diff <file>                Compare current lint score vs previous git commit
 writ upgrade [name]             Check for and apply instruction updates from Hub/PRPM
-writ plan review <file>         AI-powered plan review (uses writ model config or backend Gemini)
-writ plan review <file> --local Print review rubric for IDE's AI (no API call, zero context bloat)
+writ plan review <file>         Plan review via prompt injection (default, no API call)
+writ plan review <file> --local Send to your configured local model (writ model set local)
+writ plan review <file> --cloud Send to enwrit.com API only (requires login)
+writ plan review --with-plan    Include plan content inline in the prompt
+writ plan review --subagent     Launch a subagent for the review
 writ docs init                  Create documentation index for knowledge health tracking
-writ docs check                 Heuristic documentation health scan (dead refs, treeview drift, staleness)
-writ docs update                AI-powered documentation update pass (check + injected instruction for LLM)
-writ query                      Show documentation index (agent navigation of project knowledge)
+writ docs check [--user|--all]  Heuristic documentation health scan (static built-in hidden by default)
+writ docs update [--user|--all] Documentation update pass (check + injected instruction for LLM)
+writ query ["search term"]      Search documentation index (agent navigation of project knowledge)
 writ status                     Recent activity log + documentation health score
 writ hook install/uninstall     Git pre-commit hook for instruction quality checks
 writ model set/list/clear       Configure LLM provider for plan review (openai, anthropic, gemini, local)

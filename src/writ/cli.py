@@ -51,46 +51,58 @@ app = typer.Typer(
 
 
 # ---------------------------------------------------------------------------
-# Register command groups
+# Register command groups (rich_help_panel for --help visual grouping)
 # ---------------------------------------------------------------------------
 
-# Core commands
-app.command(name="init")(init.init_command)
-app.command(name="add")(agent.add)
-app.command(name="list")(agent.list_agents)
-app.command(name="remove")(agent.remove)
+_CORE = "Core"
+_QUALITY = "Quality"
+_DISCOVERY = "Discovery"
+_COMMUNICATION = "Communication"
+_SYNC_AUTH = "Sync & Auth"
+_ADVANCED = "Advanced"
 
-# Hidden alias: `writ install` -> `writ add` (backward compat)
+# -- Core -------------------------------------------------------------------
+app.command(name="init", rich_help_panel=_CORE)(init.init_command)
+app.command(name="add", rich_help_panel=_CORE)(agent.add)
+app.command(name="list", rich_help_panel=_CORE)(agent.list_agents)
+app.command(name="remove", rich_help_panel=_CORE)(agent.remove)
+app.command(name="save", rich_help_panel=_CORE)(library.save)
+
+# LEGACY alias: `writ install` -> `writ add`
 app.command(name="install", hidden=True)(agent.add)
 
-# Library: save to personal library
-app.command(name="save")(library.save)
+# -- Quality ----------------------------------------------------------------
+app.command(name="lint", rich_help_panel=_QUALITY)(lint.lint_command)
+app.command(name="diff", rich_help_panel=_QUALITY)(diff.diff_command)
+app.add_typer(plan_app, name="plan", rich_help_panel=_QUALITY)
+app.add_typer(docs_app, name="docs", rich_help_panel=_QUALITY)
+app.add_typer(hook_app, name="hook", rich_help_panel=_QUALITY)
 
-# Search & discovery
-app.command(name="search")(search.search_command)
+# -- Discovery --------------------------------------------------------------
+app.command(name="search", rich_help_panel=_DISCOVERY)(search.search_command)
+app.command(name="upgrade", rich_help_panel=_DISCOVERY)(upgrade.upgrade_command)
+app.command(name="query", rich_help_panel=_DISCOVERY)(query_command)
+app.command(name="status", rich_help_panel=_DISCOVERY)(_status_command)
 
-# Auth commands (register/login/logout)
-app.command(name="register")(register.register)
-app.command(name="login")(login.login)
-app.command(name="logout")(login.logout)
+# -- Communication ----------------------------------------------------------
+app.command(name="connect", rich_help_panel=_COMMUNICATION)(connect_command)
+app.add_typer(chat_app, name="chat", rich_help_panel=_COMMUNICATION)
+app.command(name="inbox", rich_help_panel=_COMMUNICATION)(inbox_command)
+app.add_typer(peers_app, name="peers", rich_help_panel=_COMMUNICATION)
+app.command(name="review", rich_help_panel=_COMMUNICATION)(knowledge.review_command)
+app.add_typer(knowledge.threads_app, name="threads", rich_help_panel=_COMMUNICATION)
+app.add_typer(approvals.approvals_app, name="approvals", rich_help_panel=_COMMUNICATION)
 
-# Sync command (bulk library sync)
-app.command(name="sync")(sync.sync_command)
+# -- Sync & Auth ------------------------------------------------------------
+app.command(name="register", rich_help_panel=_SYNC_AUTH)(register.register)
+app.command(name="login", rich_help_panel=_SYNC_AUTH)(login.login)
+app.command(name="logout", rich_help_panel=_SYNC_AUTH)(login.logout)
+app.command(name="sync", rich_help_panel=_SYNC_AUTH)(sync.sync_command)
+app.command(name="publish", rich_help_panel=_SYNC_AUTH)(publish.publish_command)
+app.command(name="unpublish", rich_help_panel=_SYNC_AUTH)(publish.unpublish_command)
 
-# Lint command
-app.command(name="lint")(lint.lint_command)
-
-# Diff: lint score vs git revision
-app.command(name="diff")(diff.diff_command)
-
-# Upgrade: pull latest versions from source
-app.command(name="upgrade")(upgrade.upgrade_command)
-
-# Publish commands
-app.command(name="publish")(publish.publish_command)
-app.command(name="unpublish")(publish.unpublish_command)
-
-# Memory sub-group
+# -- Advanced ---------------------------------------------------------------
+app.add_typer(mcp_app, name="mcp", rich_help_panel=_ADVANCED)
 memory_app = typer.Typer(
     name="memory",
     help="Cross-project memory sharing.",
@@ -99,9 +111,8 @@ memory_app = typer.Typer(
 memory_app.command(name="export")(memory.export_memory)
 memory_app.command(name="import")(memory.import_memory)
 memory_app.command(name="list")(memory.list_memory)
-app.add_typer(memory_app, name="memory")
+app.add_typer(memory_app, name="memory", rich_help_panel=_ADVANCED)
 
-# Handoff sub-group
 handoff_app = typer.Typer(
     name="handoff",
     help="Context handoffs between instructions.",
@@ -109,45 +120,9 @@ handoff_app = typer.Typer(
 )
 handoff_app.command(name="create")(handoff.create)
 handoff_app.command(name="list")(handoff.list_handoffs)
-app.add_typer(handoff_app, name="handoff")
+app.add_typer(handoff_app, name="handoff", rich_help_panel=_ADVANCED)
 
-# MCP sub-group
-app.add_typer(mcp_app, name="mcp")
-
-# Chat sub-group (agent-to-agent conversations)
-app.add_typer(chat_app, name="chat")
-app.command(name="inbox")(inbox_command)
-
-# Peers sub-group (connected repositories)
-app.add_typer(peers_app, name="peers")
-
-# Connect wizard (interactive peer setup)
-app.command(name="connect")(connect_command)
-
-# Knowledge: review + threads
-app.command(name="review")(knowledge.review_command)
-app.add_typer(knowledge.threads_app, name="threads")
-
-# Approvals (human-in-the-loop for agent actions)
-app.add_typer(approvals.approvals_app, name="approvals")
-
-# Model configuration (AI model for plan review)
-app.add_typer(model_app, name="model")
-
-# Plan review
-app.add_typer(plan_app, name="plan")
-
-# Documentation health
-app.add_typer(docs_app, name="docs")
-
-# Pre-commit hook
-app.add_typer(hook_app, name="hook")
-
-# Query: documentation index navigation
-app.command(name="query")(query_command)
-
-# Status: project status + knowledge health + recent activity
-app.command(name="status")(_status_command)
+app.add_typer(model_app, name="model", rich_help_panel=_ADVANCED)
 
 
 # ---------------------------------------------------------------------------

@@ -49,10 +49,11 @@ Three tiers depending on your needs:
 
 ```bash
 writ lint CLAUDE.md                     # Default: ML-powered, local, free (TF-IDF + LightGBM)
-writ lint AGENTS.md --deep              # Type-aware qualitative review (your IDE's AI)
-writ lint AGENTS.md --deep --fix        # Review + auto-fix
-writ lint AGENTS.md --deep-api          # AI scoring via enwrit.com (Gemini)
-writ lint AGENTS.md --deep-local        # Fully local AI (writ-lint-0.8B, GPU-accelerated)
+writ lint AGENTS.md --prompt            # Type-aware qualitative review (your IDE's AI)
+writ lint AGENTS.md --prompt --fix      # Review + auto-fix
+writ lint AGENTS.md --local             # Your configured local model (LM Studio etc)
+writ lint AGENTS.md --cloud             # AI scoring via enwrit.com (Gemini)
+writ lint AGENTS.md --local-model       # Bundled writ-lint-0.8B (auto-downloaded)
 writ lint rules.mdc --json              # Machine-readable output for CI
 writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
 ```
@@ -64,13 +65,15 @@ writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
 `writ plan review` analyzes implementation plans with AI -- catching technical issues, questioning assumptions, and suggesting alternatives before implementation. Since the AI LLM can call this command by itself, it enables the agent to automatically find problems in the plan through an unbiased objective reviewer with different context, thus improving the plan and reducing the human's cognitive load.
 
 ```bash
-writ plan review plan.md                # Review with your configured model
-writ plan review plan.md --local        # Print review rubric for IDE's AI (no API call)
-writ plan review plan.md --json         # Structured JSON for agent consumption
+writ plan review plan.md                # Review rubric for IDE's AI (default, no API call)
+writ plan review plan.md --with-plan    # Include plan content inline in the prompt
+writ plan review plan.md --local        # Send to your configured local model
+writ plan review plan.md --cloud        # Send to enwrit.com API (requires login)
+writ plan review plan.md --cloud --json # Structured JSON for agent consumption
 writ plan review plan.md --no-context   # Skip project context injection
 ```
 
-**Free tier**: `writ login` gives you 5 daily reviews via Gemini -- zero config needed.
+**Free tier**: `writ login` gives you 50 daily reviews via Gemini -- zero config needed.
 
 ---
 
@@ -241,17 +244,18 @@ writ inbox                          # Check for responses
 | `writ add <name> --from prpm` | Install from PRPM registry |
 | `writ add --file <path>` | Import markdown file(s) or directory |
 | `writ add <name> --format cursor` | Export to a specific format |
-| `writ list` | List all instructions in project |
+| `writ list` | List user instructions (use --all for built-in too) |
 | `writ remove <name>` | Remove instruction |
 | `writ save <name>` | Save to personal library (syncs to cloud if logged in) |
 | `writ search <query>` | Semantic search across Hub |
-| `writ lint [file] [--deep] [--deep --fix] [--deep-api]` | Type-aware quality score, qualitative review, or auto-fix |
+| `writ lint [file] [--prompt] [--local] [--cloud]` | Quality score, review via IDE/local model/cloud |
+| `writ lint --local-model` | Bundled writ-lint-0.8B (no setup needed) |
 | `writ lint --ci --min-score N` | CI gate: exit 1 if score below threshold |
-| `writ plan review <file>` | AI-powered plan review (configured model or free Gemini) |
-| `writ plan review <file> --local` | Print review rubric for IDE's AI (no API call) |
-| `writ plan review <file> --json` | Structured JSON output for agents |
+| `writ plan review <file>` | Plan review via prompt injection (default) |
+| `writ plan review <file> --local` | Send to your configured local model |
+| `writ plan review <file> --cloud` | Send to enwrit.com API (requires login) |
 | `writ docs init / check / update` | Documentation health (index, scan, AI-powered fix pass) |
-| `writ query` | Show documentation index (agent navigation) |
+| `writ query ["search"]` | Search documentation index (agent navigation) |
 | `writ status` | Activity log + health score summary |
 | `writ model set / list / clear` | Configure LLM (openai, anthropic, gemini, local) |
 | `writ hook install / uninstall` | Git pre-commit hook for quality checks |
@@ -284,7 +288,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                    # 610+ tests
+pytest                    # 650+ tests
 ruff check src/ tests/
 ```
 

@@ -127,6 +127,37 @@ def slugify(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Instruction classification helpers
+# ---------------------------------------------------------------------------
+
+_WRIT_DYNAMIC_NAMES = {"writ-docs-index", "writ-log"}
+
+
+def is_builtin_instruction(tags: list[str] | None) -> bool:
+    """True if instruction was installed by writ (built-in skills, context, etc.)."""
+    if not tags:
+        return False
+    return "builtin" in tags or ("writ" in tags and "skill" in tags)
+
+
+def is_writ_managed(name: str, tags: list[str] | None) -> bool:
+    """True if instruction is any writ-managed file (builtin OR writ-context/docs/log)."""
+    if is_builtin_instruction(tags):
+        return True
+    return name.startswith("writ-") and bool(tags) and "writ" in tags
+
+
+def is_writ_dynamic(name: str) -> bool:
+    """True for writ-managed files that agents update (docs-index, log)."""
+    return name in _WRIT_DYNAMIC_NAMES
+
+
+def is_writ_static(name: str, tags: list[str] | None) -> bool:
+    """True for writ-managed files that are NOT updated by agents."""
+    return is_writ_managed(name, tags) and not is_writ_dynamic(name)
+
+
+# ---------------------------------------------------------------------------
 # Markdown helpers
 # ---------------------------------------------------------------------------
 

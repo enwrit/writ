@@ -55,7 +55,21 @@ def _build_index_treeview(root: Path) -> str:
     if core_section:
         body += "\n" + core_section
 
+    body += _writ_managed_section()
+
     return _INDEX_HEADER + body
+
+
+def _writ_managed_section() -> str:
+    """Append a section listing writ-managed files that always exist."""
+    return (
+        "\n## Writ-managed files\n\n"
+        "These files are created and maintained by writ. "
+        "They may be updated by AI agents (docs update) or by writ itself.\n\n"
+        "- `writ-docs-index` -- this index file (documentation treeview)\n"
+        "- `writ-log` -- append-only activity log for writ operations\n"
+        "- `writ-context` -- CLI command reference (updated on writ init)\n"
+    )
 
 
 def _build_core_files_section(root: Path, doc_files: list[Path]) -> str:
@@ -248,6 +262,14 @@ def check_command(
         bool,
         typer.Option("--json", help="Output raw JSON (for agents/scripts)."),
     ] = False,
+    user_only: Annotated[
+        bool,
+        typer.Option("--user", help="Show only user documentation files."),
+    ] = False,
+    show_all: Annotated[
+        bool,
+        typer.Option("--all", "-A", help="Show all files including static built-in."),
+    ] = False,
 ) -> None:
     """Check documentation health across the project.
 
@@ -269,6 +291,7 @@ def check_command(
         raise typer.Exit(1)
 
     report = run_health_check(root)
+    report = _filter_report_files(report, user_only=user_only, show_all=show_all)
 
     if output_json:
         data = {
@@ -299,6 +322,14 @@ def update_command(
         str | None,
         typer.Argument(help="Project root path (defaults to current directory)."),
     ] = None,
+    user_only: Annotated[
+        bool,
+        typer.Option("--user", help="Show only user documentation files."),
+    ] = False,
+    show_all: Annotated[
+        bool,
+        typer.Option("--all", "-A", help="Show all files including static built-in."),
+    ] = False,
 ) -> None:
     """Run an AI-powered documentation update pass.
 
@@ -328,6 +359,7 @@ def update_command(
         raise typer.Exit(1)
 
     report = run_health_check(root)
+    report = _filter_report_files(report, user_only=user_only, show_all=show_all)
 
     check_context = _format_check_results(report)
 
@@ -339,6 +371,49 @@ def update_command(
     console.print()
     console.print(prompt)
     console.print(check_context)
+
+
+_WRIT_STATIC_PATTERNS = ("skills/writ/", "skills\\writ\\", "writ-context")
+_WRIT_DYNAMIC_NAMES = ("writ-docs-index", "writ-log")
+
+
+def _is_writ_static_doc(file_path: str) -> bool:
+    """True for writ-managed files agents don't update (skills, writ-context)."""
+    for pat in _WRIT_STATIC_PATTERNS:
+        if pat in file_path:
+            return True
+    return False
+
+
+def _is_writ_dynamic_doc(file_path: str) -> bool:
+    """True for writ-managed files that agents DO update (docs-index, log)."""
+    for name in _WRIT_DYNAMIC_NAMES:
+        if name in file_path:
+            return True
+    return False
+
+
+def _filter_report_files(report, *, user_only: bool, show_all: bool):  # type: ignore[type-arg]
+    """Filter report files based on visibility flags.
+
+    Default: user files + writ dynamic files. Static built-in hidden.
+    --user: user files only.
+    --all: everything.
+    """
+    if show_all:
+        return report
+
+    filtered = []
+    for f in report.files:
+        if _is_writ_static_doc(f.path):
+            continue
+        if user_only and _is_writ_dynamic_doc(f.path):
+            continue
+        filtered.append(f)
+
+    report.files = filtered
+    report.total_issues = sum(len(f.issues) for f in filtered)
+    return report
 
 
 def _format_check_results(report) -> str:  # type: ignore[type-arg]
@@ -422,7 +497,7 @@ def _display_report(report) -> None:  # type: ignore[type-arg]
     if files_needing_attention > 0:
         console.print(
             f"\n[bold]{files_needing_attention} file(s) need attention.[/bold] "
-            "Run [cyan]writ docs update[/cyan] to trigger an AI-powered fix.",
+            "Run [cyan]writ docs update[/cyan] to review and fix these issues.",
         )
     else:
         console.print("\n[green]All documentation files look healthy.[/green]")

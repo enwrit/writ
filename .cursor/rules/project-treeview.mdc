@@ -26,7 +26,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── handoff.py              # writ handoff -- create/apply context handoffs between agents
 │       │   ├── memory.py               # writ memory export/import/list -- cross-project memory sharing
 │       │   ├── publish.py              # writ publish/unpublish [--yes] -- make instructions publicly discoverable on enwrit.com
-│       │   ├── lint.py                 # writ lint [file|name] [--deep] [--deep --fix] [--deep-api] [--deep-local] [--code] [--json] [--ci] [--stop-server] -- quality scoring (Tier 2 ML default, --deep qualitative review, --fix auto-apply, --deep-api Tier 3 AI)
+│       │   ├── lint.py                 # writ lint [file|name] [--prompt] [--prompt --fix] [--cloud] [--local] [--local-model] [--code] [--json] [--ci] [--subagent] [--with-file] -- quality scoring (Tier 2 ML default, --local user model, --cloud enwrit.com, --local-model bundled Qwen)
 │       │   ├── connect.py              # writ connect -- interactive peer setup wizard for real repos
 │       │   ├── sync.py                 # writ sync [--push|--pull|--prefer-local|--dry-run] -- bulk bidirectional library sync with confirmation prompt
 │       │   ├── mcp.py                  # writ mcp install/uninstall/serve [--slim|--full] -- MCP server management (slim=2 tools, full=24 tools)
@@ -36,9 +36,9 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── approvals.py            # writ approvals create/list/approve/deny -- human-in-the-loop approval management
 │       │   ├── diff.py                 # writ diff <file> [--ref] -- lint score comparison vs git history
 │       │   ├── upgrade.py              # writ upgrade [name] [--dry-run] -- version-aware instruction updates from Hub/PRPM
-│       │   ├── plan.py                 # writ plan review <file> [--json] [--no-context] -- AI-powered plan review (LLM via writ model or enwrit.com backend)
-│       │   ├── docs.py                 # writ docs init/check/update [--json] -- knowledge health diagnostics (core differentiator: schema-driven health-checking, "commands as injected instructions" pattern)
-│       │   ├── query.py               # writ query -- return docs index to stdout (agent navigation of local knowledge)
+│       │   ├── plan.py                 # writ plan review <file> [--local] [--cloud] [--json] [--subagent] -- plan review (default: prompt injection, --local user model, --cloud enwrit.com API)
+│       │   ├── docs.py                 # writ docs init/check/update [--json] [--user] [--all] -- knowledge health diagnostics (schema-driven, built-in static hidden by default)
+│       │   ├── query.py               # writ query ["search"] -- search docs index (basic string filtering, agent navigation)
 │       │   ├── status.py              # writ status -- recent log entries + documentation health summary
 │       │   ├── hook.py                 # writ hook install/uninstall -- git pre-commit hook for instruction quality checks
 │       │   └── model.py                # writ model set/list/clear -- configure LLM provider (openai, anthropic, gemini, local) for plan review
@@ -57,12 +57,12 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── messaging.py            # Conversation lifecycle, markdown read/write, file attachment embedding, _latest.md
 │       │   ├── peers.py                # Peer repository management -- read/write peers.yaml
 │       │   ├── invoker.py              # CLI agent detection (claude/gemini/codex/cursor) + invocation with AutoRespondTier, LLM API fallback
-│       │   ├── local_llm.py            # Tier 2.5: auto-downloads llama.cpp binary (Vulkan GPU / CPU) + GGUF model, persistent server, hybrid inference (LightGBM scores + Qwen feedback) for --deep-local
+│       │   ├── local_llm.py            # Tier 2.5: auto-downloads llama.cpp binary (Vulkan GPU / CPU) + GGUF model, persistent server, hybrid inference (LightGBM scores + Qwen feedback) for --local-model
 │       │   ├── context_window.py       # Sliding window + token estimation for API invocations
 │       │   ├── file_io.py              # Cross-platform file locking + atomic append for conversation files
 │       │   ├── llm_client.py           # Multi-provider LLM client (OpenAI, Anthropic, Gemini, local/LM Studio) for plan review
 │       │   ├── doc_health.py           # Documentation health analysis: dead refs, treeview drift, staleness, contradictions, reverse drift (missing-from-index)
-│       │   ├── type_inference.py       # Infer instruction type (agent/skill/rule/plan/context/other) from path, name, or store metadata -- used by lint --deep for type-aware hooks
+│       │   ├── type_inference.py       # Infer instruction type (agent/skill/rule/plan/context/other) from path, name, or store metadata -- used by lint --prompt for type-aware hooks
 │       │   └── rubrics/                # Versioned rubric files for AI-powered features
 │       │       └── plan-review-v1.md   # Plan review rubric (system prompt for LLM analysis)
 │       ├── integrations/               # External registry integrations
@@ -72,7 +72,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │       │   ├── url.py                  # Install from any URL (fetches YAML via httpx) (or git repo fetch planned?)
 │       │   ├── registry.py             # enwrit platform API client (httpx): push/pull library, hub_search (semantic), hub_download, relay, knowledge, approvals
 │       │   └── mcp_server.py           # MCP server (FastMCP): V1 discovery, V2 compose/search/add, V3 conversations+peers, V4 knowledge, V5 approvals, V7 docs (24 full / 2 slim)
-│       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting
+│       ├── utils.py                    # Path helpers, slugify, YAML I/O, markdown formatting, instruction classification (is_builtin, is_writ_managed, is_writ_dynamic, is_writ_static)
 │       ├── models/                     # Bundled ML models for Tier 2 lint scoring
 │       │   └── tier2/                  # m2cgen pure-Python scorers + kNN suggestion index
 │       │       ├── __init__.py         # models_available() check
@@ -118,16 +118,18 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │               ├── prompts/           # Injected instructions for "commands as instructions" pattern (versioned .md files, loaded by commands at runtime)
 │               │   ├── docs-init-v1.md         # Instruction for writ docs init (LLM populates docs index)
 │               │   ├── docs-update-v1.md       # Instruction for writ docs update (LLM acts on health-check findings, updates docs, logs summary)
-│               │   ├── lint-deep-v1.md         # Qualitative review rubric for writ lint --deep (actionable feedback, not scoring)
-│               │   ├── lint-fix-v1.md          # Fix hook for writ lint --deep --fix (instructs LLM to apply fixes directly)
-│               │   ├── plan-review-local-v1.md # Wrapper for writ plan review --local (rubric injection for IDE's AI)
-│               │   └── hooks/                  # Type-specific supplement prompts, dynamically injected after base rubric by lint --deep
+│               │   ├── lint-deep-v1.md         # Qualitative review rubric for writ lint --prompt (actionable feedback, not scoring)
+│               │   ├── lint-fix-v1.md          # Fix hook for writ lint --prompt --fix (instructs LLM to apply fixes directly)
+│               │   ├── plan-review-local-v1.md # Wrapper for writ plan review (default prompt injection for IDE's AI)
+│               │   └── hooks/                  # Type-specific supplement prompts, dynamically injected after base rubric by lint --prompt
 │               │       ├── hook-lint-skill.md   # Skill-specific review criteria (procedure, triggers, self-containment)
 │               │       ├── hook-lint-agent.md   # Agent-specific review criteria (persona, scope, delegation)
 │               │       ├── hook-lint-rule.md    # Rule-specific review criteria (testability, contradictions, exceptions)
 │               │       ├── hook-lint-plan.md    # Plan-specific review criteria (ordering, dependencies, risks)
 │               │       ├── hook-lint-context.md # Context-specific review criteria (currency, minimality, accuracy)
 │               │       └── hook-lint-other.md   # Fallback for unknown document types (universal quality checks)
+│               ├── agents/            # Built-in agent templates, auto-installed to IDE agents/ dirs on writ init
+│               │   └── writ-agent.md  # Subagent for writ commands (lint --subagent, plan review --subagent)
 │               └── skills/            # 11 battle-tested skills, auto-installed to IDE skill dirs on writ init
 │                   ├── autoresearch.md, plan-skill.md, doc-maintenance.md, doc-health.md, pre-commit-checks.md
 │                   ├── code-simplifier.md, security-scan.md, verify-skill.md, tech-debt-fixer.md
@@ -203,7 +205,7 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │   └── *.yaml
 ├── context/                            # Personal context library
 │   └── *.yaml
-├── models/                             # Downloaded GGUF models for --deep-local (auto-downloaded on first use)
+├── models/                             # Downloaded GGUF models for --local (auto-downloaded on first use)
 │   └── writ-lint-0.8B-Q4_K_M.gguf    # ~530 MB, fine-tuned Qwen3.5-0.8B for lint feedback
 ├── memory/                             # Cross-project memory exports
 │   └── *.yaml                          # PLANNED: synced to remote backend

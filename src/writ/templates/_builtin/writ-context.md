@@ -19,29 +19,40 @@ instructions across AI coding tools, projects, and agents.
 - `writ add --template <name>` -- add from built-in template
 
 ### Manage
-- `writ list` -- show all instructions in this project
+- `writ list` -- show user instructions in this project (built-in hidden by default)
+- `writ list --all` -- show all instructions including built-in
+- `writ list --user` -- show only user instructions
 - `writ list --library` -- show personal library (local + remote)
 - `writ remove <name>` -- remove instruction
 
 ### Quality
 - `writ lint [file|name]` -- score instruction quality (0-100, ML-powered)
-- `writ lint --deep` -- type-aware deep qualitative review (prints analysis instruction for your IDE's AI; auto-detects skill/agent/rule/plan/context type and injects specialized review criteria)
-- `writ lint --deep --fix` -- deep review + instruct the AI to apply fixes directly
-- `writ lint --deep-api` -- AI-powered scoring via enwrit.com API (requires login)
-- `writ lint --deep-local` -- fully local AI analysis (GPU-accelerated)
+- `writ lint --prompt` -- type-aware qualitative review (prints analysis instruction for your IDE's AI)
+- `writ lint --prompt --fix` -- review + instruct the AI to apply fixes directly
+- `writ lint --prompt --with-file` -- inline file content in the prompt (instead of asking agent to read it)
+- `writ lint --prompt --subagent` -- instruct IDE to launch a subagent for the review
+- `writ lint --cloud` -- AI scoring via enwrit.com API only (requires login)
+- `writ lint --local` -- AI scoring via your configured local model (writ model set local)
+- `writ lint --local-model` -- bundled writ-lint-0.8B model (auto-downloaded, no setup needed)
 - `writ lint --code` -- deterministic code-only scoring
-- `writ plan review <file>` -- AI-powered plan review (catches technical issues, suggests alternatives)
-- `writ plan review <file> --local` -- print review rubric for your IDE's AI (no API call, zero bloat)
-- `writ plan review <file> --local --with-plan` -- include plan content with the rubric (for old/external plans)
-- `writ plan review <file> --json` -- structured JSON output for agent consumption
+- `writ plan review <file>` -- plan review via prompt injection (default, no API call)
+- `writ plan review <file> --with-plan` -- include plan content inline in the prompt
+- `writ plan review <file> --local` -- send to your configured local model (writ model set local)
+- `writ plan review <file> --cloud` -- send to enwrit.com API only (requires login)
+- `writ plan review <file> --cloud --json` -- structured JSON output for agent consumption
+- `writ plan review <file> --subagent` -- launch a subagent for the review
 - `writ diff <file>` -- compare lint score vs previous git commit
 - `writ upgrade [name]` -- check for and apply instruction updates from Hub/PRPM
 
 ### Documentation Health
 - `writ docs init` -- create documentation index (writ-docs-index) for knowledge health tracking
 - `writ docs check` -- heuristic documentation health scan (dead refs, staleness, contradictions)
-- `writ docs update` -- AI-powered documentation update pass (runs check, then instructs your model to fix issues and log summary)
+- `writ docs check --user` -- show only user documentation files
+- `writ docs check --all` -- show all files including static built-in
+- `writ docs update` -- documentation update pass (runs check, then instructs your model to fix issues and log summary)
+- `writ docs update --user` -- focus on user documentation only
 - `writ query` -- show documentation index (helps agents navigate project knowledge)
+- `writ query "search term"` -- filter index by keyword and show relevant files
 - `writ status` -- recent activity summary + documentation health score
 
 ### Library & Sync

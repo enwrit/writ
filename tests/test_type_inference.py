@@ -116,61 +116,77 @@ class TestChangedPatterns:
             assert d in _CHANGED_PATTERNS
 
 
-class TestPlanReviewLocal:
-    """Test --local plan review prints rubric without API call."""
+class TestPlanReviewPrompt:
+    """Test plan review default (prompt injection) prints rubric without API call."""
 
-    def test_local_prints_rubric_no_api(self, tmp_project: Path):
+    def test_default_prints_rubric_no_api(self, tmp_project: Path):
         plan = tmp_project / "plan.md"
         plan.write_text("# My Plan\n\nStep 1: Do the thing.\n", encoding="utf-8")
 
-        result = runner.invoke(app, ["plan", "review", str(plan), "--local"])
+        result = runner.invoke(app, ["plan", "review", str(plan)])
         assert result.exit_code == 0
         assert "Plan Review" in result.output
         assert "Review Priorities" in result.output
         assert "Step 1: Do the thing" not in result.output
 
-    def test_local_with_plan_includes_content(self, tmp_project: Path):
+    def test_with_plan_includes_content(self, tmp_project: Path):
         plan = tmp_project / "plan.md"
         plan.write_text("# My Plan\n\nStep 1: Do the thing.\n", encoding="utf-8")
 
         result = runner.invoke(
-            app, ["plan", "review", str(plan), "--local", "--with-plan"],
+            app, ["plan", "review", str(plan), "--with-plan"],
         )
         assert result.exit_code == 0
         assert "Plan Review" in result.output
         assert "Step 1: Do the thing" in result.output
 
+    def test_legacy_prompt_flag_still_works(self, tmp_project: Path):
+        plan = tmp_project / "plan.md"
+        plan.write_text("# My Plan\n\nStep 1: Do the thing.\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["plan", "review", str(plan), "--prompt"])
+        assert result.exit_code == 0
+        assert "Plan Review" in result.output
+
+    def test_local_flag_requires_model(self, tmp_project: Path):
+        plan = tmp_project / "plan.md"
+        plan.write_text("# My Plan\n\nStep 1: Do the thing.\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["plan", "review", str(plan), "--local"])
+        assert result.exit_code == 1
+        assert "No model configured" in result.output
+
 
 class TestLintDeepTypeHooks:
-    """Test that --deep injects type-specific hooks."""
+    """Test that --prompt injects type-specific hooks."""
 
-    def test_deep_skill_gets_hook(self, tmp_project: Path):
+    def test_prompt_skill_gets_hook(self, tmp_project: Path):
         skill_dir = tmp_project / ".cursor" / "skills"
         skill_dir.mkdir(parents=True)
         skill_file = skill_dir / "my-skill.md"
         skill_file.write_text("# My Skill\n\nDo the thing.\n", encoding="utf-8")
 
-        result = runner.invoke(app, ["lint", str(skill_file), "--deep"])
+        result = runner.invoke(app, ["lint", str(skill_file), "--prompt"])
         assert result.exit_code == 0
         assert "type: skill" in result.output
         assert "Type Context: Skill" in result.output
 
-    def test_deep_rule_gets_hook(self, tmp_project: Path):
+    def test_prompt_rule_gets_hook(self, tmp_project: Path):
         rule_dir = tmp_project / ".cursor" / "rules"
         rule_dir.mkdir(parents=True)
         rule_file = rule_dir / "my-rule.mdc"
         rule_file.write_text("# My Rule\n\nAlways do X.\n", encoding="utf-8")
 
-        result = runner.invoke(app, ["lint", str(rule_file), "--deep"])
+        result = runner.invoke(app, ["lint", str(rule_file), "--prompt"])
         assert result.exit_code == 0
         assert "type: rule" in result.output
         assert "Type Context: Rule" in result.output
 
-    def test_deep_unknown_gets_other_hook(self, tmp_project: Path):
+    def test_prompt_unknown_gets_other_hook(self, tmp_project: Path):
         f = tmp_project / "random-doc.md"
         f.write_text("# Random\n\nSome content.\n", encoding="utf-8")
 
-        result = runner.invoke(app, ["lint", str(f), "--deep"])
+        result = runner.invoke(app, ["lint", str(f), "--prompt"])
         assert result.exit_code == 0
         assert "type: other" in result.output
         assert "Type Context: Unknown" in result.output
