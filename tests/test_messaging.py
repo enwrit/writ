@@ -8,6 +8,7 @@ import pytest
 
 from writ.core.models import (
     AutoRespondTier,
+    Conversation,
     ConversationStatus,
     PeerConfig,
 )
@@ -562,3 +563,274 @@ class TestConnect:
         ])
         assert result.exit_code == 1
         assert "not found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Remote conversation pull (backend relay inbound sync)
+# ---------------------------------------------------------------------------
+
+class TestRemotePull:
+    """Verify _pull_remote_messages appends new messages from the relay."""
+
+    def _setup_remote_conv(self, repo_root: Path) -> tuple[Path, PeerConfig, Conversation]:
+        """Register a remote peer and seed a conversation file."""
+        from writ.core import messaging
+        from writ.core.peers import add_peer
+
+        peer = add_peer("remote-peer", remote="peeruser")
+        conv = messaging.create_conversation(
+            peer_repo="remote-peer",
+            goal="Remote sync test",
+            local_agent="me",
+            local_repo=repo_root.name,
+        )
+        path = messaging.conversations_dir() / messaging._conv_filename(
+            "remote-peer", "Remote sync test",
+        )
+        return path, peer, conv
+
+    def test_pull_appends_new_messages(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from writ.commands.chat import _pull_remote_messages
+        from writ.core import auth
+
+        path, peer, conv = self._setup_remote_conv(initialized_project)
+
+        monkeypatch.setattr(auth, "is_logged_in", lambda: True)
+
+        class _FakeClient:
+            def pull_conversation(self, conv_id, *, after_message=0):
+                return {
+                    "messages": [
+                        {
+                            "id": "msg-r1",
+                            "agent_name": "peer-agent",
+                            "repo_name": "remote-peer",
+                            "content": "Hello from the relay",
+                            "attachments": [],
+                        }
+                    ]
+                }
+
+        import writ.integrations.registry as reg_mod
+        monkeypatch.setattr(reg_mod, "RegistryClient", lambda: _FakeClient())
+
+        appended = _pull_remote_messages(peer, path, conv)
+        assert appended == 1
+
+        from writ.core.messaging import load_conversation
+        refreshed = load_conversation(path)
+        assert refreshed is not None
+        assert len(refreshed.messages) == 1
+        assert refreshed.messages[0].content == "Hello from the relay"
+
+    def test_pull_idempotent_on_re_pull(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from writ.commands.chat import _pull_remote_messages
+        from writ.core import auth, messaging
+
+        path, peer, conv = self._setup_remote_conv(initialized_project)
+        monkeypatch.setattr(auth, "is_logged_in", lambda: True)
+
+        all_remote = [
+            {
+                "id": "msg-r1",
+                "agent_name": "peer-agent",
+                "repo_name": "remote-peer",
+                "content": "Only-once message",
+                "attachments": [],
+            }
+        ]
+
+        class _FakeClient:
+            def pull_conversation(self, conv_id, *, after_message=0):
+                return {"messages": all_remote[after_message:]}
+
+        import writ.integrations.registry as reg_mod
+        monkeypatch.setattr(reg_mod, "RegistryClient", lambda: _FakeClient())
+
+        first = _pull_remote_messages(peer, path, conv)
+        assert first == 1
+
+        refreshed = messaging.load_conversation(path)
+        assert refreshed is not None
+        second = _pull_remote_messages(peer, path, refreshed)
+        assert second == 0
+
+        refreshed2 = messaging.load_conversation(path)
+        assert refreshed2 is not None
+        assert len(refreshed2.messages) == 1
+
+    def test_pull_graceful_on_network_error(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from writ.commands.chat import _pull_remote_messages
+        from writ.core import auth
+
+        path, peer, conv = self._setup_remote_conv(initialized_project)
+        monkeypatch.setattr(auth, "is_logged_in", lambda: True)
+
+        class _FakeClient:
+            def pull_conversation(self, conv_id, *, after_message=0):
+                raise RuntimeError("boom")
+
+        import writ.integrations.registry as reg_mod
+        monkeypatch.setattr(reg_mod, "RegistryClient", lambda: _FakeClient())
+
+        assert _pull_remote_messages(peer, path, conv) == 0
+
+    def test_pull_skipped_for_local_peer(
+        self, initialized_project: Path,
+    ):
+        from writ.commands.chat import _pull_remote_messages
+        from writ.core import messaging
+        from writ.core.peers import add_peer
+
+        local_peer_root = initialized_project.parent / "local-peer"
+        local_peer_root.mkdir()
+        (local_peer_root / ".writ").mkdir()
+        peer = add_peer("local-peer", path=str(local_peer_root))
+
+        conv = messaging.create_conversation(
+            peer_repo="local-peer",
+            goal="Local",
+            local_agent="me",
+            local_repo=initialized_project.name,
+        )
+        path = messaging.conversations_dir() / messaging._conv_filename(
+            "local-peer", "Local",
+        )
+        assert _pull_remote_messages(peer, path, conv) == 0
+
+    def test_pull_skipped_when_not_logged_in(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from writ.commands.chat import _pull_remote_messages
+        from writ.core import auth
+
+        path, peer, conv = self._setup_remote_conv(initialized_project)
+        monkeypatch.setattr(auth, "is_logged_in", lambda: False)
+
+        assert _pull_remote_messages(peer, path, conv) == 0
+
+
+# ---------------------------------------------------------------------------
+# PeerConfig context-bloat limits (item 7)
+# ---------------------------------------------------------------------------
+
+class TestPeerConfigLimits:
+    """Enforce max_turns + max_context_tokens in chat_send."""
+
+    def _start_conversation(
+        self, initialized_project: Path, peer_name: str = "peer",
+        *, max_turns: int | None = None, max_context_tokens: int | None = None,
+    ):
+        from writ.core import messaging
+        from writ.core.peers import add_peer
+
+        peer_root = initialized_project.parent / "peer-project"
+        peer_root.mkdir(parents=True, exist_ok=True)
+        (peer_root / ".writ").mkdir(exist_ok=True)
+
+        kwargs: dict = {"path": str(peer_root)}
+        if max_turns is not None:
+            kwargs["max_turns"] = max_turns
+        add_peer(peer_name, **kwargs)
+
+        if max_context_tokens is not None:
+            from writ.core.peers import load_peers, save_peers
+            manifest = load_peers()
+            manifest.peers[peer_name].max_context_tokens = max_context_tokens
+            save_peers(manifest)
+
+        conv = messaging.create_conversation(
+            peer_repo=peer_name,
+            goal="Limits test",
+            local_agent="me",
+            local_repo=initialized_project.name,
+        )
+        return conv
+
+    def test_send_blocked_when_message_exceeds_token_cap(
+        self, initialized_project: Path,
+    ):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+
+        conv = self._start_conversation(
+            initialized_project, max_context_tokens=100,
+        )
+        runner = CliRunner()
+        huge = "x " * 1000
+        result = runner.invoke(
+            app, ["chat", "send", conv.id, huge, "--no-invoke"],
+        )
+        assert result.exit_code == 1
+        assert "--truncate" in result.output or "--force" in result.output
+
+    def test_truncate_flag_lets_message_through(
+        self, initialized_project: Path,
+    ):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+
+        conv = self._start_conversation(
+            initialized_project, max_context_tokens=100,
+        )
+        runner = CliRunner()
+        huge = "x " * 1000
+        result = runner.invoke(
+            app, ["chat", "send", conv.id, huge, "--truncate", "--no-invoke"],
+        )
+        assert result.exit_code == 0
+        assert "Truncated" in result.output or "Sent" in result.output
+
+    def test_force_flag_bypasses_token_cap(
+        self, initialized_project: Path,
+    ):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+
+        conv = self._start_conversation(
+            initialized_project, max_context_tokens=100,
+        )
+        runner = CliRunner()
+        huge = "x " * 1000
+        result = runner.invoke(
+            app, ["chat", "send", conv.id, huge, "--force", "--no-invoke"],
+        )
+        assert result.exit_code == 0
+
+    def test_turn_cap_blocks_further_sends(
+        self, initialized_project: Path,
+    ):
+        from typer.testing import CliRunner
+
+        from writ.cli import app
+        from writ.core import messaging
+
+        conv = self._start_conversation(
+            initialized_project, max_turns=1,
+        )
+        path_pair = messaging.find_conversation(conv.id)
+        assert path_pair is not None
+        path, _ = path_pair
+        messaging.append_message(
+            path, agent="me", repo=initialized_project.name,
+            content="first message to hit the cap",
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app, ["chat", "send", conv.id, "second", "--no-invoke"],
+        )
+        assert result.exit_code == 1
+        assert (
+            "capacity reached" in result.output.lower()
+            or "max_turns" in result.output.lower()
+        )

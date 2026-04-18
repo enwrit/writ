@@ -6,9 +6,11 @@ contradictions, and computes an aggregate health score.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 
@@ -39,6 +41,7 @@ class DocHealthReport:
     health_score: int = 100
     files: list[DocFileReport] = field(default_factory=list)
     total_issues: int = 0
+    lint_cap_exceeded: bool = False
 
 
 _FILE_PATH_RE = re.compile(
@@ -356,6 +359,296 @@ def check_contradictions(
     return issues
 
 
+# ---------------------------------------------------------------------------
+# Lint-score integration (live data, cached in .writ/lint-scores.json)
+# ---------------------------------------------------------------------------
+
+_LINT_SCORES_FILENAME = "lint-scores.json"
+_LINT_RESCORE_CAP = 50
+
+
+def _file_commit_hash(root: Path, rel_path: str) -> str | None:
+    """Return the last commit hash that touched ``rel_path``, or None."""
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%H", "--", rel_path],
+            capture_output=True, text=True, cwd=str(root), timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _load_lint_scores_cache(root: Path) -> tuple[dict, dict]:
+    """Load the per-file lint-scores cache. Returns (scores, meta)."""
+    try:
+        from writ.utils import project_writ_dir
+        writ_dir = project_writ_dir()
+    except Exception:  # noqa: BLE001
+        writ_dir = root / ".writ"
+    path = writ_dir / _LINT_SCORES_FILENAME
+    if not path.is_file():
+        return {}, {}
+    try:
+        raw = path.read_text(encoding="utf-8")
+        data = json.loads(raw) if raw.strip() else {}
+    except (OSError, ValueError):
+        return {}, {}
+    scores = data.get("scores") if isinstance(data, dict) else None
+    meta = data.get("_meta") if isinstance(data, dict) else None
+    if not isinstance(scores, dict):
+        scores = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    return scores, meta
+
+
+def _save_lint_scores_cache(
+    root: Path, scores: dict, meta: dict,
+) -> None:
+    """Write the cache atomically; swallow errors."""
+    try:
+        from writ.utils import project_writ_dir
+        writ_dir = project_writ_dir()
+    except Exception:  # noqa: BLE001
+        writ_dir = root / ".writ"
+    if not writ_dir.is_dir():
+        return
+    out_path = writ_dir / _LINT_SCORES_FILENAME
+    meta = dict(meta)
+    meta["last_updated"] = datetime.now().replace(microsecond=0).isoformat(sep="T")
+    payload = {"scores": scores, "_meta": meta}
+    try:
+        out_path.write_text(
+            json.dumps(payload, indent=2) + "\n", encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def _parse_cached_ts(ts: str | None) -> float | None:
+    """Parse an ISO timestamp from the cache into an epoch float."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts).timestamp()
+    except ValueError:
+        return None
+
+
+def _score_file_tier2(file_path: Path) -> int | None:
+    """Score a markdown instruction file using the Tier-2 ML helper.
+
+    Loads the file as an ``InstructionConfig``, runs the Tier-1 linter to get
+    baseline ``LintResult``s, and then upgrades to the Tier-2 ML model if
+    bundled models are available.  Returns the headline score, or ``None``
+    on any failure (so callers can fall back to the cached value).
+    """
+    try:
+        from writ.core import linter as lint_engine
+        from writ.core.models import InstructionConfig
+    except Exception:  # noqa: BLE001
+        return None
+
+    try:
+        text = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    name = file_path.stem
+    try:
+        try:
+            import frontmatter
+
+            post = frontmatter.loads(text)
+            meta = post.metadata or {}
+            meta.setdefault("name", name)
+            meta.setdefault("instructions", post.content)
+            agent = InstructionConfig(**meta)
+        except Exception:  # noqa: BLE001
+            agent = InstructionConfig(name=name, instructions=text)
+    except Exception:  # noqa: BLE001
+        return None
+
+    try:
+        results = lint_engine.lint(agent, source_path=file_path)
+        score = lint_engine.compute_score_with_ml(agent, results)
+        return int(score.score)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _lint_scores_for_files(
+    root: Path, doc_files: list[Path],
+) -> tuple[dict[str, int], bool]:
+    """Return ``{relpath: score}`` for markdown instruction files.
+
+    Uses ``.writ/lint-scores.json`` as a cache.  Invalidates when the file's
+    mtime is newer than the cached timestamp OR its last-commit hash has
+    changed.  Caps re-scoring at ``_LINT_RESCORE_CAP`` files per call;
+    returns ``(scores, cap_exceeded)``.
+    """
+    scores_out: dict[str, int] = {}
+    cache_scores, cache_meta = _load_lint_scores_cache(root)
+
+    updates: dict[str, dict] = {}
+    rescored = 0
+    cap_exceeded = False
+
+    for fp in doc_files:
+        if fp.suffix.lower() not in {".md", ".mdc"}:
+            continue
+        try:
+            rel = fp.relative_to(root).as_posix()
+        except ValueError:
+            continue
+
+        cached = cache_scores.get(rel) if isinstance(cache_scores, dict) else None
+        cached_entry = cached if isinstance(cached, dict) else None
+        cached_score = None
+        cached_ts_epoch: float | None = None
+        cached_hash: str | None = None
+        if cached_entry is not None:
+            raw_score = cached_entry.get("headline_score")
+            try:
+                cached_score = int(raw_score) if raw_score is not None else None
+            except (TypeError, ValueError):
+                cached_score = None
+            cached_ts_epoch = _parse_cached_ts(cached_entry.get("timestamp"))
+            commit_hash = cached_entry.get("commit_hash")
+            cached_hash = commit_hash if isinstance(commit_hash, str) else None
+
+        try:
+            mtime = fp.stat().st_mtime
+        except OSError:
+            mtime = None
+
+        current_hash = _file_commit_hash(root, rel)
+
+        needs_rescore = cached_score is None
+        if not needs_rescore:
+            if mtime is not None and cached_ts_epoch is not None and mtime > cached_ts_epoch + 1:
+                needs_rescore = True
+            if (
+                current_hash is not None
+                and cached_hash is not None
+                and current_hash != cached_hash
+            ):
+                needs_rescore = True
+
+        if needs_rescore:
+            if rescored >= _LINT_RESCORE_CAP:
+                cap_exceeded = True
+                if cached_score is not None:
+                    scores_out[rel] = cached_score
+                continue
+            fresh = _score_file_tier2(fp)
+            if fresh is None:
+                if cached_score is not None:
+                    scores_out[rel] = cached_score
+                continue
+            rescored += 1
+            scores_out[rel] = fresh
+            new_entry: dict = dict(cached_entry or {})
+            new_entry["headline_score"] = fresh
+            new_entry["timestamp"] = (
+                datetime.now().replace(microsecond=0).isoformat(sep="T")
+            )
+            if current_hash:
+                new_entry["commit_hash"] = current_hash
+            updates[rel] = new_entry
+        else:
+            scores_out[rel] = cached_score  # type: ignore[assignment]
+
+    if updates:
+        merged = dict(cache_scores)
+        merged.update(updates)
+        _save_lint_scores_cache(root, merged, cache_meta)
+
+    return scores_out, cap_exceeded
+
+
+_ORPHAN_EXEMPT_NAMES = {
+    "README.md", "AGENTS.md", "CLAUDE.md", "SKILL.md", "index.md",
+    "CONTRIBUTING.md", "CHANGELOG.md", "ARCHITECTURE.md",
+    ".cursorrules", ".windsurfrules",
+    "writ-docs-index.md", "writ-docs-index.mdc",
+    "writ-log.md", "writ-log.mdc",
+}
+
+
+def _index_core_files(root: Path) -> set[str]:
+    """Return basenames listed under '## Core files' of the docs index."""
+    try:
+        from writ.core import store
+        cfg = store.load_instruction("writ-docs-index")
+    except Exception:  # noqa: BLE001
+        return set()
+    if not cfg or not cfg.instructions:
+        return set()
+
+    core: set[str] = set()
+    in_core = False
+    for line in cfg.instructions.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("## core"):
+            in_core = True
+            continue
+        if in_core and stripped.startswith("## "):
+            break
+        if not in_core:
+            continue
+        for m in re.finditer(
+            r'`([^`\n]+\.[a-zA-Z0-9]{1,10})`|(\S+\.[a-zA-Z0-9]{1,10})',
+            stripped,
+        ):
+            token = m.group(1) or m.group(2)
+            if not token:
+                continue
+            core.add(Path(token).name)
+            core.add(token)
+    return core
+
+
+def _build_reverse_reference_map(
+    files_with_text: list[tuple[Path, str]],
+    root: Path,
+) -> dict[str, int]:
+    """Return ``{relpath_posix: inbound_ref_count}`` across the doc set.
+
+    A reference counts when another doc file either links to or otherwise
+    mentions the file's name or relative path.  Self-references are ignored.
+    """
+    counts: dict[str, int] = {}
+    rels: list[str] = []
+    names: list[str] = []
+    for fp, _ in files_with_text:
+        try:
+            rel = fp.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        counts[rel] = 0
+        rels.append(rel)
+        names.append(fp.name)
+
+    for fp, text in files_with_text:
+        try:
+            self_rel = fp.relative_to(root).as_posix()
+        except ValueError:
+            self_rel = None
+        lower = text.lower()
+        for rel, name in zip(rels, names, strict=True):
+            if rel == self_rel:
+                continue
+            needles = {rel.lower(), name.lower()}
+            if any(n in lower for n in needles):
+                counts[rel] = counts.get(rel, 0) + 1
+
+    return counts
+
+
 def _check_missing_from_index(
     root: Path,
     doc_files: list[Path],
@@ -451,6 +744,46 @@ def run_health_check(root: Path | None = None) -> DocHealthReport:
                 break
 
     _check_missing_from_index(root, doc_files, file_reports)
+
+    try:
+        ref_counts = _build_reverse_reference_map(files_with_text, root)
+        core_files = _index_core_files(root)
+    except Exception:  # noqa: BLE001
+        ref_counts, core_files = {}, set()
+
+    for rel, fr in file_reports.items():
+        rel_posix = Path(rel).as_posix()
+        inbound = ref_counts.get(rel_posix, 0)
+        if inbound > 0:
+            continue
+        base = Path(rel).name
+        if base in _ORPHAN_EXEMPT_NAMES:
+            continue
+        if base in core_files or rel_posix in core_files:
+            continue
+        if "skills/writ/" in rel_posix or "skills\\writ\\" in rel:
+            continue
+        fr.issues.append(DocIssue(
+            kind="orphan",
+            message=(
+                f"Orphan page: `{rel_posix}` has no inbound references "
+                f"from other docs"
+            ),
+            severity="info",
+        ))
+
+    try:
+        lint_scores_map, cap_exceeded = _lint_scores_for_files(root, doc_files)
+    except Exception:  # noqa: BLE001
+        lint_scores_map, cap_exceeded = {}, False
+    report_by_posix = {
+        Path(rel).as_posix(): fr for rel, fr in file_reports.items()
+    }
+    for rel_posix, score in lint_scores_map.items():
+        fr = report_by_posix.get(rel_posix)
+        if fr is not None:
+            fr.lint_score = score
+    report.lint_cap_exceeded = cap_exceeded
 
     total_issues = 0
     penalty = 0

@@ -319,7 +319,14 @@ class PeerConfig(BaseModel):
     remote: str | None = Field(default=None, description="Remote API URL.")
     transport: str = Field(default="local", description="Transport: local or remote.")
     auto_respond: AutoRespondTier = Field(default=AutoRespondTier.OFF)
-    max_turns: int = Field(default=10, description="Safety limit per conversation.")
+    max_turns: int = Field(default=50, description="Safety limit per conversation.")
+    max_context_tokens: int = Field(
+        default=200_000,
+        description=(
+            "Per-message soft cap (tokens, including attachments). "
+            "Outgoing messages above this abort unless --force/--truncate."
+        ),
+    )
     allowed_context: list[str] = Field(
         default_factory=lambda: ["writ://instructions/*"],
         description="Glob patterns for what context can be shared.",

@@ -41,6 +41,7 @@ def peers_list() -> None:
     table.add_column("Transport")
     table.add_column("Auto-respond")
     table.add_column("Max turns", justify="right")
+    table.add_column("Max tokens", justify="right")
 
     for name, peer in manifest.peers.items():
         location = peer.path or peer.remote or "?"
@@ -50,6 +51,7 @@ def peers_list() -> None:
             peer.transport,
             peer.auto_respond.value,
             str(peer.max_turns),
+            str(getattr(peer, "max_context_tokens", 200_000)),
         )
 
     console.print(table)
@@ -61,7 +63,12 @@ def peers_add(
     path: str = typer.Option(None, "--path", "-p", help="Local filesystem path to the peer repo."),
     remote: str = typer.Option(None, "--remote", "-r", help="Remote API URL for the peer."),
     auto_respond: str = typer.Option("off", "--auto-respond", help="off, read_only, or full."),
-    max_turns: int = typer.Option(10, "--max-turns", help="Safety limit per conversation."),
+    max_turns: int = typer.Option(50, "--max-turns", help="Safety limit per conversation."),
+    max_context_tokens: int = typer.Option(
+        200_000,
+        "--max-context-tokens",
+        help="Per-message token cap (protects peer and backend from context bloat).",
+    ),
 ) -> None:
     """Register a new peer repository."""
     _require_init()
@@ -80,7 +87,12 @@ def peers_add(
         raise typer.Exit(1) from None
 
     peer = peers.add_peer(
-        name, path=path, remote=remote, auto_respond=tier, max_turns=max_turns,
+        name,
+        path=path,
+        remote=remote,
+        auto_respond=tier,
+        max_turns=max_turns,
+        max_context_tokens=max_context_tokens,
     )
     console.print(f"[green]Added peer[/green] [cyan]{name}[/cyan] ({peer.transport})")
 

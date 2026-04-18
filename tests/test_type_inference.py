@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from writ.cli import app
@@ -148,9 +149,15 @@ class TestPlanReviewPrompt:
         assert result.exit_code == 0
         assert "Plan Review" in result.output
 
-    def test_local_flag_requires_model(self, tmp_project: Path):
+    def test_local_flag_requires_model(
+        self, tmp_project: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         plan = tmp_project / "plan.md"
         plan.write_text("# My Plan\n\nStep 1: Do the thing.\n", encoding="utf-8")
+
+        from writ.core import llm_client
+
+        monkeypatch.setattr(llm_client, "get_model_config", lambda: None)
 
         result = runner.invoke(app, ["plan", "review", str(plan), "--local"])
         assert result.exit_code == 1

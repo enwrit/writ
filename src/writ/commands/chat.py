@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from writ.core import messaging, peers, store
-from writ.core.models import AutoRespondTier, ConversationStatus
+from writ.core.models import AutoRespondTier, Conversation, ConversationStatus, PeerConfig
 from writ.utils import console, error_console
 
 chat_app = typer.Typer(
@@ -28,6 +28,133 @@ def _require_init() -> None:
     if not store.is_initialized():
         error_console.print("[red]Project not initialized.[/red] Run [cyan]writ init[/cyan] first.")
         raise typer.Exit(1)
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimator with a soft fallback for missing deps."""
+    try:
+        from writ.core.context_window import estimate_tokens
+        return estimate_tokens(text)
+    except Exception:  # noqa: BLE001
+        return max(1, len(text) // 4)
+
+
+def _pull_remote_messages(
+    peer: PeerConfig, conv_path: Path, conv: Conversation,
+) -> int:
+    """Pull any new messages for a remote conversation from the backend relay.
+
+    Appends only genuinely new messages (those not already in the local file)
+    to the conversation file, refreshes ``_latest.md``, and returns the count
+    of newly appended messages.  Returns 0 on network error, no new messages,
+    unauthenticated user, or non-remote peers -- never raises.
+    """
+    if peer.transport != "remote":
+        return 0
+
+    from writ.core import auth
+    if not auth.is_logged_in():
+        return 0
+
+    try:
+        from writ.integrations.registry import RegistryClient
+        client = RegistryClient()
+        data = client.pull_conversation(
+            conv.id, after_message=len(conv.messages),
+        )
+    except Exception:  # noqa: BLE001
+        return 0
+
+    if not data:
+        return 0
+
+    remote_msgs = data.get("messages") or []
+    if not remote_msgs:
+        return 0
+
+    repo_name = Path.cwd().name
+    existing_ids = {m.id for m in conv.messages}
+    appended = 0
+    for rm in remote_msgs:
+        if not isinstance(rm, dict):
+            continue
+        mid = rm.get("id") or rm.get("message_id")
+        if mid and mid in existing_ids:
+            continue
+        sender_agent = rm.get("agent_name") or rm.get("author_agent") or "agent"
+        sender_repo = rm.get("repo_name") or rm.get("author_repo") or peer.name
+        if sender_repo == repo_name:
+            continue
+        content = rm.get("content") or ""
+        if not content:
+            continue
+        raw_attachments = rm.get("attachments") or []
+        attach_blocks: list[str] = []
+        for a in raw_attachments:
+            if isinstance(a, str):
+                attach_blocks.append(a)
+            elif isinstance(a, dict):
+                body = a.get("content") or ""
+                path_hint = a.get("path") or a.get("name") or "attachment"
+                attach_blocks.append(
+                    f'<attached file="{path_hint}">\n{body}\n</attached>'
+                )
+        try:
+            messaging.append_message(
+                conv_path,
+                agent=sender_agent,
+                repo=sender_repo,
+                content=content,
+            )
+            if attach_blocks:
+                from writ.core.file_io import atomic_append
+                atomic_append(conv_path, "\n".join(attach_blocks) + "\n")
+        except Exception:  # noqa: BLE001
+            continue
+        appended += 1
+    return appended
+
+
+def _pull_all_remote(*, silent: bool = False) -> int:
+    """Pull updates for every remote conversation. Returns total appended.
+
+    Silent mode suppresses the dim warning printed on network failure, used
+    by list/read commands where noise is undesirable.
+    """
+    total = 0
+    try:
+        manifest = peers.load_peers()
+    except Exception:  # noqa: BLE001
+        return 0
+    remote_peer_names = {
+        p.name for p in manifest.peers.values() if p.transport == "remote"
+    }
+    if not remote_peer_names:
+        return 0
+
+    for path, conv in messaging.list_conversations():
+        peer_match: PeerConfig | None = None
+        for participant in conv.participants:
+            if participant.repo in remote_peer_names:
+                peer_match = manifest.peers.get(participant.repo)
+                break
+            match = peers.find_peer(participant.repo)
+            if match is not None and match.transport == "remote":
+                peer_match = match
+                break
+        if peer_match is None:
+            continue
+        try:
+            appended = _pull_remote_messages(peer_match, path, conv)
+            total += appended
+        except Exception:  # noqa: BLE001
+            if not silent:
+                console.print(
+                    "[dim]Note: failed to pull remote updates for "
+                    f"{conv.id}.[/dim]"
+                )
+            continue
+    return total
 
 
 def _sync_to_peer(peer: PeerConfig, conv_path: Path, conv: Conversation) -> None:  # noqa: F821
@@ -150,6 +277,7 @@ def chat_list() -> None:
     """List all conversations."""
     _require_init()
 
+    _pull_all_remote(silent=True)
     convs = messaging.list_conversations()
     if not convs:
         console.print("[dim]No conversations found.[/dim]")
@@ -200,6 +328,23 @@ def chat_read(
         raise typer.Exit(1)
 
     path, conv = result
+    peer_name = ""
+    for p in conv.participants:
+        if p.repo != Path.cwd().name:
+            peer_name = p.repo
+            break
+    peer = peers.find_peer(peer_name) if peer_name else None
+    if peer and peer.transport == "remote":
+        try:
+            appended = _pull_remote_messages(peer, path, conv)
+            if appended:
+                refreshed = messaging.load_conversation(path)
+                if refreshed is not None:
+                    conv = refreshed
+        except Exception:  # noqa: BLE001
+            console.print(
+                "[dim]Note: failed to pull remote updates (showing local state).[/dim]"
+            )
     text = path.read_text(encoding="utf-8")
 
     if last_n > 0 and conv.messages:
@@ -258,6 +403,14 @@ def chat_send(
         typer.Option("--file", "-f", help="Attach file(s) to the message."),
     ] = None,
     invoke: bool = typer.Option(True, "--invoke/--no-invoke", help="Auto-invoke peer agent."),
+    force: bool = typer.Option(
+        False, "--force",
+        help="Bypass peer max_context_tokens limit and send as-is.",
+    ),
+    truncate: bool = typer.Option(
+        False, "--truncate",
+        help="Truncate the message at the peer's max_context_tokens limit.",
+    ),
 ) -> None:
     """Send a message in an existing conversation."""
     _require_init()
@@ -283,6 +436,55 @@ def chat_send(
         else:
             console.print("[dim]No diff found (clean working tree)[/dim]")
 
+    peer_name_for_limits = ""
+    for p in conv.participants:
+        if p.repo != repo_name:
+            peer_name_for_limits = p.repo
+            break
+    peer_cfg = peers.find_peer(peer_name_for_limits) if peer_name_for_limits else None
+
+    if peer_cfg is not None:
+        turn_count = len(conv.messages)
+        max_turns = getattr(peer_cfg, "max_turns", 50) or 50
+        if turn_count >= max_turns:
+            error_console.print(
+                f"[red]Conversation capacity reached[/red] "
+                f"({turn_count}/{max_turns} turns). "
+                f"Start a new chat with "
+                f"[cyan]writ chat start --with {peer_name_for_limits}[/cyan] "
+                f"or raise [cyan]max_turns[/cyan] in peers.yaml."
+            )
+            raise typer.Exit(1)
+
+        max_tokens = getattr(peer_cfg, "max_context_tokens", 200_000) or 200_000
+        outgoing = full_message
+        if files:
+            for fp in files:
+                try:
+                    outgoing += "\n" + Path(fp).read_text(
+                        encoding="utf-8", errors="replace",
+                    )
+                except OSError:
+                    continue
+        estimated = _estimate_tokens(outgoing)
+        if estimated > max_tokens:
+            if truncate:
+                budget_chars = max_tokens * 4
+                marker = f"\n\n[... truncated ~{estimated - max_tokens} tokens ...]"
+                full_message = full_message[: budget_chars - len(marker)] + marker
+                console.print(
+                    f"[yellow]Truncated message "
+                    f"from ~{estimated} to ~{max_tokens} tokens[/yellow]"
+                )
+            elif not force:
+                error_console.print(
+                    f"[yellow]Message size ~{estimated} tokens exceeds "
+                    f"peer limit of {max_tokens}.[/yellow] "
+                    f"Use [cyan]--truncate[/cyan] to auto-trim or "
+                    f"[cyan]--force[/cyan] to send as-is."
+                )
+                raise typer.Exit(1)
+
     attach = [str(f) for f in files] if files else None
     msg = messaging.append_message(
         path,
@@ -295,12 +497,7 @@ def chat_send(
     if files:
         console.print(f"[dim]Attached {len(files)} file(s)[/dim]")
 
-    peer_name = ""
-    for p in conv.participants:
-        if p.repo != repo_name:
-            peer_name = p.repo
-            break
-    peer = peers.find_peer(peer_name) if peer_name else None
+    peer = peer_cfg
 
     if peer:
         reloaded = messaging.load_conversation(path)
@@ -349,6 +546,17 @@ def chat_resume(
         raise typer.Exit(1)
 
     path, conv = result
+    peer_name = ""
+    for p in conv.participants:
+        if p.repo != Path.cwd().name:
+            peer_name = p.repo
+            break
+    peer = peers.find_peer(peer_name) if peer_name else None
+    if peer and peer.transport == "remote":
+        try:
+            _pull_remote_messages(peer, path, conv)
+        except Exception:  # noqa: BLE001
+            pass
     if conv.status != ConversationStatus.PAUSED:
         error_console.print(f"[yellow]Conversation is {conv.status.value}, not paused.[/yellow]")
         raise typer.Exit(1)
@@ -386,6 +594,8 @@ def inbox_command() -> None:
     if not store.is_initialized():
         error_console.print("[red]Project not initialized.[/red]")
         raise typer.Exit(1)
+
+    _pull_all_remote(silent=True)
 
     repo_name = Path.cwd().name
     unread: list[tuple[str, str, str, str]] = []

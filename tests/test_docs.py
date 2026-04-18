@@ -123,6 +123,180 @@ def test_docs_check_invalid_path() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Lint-score integration in docs health
+# ---------------------------------------------------------------------------
+
+
+def test_doc_health_populates_lint_score_on_first_check(
+    initialized_project: Path, monkeypatch,
+) -> None:
+    (initialized_project / "README.md").write_text(
+        "# Guide\n\nRun `writ init` before anything else.\n",
+        encoding="utf-8",
+    )
+    from writ.core import doc_health
+
+    monkeypatch.setattr(doc_health, "_score_file_tier2", lambda p: 73)
+
+    report = doc_health.run_health_check(initialized_project)
+    readme = next((f for f in report.files if f.path == "README.md"), None)
+    assert readme is not None
+    assert readme.lint_score == 73
+
+
+def test_doc_health_attaches_lint_score_for_nested_files_windows_paths(
+    initialized_project: Path, monkeypatch,
+) -> None:
+    """Regression: on Windows, file_reports use native `\\` paths while the
+    lint-scores map uses posix keys. Scores must still be attached to nested
+    files regardless of separator style.
+    """
+    rules = initialized_project / ".cursor" / "rules"
+    rules.mkdir(parents=True, exist_ok=True)
+    target = rules / "example-rule.mdc"
+    target.write_text("# Example rule\n\nDo the thing.\n", encoding="utf-8")
+
+    from writ.core import doc_health
+
+    monkeypatch.setattr(doc_health, "_score_file_tier2", lambda p: 41)
+
+    report = doc_health.run_health_check(initialized_project)
+    nested = next(
+        (f for f in report.files if f.path.endswith("example-rule.mdc")), None,
+    )
+    assert nested is not None
+    assert nested.lint_score == 41
+
+
+def test_doc_health_uses_cache_when_mtime_unchanged(
+    initialized_project: Path, monkeypatch,
+) -> None:
+    (initialized_project / "README.md").write_text("# Guide", encoding="utf-8")
+    from writ.core import doc_health
+
+    calls = {"count": 0}
+
+    def _score(_path):
+        calls["count"] += 1
+        return 60
+
+    monkeypatch.setattr(doc_health, "_score_file_tier2", _score)
+
+    doc_health.run_health_check(initialized_project)
+    first_calls = calls["count"]
+    assert first_calls == 1
+
+    doc_health.run_health_check(initialized_project)
+    assert calls["count"] == first_calls, "should hit cache, not rescore"
+
+
+def test_doc_health_rescore_when_mtime_newer_than_cache(
+    initialized_project: Path, monkeypatch,
+) -> None:
+    readme = initialized_project / "README.md"
+    readme.write_text("# Guide", encoding="utf-8")
+    from writ.core import doc_health
+
+    scores = [55, 80]
+
+    def _score(_path):
+        return scores.pop(0) if scores else 0
+
+    monkeypatch.setattr(doc_health, "_score_file_tier2", _score)
+
+    first = doc_health.run_health_check(initialized_project)
+    first_readme = next(f for f in first.files if f.path == "README.md")
+    assert first_readme.lint_score == 55
+
+    import os
+    import time
+    future = time.time() + 120
+    os.utime(readme, (future, future))
+
+    second = doc_health.run_health_check(initialized_project)
+    second_readme = next(f for f in second.files if f.path == "README.md")
+    assert second_readme.lint_score == 80
+
+
+def test_orphan_page_flagged_when_no_inbound_refs(
+    initialized_project: Path,
+) -> None:
+    rules = initialized_project / ".cursor" / "rules"
+    rules.mkdir(parents=True, exist_ok=True)
+    (rules / "lonely-rule.mdc").write_text("# Lonely rule", encoding="utf-8")
+    (rules / "hub-rule.mdc").write_text(
+        "# Hub rule\nDoes not mention the orphan.\n", encoding="utf-8",
+    )
+
+    from writ.core import doc_health
+
+    report = doc_health.run_health_check(initialized_project)
+    lonely = next(
+        (f for f in report.files if f.path.endswith("lonely-rule.mdc")), None,
+    )
+    assert lonely is not None
+    assert any(i.kind == "orphan" for i in lonely.issues)
+
+
+def test_orphan_cleared_when_another_file_references_it(
+    initialized_project: Path,
+) -> None:
+    rules = initialized_project / ".cursor" / "rules"
+    rules.mkdir(parents=True, exist_ok=True)
+    (rules / "target-rule.mdc").write_text("# Target", encoding="utf-8")
+    (rules / "linker-rule.mdc").write_text(
+        "See `target-rule.mdc` for details.\n", encoding="utf-8",
+    )
+
+    from writ.core import doc_health
+
+    report = doc_health.run_health_check(initialized_project)
+    target = next(
+        (f for f in report.files if f.path.endswith("target-rule.mdc")), None,
+    )
+    assert target is not None
+    assert not any(i.kind == "orphan" for i in target.issues)
+
+
+def test_orphan_exempt_entry_points_never_flagged(
+    initialized_project: Path,
+) -> None:
+    (initialized_project / "README.md").write_text(
+        "# Top-level readme\n", encoding="utf-8",
+    )
+    (initialized_project / "AGENTS.md").write_text(
+        "# Agents\n", encoding="utf-8",
+    )
+
+    from writ.core import doc_health
+
+    report = doc_health.run_health_check(initialized_project)
+    for fname in ("README.md", "AGENTS.md"):
+        fr = next((f for f in report.files if f.path == fname), None)
+        if fr is None:
+            continue
+        assert not any(i.kind == "orphan" for i in fr.issues)
+
+
+def test_doc_health_respects_rescore_cap(
+    initialized_project: Path, monkeypatch,
+) -> None:
+    rules = initialized_project / ".cursor" / "rules"
+    rules.mkdir(parents=True, exist_ok=True)
+    for i in range(55):
+        (rules / f"rule-{i:02d}.mdc").write_text(
+            f"# rule {i}", encoding="utf-8",
+        )
+
+    from writ.core import doc_health
+
+    monkeypatch.setattr(doc_health, "_score_file_tier2", lambda p: 70)
+
+    report = doc_health.run_health_check(initialized_project)
+    assert report.lint_cap_exceeded is True
+
+
+# ---------------------------------------------------------------------------
 # writ docs update
 # ---------------------------------------------------------------------------
 
@@ -133,12 +307,84 @@ def test_docs_update_requires_index(initialized_project: Path) -> None:
     assert "No documentation index found" in result.output
 
 
+def test_docs_update_prompt_includes_concept_gap_pass() -> None:
+    from writ.commands.docs import _BUILTIN_PROMPTS
+
+    text = (_BUILTIN_PROMPTS / "docs-update-v1.md").read_text(encoding="utf-8")
+    assert "Step 2b: Concept-gap pass" in text
+    assert "A single clarifying sentence" in text
+    assert "A short bullet added to an existing list" in text
+    assert "A new subsection in an existing file" in text
+    assert "A new dedicated page" in text
+    assert "Prefer silence over padding" in text
+
+
 def test_docs_update_prints_instruction(initialized_project: Path) -> None:
     runner.invoke(app, ["docs", "init"])
     result = runner.invoke(app, ["docs", "update"])
     assert result.exit_code == 0
     assert "Documentation Update Instruction" in result.output
     assert "Health score" in result.output
+
+
+def test_docs_update_subagent_emits_wrapper_prompt(
+    initialized_project: Path,
+) -> None:
+    runner.invoke(app, ["docs", "init"])
+    result = runner.invoke(app, ["docs", "update", "--subagent"])
+    assert result.exit_code == 0
+    assert "subagent" in result.output.lower()
+    assert "handover" in result.output.lower()
+    assert "git status" in result.output, (
+        "subagent prompt should instruct the subagent to run git status itself"
+    )
+
+
+def test_docs_update_subagent_does_not_run_health_check_inline(
+    initialized_project: Path,
+) -> None:
+    """Regression: the subagent runs `writ docs check` itself.
+
+    The parent emits only the delegation prompt; it must not include the
+    health check output, otherwise the parent has already paid the token
+    cost the delegation was supposed to avoid.
+    """
+    runner.invoke(app, ["docs", "init"])
+    result = runner.invoke(app, ["docs", "update", "--subagent"])
+    assert result.exit_code == 0
+    assert "Health score" not in result.output
+    assert "Project Documentation Health" not in result.output
+
+
+def test_docs_update_subagent_logs_delegation(
+    initialized_project: Path,
+) -> None:
+    runner.invoke(app, ["docs", "init"])
+    runner.invoke(app, ["docs", "update", "--subagent"])
+
+    from writ.core import store
+
+    cfg = store.load_instruction("writ-log")
+    assert cfg is not None
+    assert "subagent" in cfg.instructions.lower()
+
+
+def test_docs_update_default_does_not_emit_subagent_prompt(
+    initialized_project: Path,
+) -> None:
+    runner.invoke(app, ["docs", "init"])
+    result = runner.invoke(app, ["docs", "update"])
+    assert result.exit_code == 0
+    assert "Subagent Delegation" not in result.output
+
+
+def test_docs_update_subagent_prompt_includes_concept_gap() -> None:
+    from writ.commands.docs import _BUILTIN_PROMPTS
+
+    path = _BUILTIN_PROMPTS / "docs-update-subagent-v1.md"
+    assert path.exists()
+    text = path.read_text(encoding="utf-8")
+    assert "concept-gap" in text.lower() or "Step 2b" in text
 
 
 def test_docs_update_creates_log_entry(initialized_project: Path) -> None:
@@ -202,6 +448,46 @@ def test_status_shows_log_entries(initialized_project: Path) -> None:
     assert result.exit_code == 0
     assert "Recent activity" in result.output
     assert "docs init" in result.output
+
+
+def test_status_shows_lint_average_when_cache_present(
+    initialized_project: Path,
+) -> None:
+    import json
+
+    cache = initialized_project / ".writ" / "lint-scores.json"
+    cache.write_text(
+        json.dumps({
+            "scores": {
+                "README.md": {"headline_score": 72, "timestamp": "2026-04-18T00:00:00"},
+                "AGENTS.md": {"headline_score": 88, "timestamp": "2026-04-18T00:00:00"},
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "Lint" in result.output
+
+
+def test_status_shows_last_instruction_change(
+    initialized_project: Path, monkeypatch,
+) -> None:
+    from writ.commands import status as status_mod
+
+    monkeypatch.setattr(status_mod, "_last_instruction_change", lambda: "abc1234 fix docs")
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "abc1234" in result.output
+
+
+def test_status_hides_sync_row_when_logged_out(
+    initialized_project: Path,
+) -> None:
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "Sync" not in result.output or "out of sync" not in result.output
 
 
 def test_status_not_initialized(tmp_project: Path) -> None:

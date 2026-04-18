@@ -117,7 +117,8 @@ writ/                                   # github.com/enwrit/writ, writ-CLI (work
 │               ├── writ-context.md    # CLI command reference, written to IDE rules dirs
 │               ├── prompts/           # Injected instructions for "commands as instructions" pattern (versioned .md files, loaded by commands at runtime)
 │               │   ├── docs-init-v1.md         # Instruction for writ docs init (LLM populates docs index)
-│               │   ├── docs-update-v1.md       # Instruction for writ docs update (LLM acts on health-check findings, updates docs, logs summary)
+│               │   ├── docs-update-v1.md       # Instruction for writ docs update (LLM acts on health-check findings, updates docs, logs summary; Step 2b concept-gap pass)
+│               │   ├── docs-update-subagent-v1.md # Delegation prompt for writ docs update --subagent (parent writes semantic handover; subagent runs git/docs check/update)
 │               │   ├── lint-deep-v1.md         # Qualitative review rubric for writ lint --prompt (actionable feedback, not scoring)
 │               │   ├── lint-fix-v1.md          # Fix hook for writ lint --prompt --fix (instructs LLM to apply fixes directly)
 │               │   ├── plan-review-local-v1.md # Wrapper for writ plan review (default prompt injection for IDE's AI)

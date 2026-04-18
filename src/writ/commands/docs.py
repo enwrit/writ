@@ -297,6 +297,7 @@ def check_command(
         data = {
             "health_score": report.health_score,
             "total_issues": report.total_issues,
+            "lint_cap_exceeded": getattr(report, "lint_cap_exceeded", False),
             "files": [
                 {
                     "path": f.path,
@@ -330,6 +331,18 @@ def update_command(
         bool,
         typer.Option("--all", "-A", help="Show all files including static built-in."),
     ] = False,
+    subagent: Annotated[
+        bool,
+        typer.Option(
+            "--subagent",
+            help=(
+                "Emit the subagent-delegation prompt instead of the inline "
+                "update prompt. The parent agent writes a short semantic "
+                "handover; the subagent runs git / writ docs check / the "
+                "update pass itself."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Run an AI-powered documentation update pass.
 
@@ -357,6 +370,20 @@ def update_command(
             "Run [cyan]writ docs init[/cyan] first to create one."
         )
         raise typer.Exit(1)
+
+    if subagent:
+        prompt = _load_prompt("docs-update-subagent-v1.md")
+        append_log(
+            root,
+            "docs update --subagent -- emitted delegation prompt for parent agent",
+        )
+        console.print(
+            "[bold cyan]--- Documentation Update Instruction (subagent) ---"
+            "[/bold cyan]"
+        )
+        console.print()
+        console.print(prompt)
+        return
 
     report = run_health_check(root)
     report = _filter_report_files(report, user_only=user_only, show_all=show_all)
@@ -471,10 +498,12 @@ def _display_report(report) -> None:  # type: ignore[type-arg]
     table = Table(show_header=True, header_style="bold")
     table.add_column("File", min_width=35)
     table.add_column("Freshness", justify="center", min_width=10)
+    table.add_column("Lint", justify="right", min_width=6)
     table.add_column("Issues", min_width=40)
 
     for f in report.files:
         freshness_display = _freshness_label(f.freshness, f.last_commit_ago)
+        lint_display = _lint_score_label(f.lint_score)
 
         if f.issues:
             issue_lines = []
@@ -486,9 +515,16 @@ def _display_report(report) -> None:  # type: ignore[type-arg]
         else:
             issues_text = "[dim]-[/dim]"
 
-        table.add_row(f.path, freshness_display, issues_text)
+        table.add_row(f.path, freshness_display, lint_display, issues_text)
 
     console.print(table)
+
+    if getattr(report, "lint_cap_exceeded", False):
+        console.print(
+            "\n[yellow]Lint rescoring cap reached (50 files). "
+            "Some scores may be stale -- run `writ lint` on specific files "
+            "or re-check after committing changes.[/yellow]"
+        )
 
     files_needing_attention = sum(
         1 for f in report.files
@@ -501,6 +537,17 @@ def _display_report(report) -> None:  # type: ignore[type-arg]
         )
     else:
         console.print("\n[green]All documentation files look healthy.[/green]")
+
+
+def _lint_score_label(score: int | None) -> str:
+    """Format a cached lint score with colour, or a dim dash when unknown."""
+    if score is None:
+        return "[dim]-[/dim]"
+    if score >= 70:
+        return f"[green]{score}[/green]"
+    if score >= 50:
+        return f"[yellow]{score}[/yellow]"
+    return f"[red]{score}[/red]"
 
 
 def _freshness_label(freshness: str, commits_ago: int | None) -> str:

@@ -492,6 +492,44 @@ def writ_chat_send(
         return {"error": "Conversation is paused. Use writ chat resume to continue."}
 
     agent, repo = _local_identity()
+
+    peer_name = ""
+    for p in conv.participants:
+        if p.repo != repo:
+            peer_name = p.repo
+            break
+    peer = peers.find_peer(peer_name) if peer_name else None
+
+    if peer is not None:
+        max_turns = getattr(peer, "max_turns", 50) or 50
+        if len(conv.messages) >= max_turns:
+            return {
+                "error": (
+                    f"Conversation capacity reached "
+                    f"({len(conv.messages)}/{max_turns} turns). "
+                    f"Start a new conversation or raise max_turns in peers.yaml."
+                ),
+            }
+
+        max_tokens = getattr(peer, "max_context_tokens", 200_000) or 200_000
+        estimated = max(1, len(message) // 4)
+        if attach_files:
+            for fp in attach_files:
+                try:
+                    content = Path(fp).read_text(encoding="utf-8", errors="replace")
+                    estimated += max(1, len(content) // 4)
+                except OSError:
+                    continue
+        if estimated > max_tokens:
+            return {
+                "error": (
+                    f"Message size ~{estimated} tokens exceeds "
+                    f"peer max_context_tokens={max_tokens}. "
+                    f"Compact the message or raise max_context_tokens "
+                    f"in peers.yaml for this peer."
+                ),
+            }
+
     msg = messaging.append_message(
         path,
         agent=agent,
@@ -502,12 +540,6 @@ def writ_chat_send(
         repo_root=_repo_root(),
     )
 
-    peer_name = ""
-    for p in conv.participants:
-        if p.repo != repo:
-            peer_name = p.repo
-            break
-    peer = peers.find_peer(peer_name) if peer_name else None
     if peer and peer.transport == "remote":
         _relay_message(conv.id, agent, repo, message, attachments=attach_files)
 
@@ -542,6 +574,40 @@ async def writ_chat_send_wait(
     path, conv = result
 
     agent, repo = _local_identity()
+
+    peer_name = ""
+    for p in conv.participants:
+        if p.repo != repo:
+            peer_name = p.repo
+            break
+    peer_cfg = peers.find_peer(peer_name) if peer_name else None
+
+    if peer_cfg is not None:
+        max_turns = getattr(peer_cfg, "max_turns", 50) or 50
+        if len(conv.messages) >= max_turns:
+            return {
+                "error": (
+                    f"Conversation capacity reached "
+                    f"({len(conv.messages)}/{max_turns} turns)."
+                ),
+            }
+        max_tokens = getattr(peer_cfg, "max_context_tokens", 200_000) or 200_000
+        estimated = max(1, len(message) // 4)
+        if attach_files:
+            for fp in attach_files:
+                try:
+                    content = Path(fp).read_text(encoding="utf-8", errors="replace")
+                    estimated += max(1, len(content) // 4)
+                except OSError:
+                    continue
+        if estimated > max_tokens:
+            return {
+                "error": (
+                    f"Message size ~{estimated} tokens exceeds "
+                    f"peer max_context_tokens={max_tokens}."
+                ),
+            }
+
     messaging.append_message(
         path,
         agent=agent,
@@ -557,13 +623,8 @@ async def writ_chat_send_wait(
     interval = max(1, poll_interval)
     invoked = False
 
-    peer_name = ""
-    for p in conv.participants:
-        if p.repo != repo:
-            peer_name = p.repo
-            break
 
-    peer = peers.find_peer(peer_name) if peer_name else None
+    peer = peer_cfg
     if peer and peer.transport == "remote":
         _relay_message(conv.id, agent, repo, message, attachments=attach_files)
 
@@ -614,6 +675,11 @@ def writ_inbox() -> list[dict]:
     Returns a list of conversations with unread activity. Use this at the
     start of a session to see if other agents have sent you messages.
     """
+    try:
+        from writ.commands.chat import _pull_all_remote
+        _pull_all_remote(silent=True)
+    except Exception:  # noqa: BLE001
+        pass
     agent, repo = _local_identity()
     results: list[dict] = []
     for _path, conv in messaging.list_conversations():
@@ -656,7 +722,25 @@ def writ_chat_read(
     result = messaging.find_conversation(conv_id)
     if result is None:
         return {"error": f"Conversation '{conv_id}' not found."}
-    _, conv = result
+    path, conv = result
+
+    peer_name_for_pull = ""
+    self_repo = _repo_root().name
+    for p in conv.participants:
+        if p.repo != self_repo:
+            peer_name_for_pull = p.repo
+            break
+    if peer_name_for_pull:
+        peer_for_pull = peers.find_peer(peer_name_for_pull)
+        if peer_for_pull is not None and peer_for_pull.transport == "remote":
+            try:
+                from writ.commands.chat import _pull_remote_messages
+                if _pull_remote_messages(peer_for_pull, path, conv):
+                    refreshed = messaging.load_conversation(path)
+                    if refreshed is not None:
+                        conv = refreshed
+            except Exception:  # noqa: BLE001
+                pass
 
     msgs = conv.messages
     if last_n > 0:

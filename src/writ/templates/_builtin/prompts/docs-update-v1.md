@@ -31,6 +31,21 @@ After addressing the flagged issues, check whether recent code changes (from `gi
 - Renamed or reorganized modules
 - New architectural patterns or conventions
 
+## Step 2b: Concept-gap pass
+
+Zoom out and read the documentation as a whole. Do not just scan for undefined terms -- think about what important adjacent concepts, constraints, edge cases, or dependencies are conspicuously absent given the topics already covered. A smart new contributor reading these docs end-to-end should not finish with obvious unanswered questions.
+
+When you spot a gap, pick the cheapest fix that removes confusion:
+
+1. A single clarifying sentence inside an existing rule or section (preferred -- usually under 20 tokens).
+2. A short bullet added to an existing list.
+3. A new subsection in an existing file.
+4. A new dedicated page -- only when the concept is large enough to deserve its own file and would bloat an existing one.
+
+Acronyms used repeatedly without expansion should be expanded on first use in the file where they appear, not given a dedicated page.
+
+Prefer silence over padding. If no real gap exists, skip this step. Do not invent gaps.
+
 ## Step 3: Surgical Updates
 
 Fix documentation with minimal edits:

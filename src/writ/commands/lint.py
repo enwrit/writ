@@ -24,19 +24,11 @@ def _maybe_ml_score(
 ) -> LintScore:
     """Compute lint score, upgrading to Tier 2 ML when models are available.
 
-    Returns Tier 2 (ML) by default, Tier 1 (code) if --code or models missing.
+    Thin wrapper around :func:`writ.core.linter.compute_score_with_ml` so
+    other modules (e.g. ``core/doc_health.py``) can import the shared helper
+    without pulling in Typer-based command code.
     """
-    tier1 = lint_engine.compute_score(agent, results)
-    if force_code:
-        return tier1
-    try:
-        from writ.models.tier2 import models_available
-        if models_available():
-            from writ.core.ml_scorer import compute_score_ml
-            return compute_score_ml(tier1, instruction_text=agent.instructions or "")
-    except Exception:
-        pass
-    return tier1
+    return lint_engine.compute_score_with_ml(agent, results, force_code=force_code)
 
 def _build_changed_patterns() -> tuple[str, ...]:
     """Instruction file path prefixes for git-based change detection.

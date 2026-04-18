@@ -43,6 +43,7 @@ def save_peers(manifest: PeersManifest) -> None:
         entry["transport"] = peer.transport
         entry["auto_respond"] = peer.auto_respond.value
         entry["max_turns"] = peer.max_turns
+        entry["max_context_tokens"] = peer.max_context_tokens
         if peer.allowed_context:
             entry["allowed_context"] = peer.allowed_context
         data["peers"][name] = entry
@@ -56,7 +57,8 @@ def add_peer(
     path: str | None = None,
     remote: str | None = None,
     auto_respond: AutoRespondTier = AutoRespondTier.OFF,
-    max_turns: int = 10,
+    max_turns: int = 50,
+    max_context_tokens: int = 200_000,
 ) -> PeerConfig:
     """Register a new peer repository."""
     manifest = load_peers()
@@ -68,6 +70,7 @@ def add_peer(
         transport=transport,
         auto_respond=auto_respond,
         max_turns=max_turns,
+        max_context_tokens=max_context_tokens,
     )
     manifest.peers[name] = peer
     save_peers(manifest)

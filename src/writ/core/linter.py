@@ -1941,3 +1941,31 @@ def _generate_suggestions(
             )
 
     return suggestions
+
+
+def compute_score_with_ml(
+    agent: InstructionConfig,
+    results: list[LintResult],
+    *,
+    force_code: bool = False,
+) -> LintScore:
+    """Tier-2 ML scoring with a deterministic Tier-1 fallback.
+
+    This is the reusable helper used by the ``writ lint`` command and by
+    documentation health checks.  Returns a Tier-2 ML score when bundled
+    models are available and ``force_code`` is False, otherwise returns
+    the Tier-1 score.
+    """
+    tier1 = compute_score(agent, results)
+    if force_code:
+        return tier1
+    try:
+        from writ.models.tier2 import models_available
+        if models_available():
+            from writ.core.ml_scorer import compute_score_ml
+            return compute_score_ml(
+                tier1, instruction_text=agent.instructions or "",
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    return tier1
