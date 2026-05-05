@@ -1,17 +1,21 @@
 """Export agent instructions to native IDE/CLI formats.
 
 Safe formats (auto-detected, separate writ-owned files):
-- cursor: .cursor/rules/ | .cursor/skills/writ/ | .cursor/agents/
-- claude_rules: .claude/rules/ | .claude/skills/writ/ | .claude/agents/
-- kiro_steering: .kiro/steering/ | .kiro/skills/writ/ | .kiro/agents/
-- copilot: .github/instructions/ | .github/skills/writ/ | .github/agents/
-- windsurf: .windsurf/rules/ | .windsurf/skills/writ/ | .windsurf/agents/
-- cline: .clinerules/ | .cline/skills/writ/ | .cline/agents/
-- roo: .roo/rules/ | .roo/skills/writ/ | .roo/agents/
+- cursor: .cursor/rules/ | .cursor/skills/<name>/SKILL.md | .cursor/agents/
+- claude_rules: .claude/rules/ | .claude/skills/<name>/SKILL.md | .claude/agents/
+- kiro_steering: .kiro/steering/ | .kiro/skills/<name>/SKILL.md | .kiro/agents/
+- copilot: .github/instructions/ | .github/skills/<name>/SKILL.md | .github/agents/
+- windsurf: .windsurf/rules/ | .windsurf/skills/<name>/SKILL.md | .windsurf/agents/
+- cline: .clinerules/ | .cline/skills/<name>/SKILL.md | .cline/agents/
+- roo: .roo/rules/ | .roo/skills/<name>/SKILL.md | .roo/agents/
 - amazonq: .amazonq/rules/ | .amazonq/agents/
-- gemini: .gemini/rules/ | .gemini/skills/writ/ | .gemini/agents/
-- codex: .codex/rules/ | .codex/skills/writ/ | .codex/agents/
-- opencode: .opencode/rules/ | .opencode/skills/writ/ | .opencode/agents/
+- gemini: .gemini/rules/ | .gemini/skills/<name>/SKILL.md | .gemini/agents/
+- codex: .codex/rules/ | .codex/skills/<name>/SKILL.md | .codex/agents/
+- opencode: .opencode/rules/ | .opencode/skills/<name>/SKILL.md | .opencode/agents/
+
+Skills follow the AAIF/Linux Foundation SKILL.md folder convention:
+each skill lives in its own folder ``skill-name/SKILL.md`` with optional
+sibling ``references/``, ``scripts/``, ``assets/`` directories.
 
 Legacy formats (modify user-owned shared files -- explicit opt-in only):
 - claude: CLAUDE.md (managed sections)
@@ -43,12 +47,20 @@ from writ.utils import update_or_create_markdown, yaml_dumps
 
 
 class IDEPathEntry(NamedTuple):
-    """Path config for one content category (rules/skills/agents) in one IDE."""
+    """Path config for one content category (rules/skills/agents) in one IDE.
+
+    When ``folder_per_skill=True`` (used for skill entries), the directory is
+    treated as a parent under which each skill gets its own subfolder
+    ``writ-<name>/`` containing ``SKILL.md``.  Optional sibling directories
+    ``references/``, ``scripts/``, ``assets/`` may live alongside SKILL.md
+    per the AAIF Agent Skills standard.
+    """
 
     directory: str
     extension: str
     frontmatter_fn: Callable[[InstructionConfig], dict | None] | None = None
     namespaced: bool = False
+    folder_per_skill: bool = False
 
 
 class IDEConfig(NamedTuple):
@@ -80,10 +92,16 @@ def _cursor_rule_frontmatter(agent: InstructionConfig) -> dict | None:
     return fm
 
 
-def _cursor_skill_frontmatter(agent: InstructionConfig) -> dict | None:
+def _skillmd_frontmatter(agent: InstructionConfig) -> dict | None:
+    """SKILL.md spec frontmatter (AAIF Agent Skills standard).
+
+    Required: ``name``, ``description``.  We strip the leading ``writ-``
+    on ``name`` so the value matches the on-disk folder name.
+    """
+    bare_name = agent.name.removeprefix("writ-") or agent.name
     return {
+        "name": f"writ-{bare_name}" if not agent.name.startswith("writ-") else agent.name,
         "description": agent.description or f"Skill: {agent.name}",
-        "alwaysApply": True,
     }
 
 
@@ -100,14 +118,28 @@ def _kiro_frontmatter(agent: InstructionConfig) -> dict | None:
 
 # -- Central config ----------------------------------------------------------
 
+# Skills follow the AAIF SKILL.md folder convention everywhere:
+# {ide}/skills/writ-<name>/SKILL.md, with SKILL.md-spec frontmatter
+# (name + description; no Cursor `.mdc` `alwaysApply` flag).  Each skill's
+# folder may carry sibling references/, scripts/, assets/ directories.
+
+def _skill_path_entry(parent_dir: str) -> IDEPathEntry:
+    """Build a folder-per-skill IDEPathEntry rooted at ``parent_dir``."""
+    return IDEPathEntry(
+        directory=parent_dir,
+        extension="md",
+        frontmatter_fn=_skillmd_frontmatter,
+        namespaced=True,
+        folder_per_skill=True,
+    )
+
+
 IDE_PATHS: dict[str, IDEConfig] = {
     "cursor": IDEConfig(
         name="Cursor",
         detect=".cursor",
         rules=IDEPathEntry(".cursor/rules", "mdc", _cursor_rule_frontmatter),
-        skills=IDEPathEntry(
-            ".cursor/skills/writ", "mdc", _cursor_skill_frontmatter, namespaced=True,
-        ),
+        skills=_skill_path_entry(".cursor/skills"),
         agents=IDEPathEntry(".cursor/agents", "mdc", _cursor_agent_frontmatter),
         mcp=(".cursor/mcp.json", "mcpServers"),
     ),
@@ -115,7 +147,7 @@ IDE_PATHS: dict[str, IDEConfig] = {
         name="Claude Code",
         detect=".claude",
         rules=IDEPathEntry(".claude/rules", "md"),
-        skills=IDEPathEntry(".claude/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".claude/skills"),
         agents=IDEPathEntry(".claude/agents", "md"),
         mcp=(".mcp.json", "mcpServers"),
     ),
@@ -123,7 +155,7 @@ IDE_PATHS: dict[str, IDEConfig] = {
         name="Kiro",
         detect=".kiro",
         rules=IDEPathEntry(".kiro/steering", "md", _kiro_frontmatter),
-        skills=IDEPathEntry(".kiro/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".kiro/skills"),
         agents=IDEPathEntry(".kiro/agents", "md"),
         mcp=(".kiro/settings/mcp.json", "mcpServers"),
     ),
@@ -131,56 +163,56 @@ IDE_PATHS: dict[str, IDEConfig] = {
         name="GitHub Copilot",
         detect=".github",
         rules=IDEPathEntry(".github/instructions", "instructions.md"),
-        skills=IDEPathEntry(".github/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".github/skills"),
         agents=IDEPathEntry(".github/agents", "md"),
     ),
     "windsurf": IDEConfig(
         name="Windsurf",
         detect=".windsurf",
         rules=IDEPathEntry(".windsurf/rules", "md"),
-        skills=IDEPathEntry(".windsurf/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".windsurf/skills"),
         agents=IDEPathEntry(".windsurf/agents", "md"),
     ),
     "cline": IDEConfig(
         name="Cline",
         detect=".clinerules",
         rules=IDEPathEntry(".clinerules", "md"),
-        skills=IDEPathEntry(".cline/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".cline/skills"),
         agents=IDEPathEntry(".cline/agents", "md"),
     ),
     "roo": IDEConfig(
         name="Roo Code",
         detect=".roo",
         rules=IDEPathEntry(".roo/rules", "md"),
-        skills=IDEPathEntry(".roo/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".roo/skills"),
         agents=IDEPathEntry(".roo/agents", "md"),
     ),
     "amazonq": IDEConfig(
         name="Amazon Q",
         detect=".amazonq",
         rules=IDEPathEntry(".amazonq/rules", "md"),
-        skills=IDEPathEntry(".amazonq/rules", "md"),
+        skills=_skill_path_entry(".amazonq/skills"),
         agents=IDEPathEntry(".amazonq/agents", "md"),
     ),
     "gemini": IDEConfig(
         name="Gemini CLI",
         detect=".gemini",
         rules=IDEPathEntry(".gemini/rules", "md"),
-        skills=IDEPathEntry(".gemini/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".gemini/skills"),
         agents=IDEPathEntry(".gemini/agents", "md"),
     ),
     "codex": IDEConfig(
         name="Codex",
         detect=".codex",
         rules=IDEPathEntry(".codex/rules", "md"),
-        skills=IDEPathEntry(".codex/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".codex/skills"),
         agents=IDEPathEntry(".codex/agents", "md"),
     ),
     "opencode": IDEConfig(
         name="OpenCode",
         detect=".opencode",
         rules=IDEPathEntry(".opencode/rules", "md"),
-        skills=IDEPathEntry(".opencode/skills/writ", "md", namespaced=True),
+        skills=_skill_path_entry(".opencode/skills"),
         agents=IDEPathEntry(".opencode/agents", "md"),
     ),
 }
@@ -222,10 +254,37 @@ def _plain_filename(name: str, ext: str) -> str:
 
 
 def _build_filename(entry: IDEPathEntry, name: str) -> str:
-    """Build filename: plain name in namespaced dirs, writ- prefix otherwise."""
+    """Build filename: SKILL.md for folder-per-skill entries, plain name in
+    namespaced dirs, writ- prefix otherwise."""
+    if entry.folder_per_skill:
+        return "SKILL.md"
     if entry.namespaced:
         return _plain_filename(name, entry.extension)
     return _writ_filename(name, entry.extension)
+
+
+def _skill_folder_name(name: str) -> str:
+    """Build folder name for a skill: ensures a single ``writ-`` prefix.
+
+    Built-in skills are stored as ``writ-<stem>`` already; user skills come
+    in plain.  We always namespace under ``writ-`` so multiple producers can
+    coexist in ``{ide}/skills/`` without collisions.
+    """
+    if name.startswith("writ-"):
+        return name
+    return f"writ-{name}"
+
+
+def build_skill_folder_path(
+    entry: IDEPathEntry, root: Path, name: str,
+) -> Path:
+    """Resolve the on-disk folder for a skill (``{root}/{dir}/writ-<name>``).
+
+    Only valid for entries with ``folder_per_skill=True``.
+    """
+    if not entry.folder_per_skill:
+        raise ValueError("entry is not a folder-per-skill skill entry")
+    return root / entry.directory / _skill_folder_name(name)
 
 
 # ---------------------------------------------------------------------------
@@ -278,9 +337,14 @@ class IDEFormatter(BaseFormatter):
     ) -> Path:
         root = root or Path.cwd()
         entry = self._get_path_entry(agent)
-        filename = _build_filename(entry, agent.name)
-        path = root / entry.directory / filename
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if entry.folder_per_skill:
+            folder = build_skill_folder_path(entry, root, agent.name)
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / "SKILL.md"
+        else:
+            filename = _build_filename(entry, agent.name)
+            path = root / entry.directory / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
 
         if entry.frontmatter_fn:
             fm_dict = entry.frontmatter_fn(agent)
@@ -296,16 +360,55 @@ class IDEFormatter(BaseFormatter):
         return path
 
     def clean(self, agent_name: str, root: Path | None = None) -> bool:
+        """Remove this instruction's output across rules/skills/agents dirs.
+
+        For folder-per-skill skill entries, removes the entire ``writ-<name>/``
+        folder including any user-added ``references/``, ``scripts/``,
+        ``assets/`` subdirectories.
+        """
         root = root or Path.cwd()
         config = IDE_PATHS[self._key]
         cleaned = False
         for category in ("rules", "skills", "agents"):
             entry: IDEPathEntry = getattr(config, category)
+            if entry.folder_per_skill:
+                folder = build_skill_folder_path(entry, root, agent_name)
+                if folder.is_dir():
+                    import shutil
+                    shutil.rmtree(folder, ignore_errors=True)
+                    cleaned = True
+                continue
             filename = _build_filename(entry, agent_name)
             path = root / entry.directory / filename
             if path.exists():
                 path.unlink()
                 cleaned = True
+        return cleaned
+
+    def clean_legacy_skill(
+        self, agent_name: str, root: Path | None = None,
+    ) -> bool:
+        """Remove writ's old flat-file skill output (``{ide}/skills/writ/<name>.{ext}``).
+
+        Used during migration to the AAIF folder-per-skill layout.  Returns
+        True if any legacy file was removed.
+        """
+        root = root or Path.cwd()
+        config = IDE_PATHS[self._key]
+        skills_dir = root / config.skills.directory
+        bare = agent_name.removeprefix("writ-")
+        legacy_parent = skills_dir.parent / "skills" / "writ"
+        if not legacy_parent.is_dir():
+            return False
+        cleaned = False
+        for ext in ("md", "mdc"):
+            for candidate in (
+                legacy_parent / f"{bare}.{ext}",
+                legacy_parent / f"writ-{bare}.{ext}",
+            ):
+                if candidate.exists():
+                    candidate.unlink()
+                    cleaned = True
         return cleaned
 
 
@@ -545,3 +648,44 @@ def write_agent(
         path = formatter.write(agent, composed_instructions, root=root)
         paths.append(path)
     return paths
+
+
+# ---------------------------------------------------------------------------
+# Legacy migration helpers (remove old flat-file skill outputs)
+# ---------------------------------------------------------------------------
+
+
+def cleanup_legacy_skill_files(root: Path) -> list[Path]:
+    """Remove writ's pre-AAIF flat-file skill outputs.
+
+    Targets the old layout ``{ide}/skills/writ/<name>.{md,mdc}`` that writ
+    emitted before adopting the folder-per-skill standard.  Leaves user
+    skills (other folders) and the new ``{ide}/skills/writ-<name>/SKILL.md``
+    layout untouched.
+
+    Returns the list of removed paths so callers can report what migrated.
+    """
+    removed: list[Path] = []
+    for fmt_key, ide_cfg in IDE_PATHS.items():
+        skills_entry = ide_cfg.skills
+        if not skills_entry.folder_per_skill:
+            continue
+        # ``{ide}/skills`` is the new parent.  The legacy parent was
+        # ``{ide}/skills/writ`` (single namespaced dir holding flat files).
+        legacy_dir = root / skills_entry.directory / "writ"
+        if not legacy_dir.is_dir():
+            continue
+        for child in list(legacy_dir.iterdir()):
+            if child.is_file() and child.suffix.lower() in (".md", ".mdc"):
+                try:
+                    child.unlink()
+                    removed.append(child)
+                except OSError:
+                    pass
+        try:
+            if not any(legacy_dir.iterdir()):
+                legacy_dir.rmdir()
+        except OSError:
+            pass
+        _ = fmt_key  # unused; kept for clarity in case we log per-IDE later
+    return removed

@@ -38,8 +38,9 @@ class TestIDEPaths:
         assert c.detect == ".cursor"
         assert c.rules.directory == ".cursor/rules"
         assert c.rules.extension == "mdc"
-        assert c.skills.directory == ".cursor/skills/writ"
+        assert c.skills.directory == ".cursor/skills"
         assert c.skills.namespaced is True
+        assert c.skills.folder_per_skill is True
         assert c.agents.directory == ".cursor/agents"
         assert c.mcp == (".cursor/mcp.json", "mcpServers")
 
@@ -85,9 +86,20 @@ class TestIDEPaths:
         assert c.name == "Gemini CLI"
         assert c.detect == ".gemini"
         assert c.rules.directory == ".gemini/rules"
-        assert c.skills.directory == ".gemini/skills/writ"
+        assert c.skills.directory == ".gemini/skills"
         assert c.skills.namespaced is True
+        assert c.skills.folder_per_skill is True
         assert c.agents.directory == ".gemini/agents"
+
+    def test_all_skill_entries_use_folder_per_skill(self):
+        for fmt, cfg in IDE_PATHS.items():
+            assert cfg.skills.folder_per_skill is True, (
+                f"{fmt} skills entry must be folder-per-skill (AAIF SKILL.md spec)"
+            )
+            assert cfg.skills.directory.endswith("skills"), (
+                f"{fmt} skills directory should be the parent (.../skills), "
+                f"not the legacy {cfg.skills.directory}"
+            )
 
     def test_codex_config(self):
         c = IDE_PATHS["codex"]
@@ -153,8 +165,53 @@ class TestIDEFormatterRouting:
         agent = InstructionConfig(name="my-skill", task_type="skill", instructions="x")
         fmt = IDEFormatter("cursor")
         path = fmt.write(agent, "Test", root=tmp_project)
-        assert ".cursor/skills/writ" in str(path).replace("\\", "/")
-        assert path.name == "my-skill.mdc"  # namespaced: no writ- prefix
+        path_str = str(path).replace("\\", "/")
+        # AAIF folder-per-skill layout: each skill in its own writ-<name>/ folder
+        assert ".cursor/skills/writ-my-skill" in path_str
+        assert path.name == "SKILL.md"
+
+    def test_skill_already_writ_prefixed_folder(self, tmp_project: Path):
+        agent = InstructionConfig(
+            name="writ-plan-skill", task_type="skill", instructions="x",
+        )
+        fmt = IDEFormatter("cursor")
+        path = fmt.write(agent, "Test", root=tmp_project)
+        path_str = str(path).replace("\\", "/")
+        assert ".cursor/skills/writ-plan-skill/SKILL.md" in path_str
+        # No "writ-writ-" double prefix
+        assert "writ-writ-" not in path_str
+
+    def test_skill_md_frontmatter_uses_skillmd_spec(self, tmp_project: Path):
+        agent = InstructionConfig(
+            name="my-skill",
+            description="Use when the user wants to test skills.",
+            task_type="skill",
+            instructions="body",
+        )
+        path = IDEFormatter("cursor").write(agent, "body", root=tmp_project)
+        content = path.read_text(encoding="utf-8")
+        # SKILL.md spec frontmatter (name + description), NOT Cursor .mdc fields
+        assert "name: writ-my-skill" in content
+        assert "description:" in content
+        assert "alwaysApply:" not in content
+
+    def test_skill_for_claude(self, tmp_project: Path):
+        agent = InstructionConfig(name="my-skill", task_type="skill", instructions="x")
+        fmt = IDEFormatter("claude_rules")
+        path = fmt.write(agent, "body", root=tmp_project)
+        path_str = str(path).replace("\\", "/")
+        assert ".claude/skills/writ-my-skill/SKILL.md" in path_str
+
+    def test_skill_clean_removes_folder(self, tmp_project: Path):
+        agent = InstructionConfig(name="my-skill", task_type="skill", instructions="x")
+        fmt = IDEFormatter("cursor")
+        skill_path = fmt.write(agent, "body", root=tmp_project)
+        skill_folder = skill_path.parent
+        # User added sibling references/scripts -- those must be removed too
+        (skill_folder / "references").mkdir()
+        (skill_folder / "references" / "ex.md").write_text("x", encoding="utf-8")
+        assert fmt.clean("my-skill", root=tmp_project) is True
+        assert not skill_folder.exists()
 
     def test_none_task_type_goes_to_rules(self, tmp_project: Path):
         agent = InstructionConfig(name="default", instructions="x")
@@ -247,6 +304,35 @@ class TestIDEFormatterClean:
     def test_clean_nonexistent(self, tmp_project: Path):
         fmt = IDEFormatter("cursor")
         assert fmt.clean("nonexistent", root=tmp_project) is False
+
+
+class TestLegacySkillMigration:
+    """Cleanup of pre-AAIF flat-file skill outputs."""
+
+    def test_cleanup_removes_legacy_cursor_skill(self, tmp_project: Path):
+        from writ.core.formatter import cleanup_legacy_skill_files
+
+        legacy = tmp_project / ".cursor" / "skills" / "writ"
+        legacy.mkdir(parents=True)
+        flat = legacy / "plan-skill.mdc"
+        flat.write_text("---\n---\n# legacy", encoding="utf-8")
+
+        removed = cleanup_legacy_skill_files(tmp_project)
+        assert flat in removed
+        assert not flat.exists()
+
+    def test_cleanup_keeps_new_layout(self, tmp_project: Path):
+        from writ.core.formatter import cleanup_legacy_skill_files
+
+        new_skill = (
+            tmp_project / ".cursor" / "skills" / "writ-plan" / "SKILL.md"
+        )
+        new_skill.parent.mkdir(parents=True)
+        new_skill.write_text("---\nname: writ-plan\n---\n# new", encoding="utf-8")
+
+        removed = cleanup_legacy_skill_files(tmp_project)
+        assert removed == []
+        assert new_skill.exists()
 
 
 # ---------------------------------------------------------------------------

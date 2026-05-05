@@ -3,14 +3,42 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 import yaml
 from rich.console import Console
 
-console = Console()
-error_console = Console(stderr=True)
+
+def _make_safe_console(*, stderr: bool = False) -> Console:
+    """Build a Rich Console that survives Windows cp1252 terminals.
+
+    On Windows/PowerShell, the default stdout encoding is cp1252, which
+    cannot encode common chat content like the right-arrow ``\u2192`` or
+    box-drawing glyphs.  We reconfigure the underlying stream with
+    ``errors='backslashreplace'`` so non-encodable characters fall back
+    to ``\\uXXXX`` instead of raising ``UnicodeEncodeError``.
+
+    Posix terminals are normally UTF-8 already; this is a no-op there.
+    """
+    stream = sys.stderr if stderr else sys.stdout
+    try:
+        encoding = (stream.encoding or "").lower()
+    except (AttributeError, ValueError):
+        encoding = ""
+    if encoding and "utf" not in encoding:
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(errors="backslashreplace")
+            except (OSError, ValueError):
+                pass
+    return Console(stderr=stderr)
+
+
+console = _make_safe_console()
+error_console = _make_safe_console(stderr=True)
 
 
 # ---------------------------------------------------------------------------

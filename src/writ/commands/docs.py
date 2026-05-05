@@ -400,7 +400,11 @@ def update_command(
     console.print(check_context)
 
 
-_WRIT_STATIC_PATTERNS = ("skills/writ/", "skills\\writ\\", "writ-context")
+_WRIT_STATIC_PATTERNS = (
+    "skills/writ/", "skills\\writ\\",
+    "skills/writ-", "skills\\writ-",
+    "writ-context",
+)
 _WRIT_DYNAMIC_NAMES = ("writ-docs-index", "writ-log")
 
 

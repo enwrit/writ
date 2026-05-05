@@ -504,8 +504,11 @@ class TestInitWritContext:
         assert ctx_path.exists()
         content = ctx_path.read_text()
         assert "alwaysApply: true" in content
-        assert "writ init" in content
-        assert "writ search" in content
+        # Pointer rule directs the agent to the writ-commands skill instead
+        # of dumping the full reference into always-on context.
+        assert "writ-commands" in content
+        # Pointer should stay compact (~30 lines, well under the old 96)
+        assert len(content.splitlines()) < 60
 
     def test_init_creates_writ_context_in_claude_rules(self, tmp_project: Path):
         (tmp_project / ".claude").mkdir()
@@ -514,7 +517,7 @@ class TestInitWritContext:
         ctx_path = tmp_project / ".claude" / "rules" / "writ-context.md"
         assert ctx_path.exists()
         content = ctx_path.read_text()
-        assert "writ init" in content
+        assert "writ-commands" in content
 
     def test_init_creates_writ_context_in_kiro(self, tmp_project: Path):
         (tmp_project / ".kiro").mkdir()
@@ -524,7 +527,48 @@ class TestInitWritContext:
         assert ctx_path.exists()
         content = ctx_path.read_text()
         assert "inclusion: always" in content
+        assert "writ-commands" in content
+
+    def test_init_installs_writ_commands_skill_in_cursor(self, tmp_project: Path):
+        (tmp_project / ".cursor").mkdir()
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        skill_path = (
+            tmp_project / ".cursor" / "skills" / "writ-commands" / "SKILL.md"
+        )
+        assert skill_path.exists(), (
+            "writ-commands skill should be installed via folder-per-skill layout"
+        )
+        content = skill_path.read_text()
+        # The full command reference now lives in the skill, not the pointer.
         assert "writ init" in content
+        assert "writ search" in content
+        # SKILL.md spec frontmatter (name + description, no Cursor mdc fields)
+        assert "name: writ-commands" in content
+        assert "alwaysApply" not in content
+
+    def test_init_installs_builtin_skills_folder_per_skill(self, tmp_project: Path):
+        (tmp_project / ".cursor").mkdir()
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        skills_root = tmp_project / ".cursor" / "skills"
+        # Every built-in skill lives in its own writ-<name>/SKILL.md folder
+        for sub in skills_root.iterdir():
+            assert sub.is_dir(), f"unexpected file at {sub}"
+            assert sub.name.startswith("writ-")
+            assert (sub / "SKILL.md").exists()
+
+    def test_init_force_migrates_legacy_skill_files(self, tmp_project: Path):
+        (tmp_project / ".cursor").mkdir()
+        legacy = tmp_project / ".cursor" / "skills" / "writ"
+        legacy.mkdir(parents=True)
+        legacy_file = legacy / "old-skill.mdc"
+        legacy_file.write_text("---\n---\n# legacy", encoding="utf-8")
+        result = runner.invoke(app, ["init", "--force"])
+        assert result.exit_code == 0
+        assert not legacy_file.exists(), (
+            "writ init --force should remove pre-AAIF flat-file skill outputs"
+        )
 
     def test_init_no_ide_saves_to_writ_only(self, tmp_project: Path):
         result = runner.invoke(app, ["init"])

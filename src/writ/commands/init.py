@@ -15,7 +15,7 @@ from writ.core import scanner, store
 from writ.core.formatter import (
     IDE_PATHS,
     IDEFormatter,
-    _build_filename,
+    cleanup_legacy_skill_files,
 )
 from writ.core.models import (
     CompositionConfig,
@@ -30,6 +30,28 @@ from writ.utils import console
 _TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates"
 _BUILTIN_ROOT = _TEMPLATE_ROOT / "_builtin"
 
+# Hand-crafted "When to read" descriptions for built-in skills.
+# User-added skills fall back to their stored description field.
+_BUILTIN_SKILL_HINTS: dict[str, str] = {
+    "writ-commands": (
+        "**Start here.** Full command reference for all `writ` features. "
+        "Read whenever running, configuring, or troubleshooting any `writ` "
+        "command, editing `.writ/` config, or unsure which writ feature "
+        "applies to a task"
+    ),
+    "writ-plan-skill": "Writing implementation plans",
+    "writ-doc-health": "Documentation health checks (`writ docs check/update`)",
+    "writ-doc-maintenance": "Maintaining project documentation",
+    "writ-pre-commit-checks": "Pre-commit verification",
+    "writ-code-simplifier": "Simplifying complex code",
+    "writ-tech-debt-fixer": "Reducing technical debt",
+    "writ-security-scan": "Security review",
+    "writ-autoresearch": "Research tasks",
+    "writ-verify-skill": "Verifying changes and claims",
+    "writ-skill-creator-skill": "Authoring new skills",
+    "writ-superpower-skill": "Advanced multi-step agent workflows",
+}
+
 
 def _refresh_writ_context_if_stale() -> bool:
     """Silently overwrite writ-context in IDE dirs if the bundled version changed."""
@@ -37,7 +59,10 @@ def _refresh_writ_context_if_stale() -> bool:
     if not context_file.exists():
         return False
 
-    bundled = context_file.read_text(encoding="utf-8").strip()
+    template = context_file.read_text(encoding="utf-8").strip()
+    bundled = template.replace(
+        "{skills_table}", _build_skills_table("skills"),
+    )
 
     existing_cfg = store.load_instruction("writ-context")
     if existing_cfg and existing_cfg.instructions.strip() == bundled:
@@ -90,6 +115,16 @@ def init_command(
     writ_dir = store.init_project_store(clean=force)
     console.print(f"[green]Created[/green] {writ_dir.relative_to(Path.cwd())}/")
 
+    # 1b. Migrate legacy flat-file skill outputs to the folder-per-skill layout.
+    #     Always safe to run; only removes files writ itself wrote in the
+    #     old ``{ide}/skills/writ/`` parent dir.
+    removed_legacy = cleanup_legacy_skill_files(Path.cwd())
+    if removed_legacy:
+        console.print(
+            f"[dim]Migrated[/dim] {len(removed_legacy)} legacy skill file(s) "
+            "to folder-per-skill layout"
+        )
+
     # 2. Detect active IDE tools for format config (directory-based only)
     detected_formats = _detect_active_tools()
     config = ProjectConfig(formats=detected_formats or ["cursor"])
@@ -111,14 +146,14 @@ def init_command(
     store.save_project_context(project_ctx)
     console.print("[green]Generated[/green] project context (.writ/project-context.md)")
 
-    # 5. Install writ-context rule to detected IDEs
-    _install_writ_context(detected_formats)
-
-    # 6. Install built-in skills to detected IDEs
+    # 5. Install built-in skills to detected IDEs (before writ-context so table is populated)
     skills_installed = _install_builtin_skills(detected_formats)
 
-    # 6b. Install writ-agent to detected IDE agent dirs
+    # 5b. Install writ-agent to detected IDE agent dirs
     _install_builtin_agents(detected_formats)
+
+    # 6. Install writ-context rule (reads skill list from store for the table)
+    _install_writ_context(detected_formats)
 
     # 7. Load template if specified
     if template:
@@ -232,19 +267,79 @@ def load_template(template_name: str) -> int:
     return count
 
 
-def _install_writ_context(detected_formats: list[str]) -> None:
-    """Write writ-context rule to detected IDE directories.
+def _build_skills_table(
+    skills_dir: str,
+    *,
+    extra_rows: list[str] | None = None,
+) -> str:
+    """Build a markdown table of all installed skills for writ-context.
 
-    Falls back to ``.writ/rules/writ-context.md`` when no IDE directory
-    is detected -- never creates IDE directories that don't already exist.
+    *extra_rows* are user-added table rows (from manual edits) that are
+    preserved across rebuilds.  They are appended after all store-based rows.
     """
-    context_file = _BUILTIN_ROOT / "writ-context.md"
-    if not context_file.exists():
-        return
+    skills = [
+        cfg for cfg in store.list_instructions()
+        if cfg.task_type == "skill"
+    ]
 
-    content = context_file.read_text(encoding="utf-8").strip()
+    # Stable ordering: built-in skills first (in map order), then user skills alphabetically
+    builtin_order = list(_BUILTIN_SKILL_HINTS.keys())
+    builtin_set = set(builtin_order)
 
-    cfg = InstructionConfig(
+    builtin_skills = [s for name in builtin_order for s in skills if s.name == name]
+    user_skills = sorted(
+        [s for s in skills if s.name not in builtin_set],
+        key=lambda s: s.name,
+    )
+
+    rows = ["| Skill | When to read |", "|---|---|"]
+    generated_paths: set[str] = set()
+    for s in builtin_skills + user_skills:
+        hint = _BUILTIN_SKILL_HINTS.get(s.name, s.description or s.name)
+        folder = s.name if s.name.startswith("writ-") else f"writ-{s.name}"
+        path = f"{skills_dir}/{folder}/SKILL.md"
+        rows.append(f"| {path} | {hint} |")
+        generated_paths.add(path)
+
+    if extra_rows:
+        for row in extra_rows:
+            # Skip if the row references a path we already generated
+            already_covered = any(gp in row for gp in generated_paths)
+            if not already_covered:
+                rows.append(row)
+
+    return "\n".join(rows)
+
+
+def _extract_user_rows(file_path: Path, skills_dir: str) -> list[str]:
+    """Extract manually-added table rows from an existing writ-context file.
+
+    Returns rows that reference paths outside the ``writ-*/SKILL.md`` pattern
+    managed by writ, so they survive rebuilds.
+    """
+    if not file_path.exists():
+        return []
+    try:
+        text = file_path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+
+    user_rows: list[str] = []
+    writ_prefix = f"{skills_dir}/writ-"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or stripped.startswith("| Skill") or stripped.startswith("|---"):
+            continue
+        # Row managed by writ -- skip (will be regenerated)
+        if writ_prefix in stripped:
+            continue
+        user_rows.append(stripped)
+    return user_rows
+
+
+def _writ_context_cfg(content: str) -> InstructionConfig:
+    """Build the InstructionConfig for writ-context."""
+    return InstructionConfig(
         name="writ-context",
         description="writ CLI command reference (auto-generated)",
         task_type="rule",
@@ -258,6 +353,24 @@ def _install_writ_context(detected_formats: list[str]) -> None:
             ),
         ),
     )
+
+
+def _install_writ_context(detected_formats: list[str]) -> None:
+    """Write writ-context rule to detected IDE directories.
+
+    Falls back to ``.writ/rules/writ-context.md`` when no IDE directory
+    is detected -- never creates IDE directories that don't already exist.
+    """
+    context_file = _BUILTIN_ROOT / "writ-context.md"
+    if not context_file.exists():
+        return
+
+    template = context_file.read_text(encoding="utf-8").strip()
+
+    generic = template.replace(
+        "{skills_table}", _build_skills_table("skills"),
+    )
+    cfg = _writ_context_cfg(generic)
     store.save_instruction(cfg)
 
     if not detected_formats:
@@ -270,17 +383,65 @@ def _install_writ_context(detected_formats: list[str]) -> None:
     for fmt in detected_formats:
         if fmt not in IDE_PATHS:
             continue
+        ide_cfg = IDE_PATHS[fmt]
+        content = template.replace(
+            "{skills_table}", _build_skills_table(ide_cfg.skills.directory),
+        )
         formatter = IDEFormatter(fmt)
         path = formatter.write(cfg, content, root=root)
         console.print(f"[green]Wrote[/green] writ-context -> {path}")
 
 
+def _writ_context_path(ide_cfg: "IDEConfig", root: Path) -> Path:
+    """Resolve the file path where writ-context lives for a given IDE."""
+    rules = ide_cfg.rules
+    return root / rules.directory / f"writ-context.{rules.extension}"
+
+
+def rebuild_writ_context() -> None:
+    """Rebuild writ-context in all detected IDE dirs from current store state.
+
+    Called after add/remove of skills so the table stays in sync.
+    Preserves any manually-added table rows the user inserted.
+    """
+    if not store.is_initialized():
+        return
+
+    context_file = _BUILTIN_ROOT / "writ-context.md"
+    if not context_file.exists():
+        return
+
+    template = context_file.read_text(encoding="utf-8").strip()
+    root = Path.cwd()
+
+    generic = template.replace(
+        "{skills_table}", _build_skills_table("skills"),
+    )
+    cfg = _writ_context_cfg(generic)
+    store.save_instruction(cfg)
+
+    for fmt, ide_cfg in IDE_PATHS.items():
+        if not (root / ide_cfg.detect).exists():
+            continue
+        skills_dir = ide_cfg.skills.directory
+        existing_path = _writ_context_path(ide_cfg, root)
+        user_rows = _extract_user_rows(existing_path, skills_dir)
+        content = template.replace(
+            "{skills_table}",
+            _build_skills_table(skills_dir, extra_rows=user_rows),
+        )
+        try:
+            IDEFormatter(fmt).write(cfg, content, root=root)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _install_builtin_skills(detected_formats: list[str]) -> int:
     """Install built-in skills from _builtin/skills/ to IDE skill directories.
 
-    Skills go to dedicated skill dirs (e.g. .cursor/skills/writ/) NOT to
-    rules dirs. This keeps skills separate from project-specific rules.
-    Returns the number of skills installed.
+    Each skill is written as ``{ide}/skills/writ-<name>/SKILL.md`` per the
+    AAIF Agent Skills folder convention.  Returns the number of skills
+    installed.
     """
     skills_dir = _BUILTIN_ROOT / "skills"
     if not skills_dir.is_dir():
@@ -292,8 +453,6 @@ def _install_builtin_skills(detected_formats: list[str]) -> int:
 
     root = Path.cwd()
     count = 0
-
-    from writ.utils import yaml_dumps
 
     for skill_file in skill_files:
         skill_name = skill_file.stem
@@ -320,26 +479,11 @@ def _install_builtin_skills(detected_formats: list[str]) -> int:
         for fmt in detected_formats:
             if fmt not in IDE_PATHS:
                 continue
-            ide_config = IDE_PATHS[fmt]
-            skills_entry = ide_config.skills
-            skill_dir = root / skills_entry.directory
-            skill_dir.mkdir(parents=True, exist_ok=True)
-            filename = _build_filename(skills_entry, skill_name)
-            path = skill_dir / filename
-
-            if skills_entry.frontmatter_fn:
-                fm_dict = skills_entry.frontmatter_fn(cfg)
-                if fm_dict:
-                    fm_str = yaml_dumps(fm_dict).strip()
-                    path.write_text(
-                        f"---\n{fm_str}\n---\n\n{content}\n",
-                        encoding="utf-8",
-                    )
-                else:
-                    path.write_text(content + "\n", encoding="utf-8")
-            else:
-                path.write_text(content + "\n", encoding="utf-8")
-            wrote_to_ide = True
+            try:
+                IDEFormatter(fmt).write(cfg, content, root=root)
+                wrote_to_ide = True
+            except OSError:
+                continue
 
         if wrote_to_ide:
             count += 1
@@ -370,8 +514,6 @@ def _install_builtin_agents(detected_formats: list[str]) -> int:
     root = Path.cwd()
     count = 0
 
-    from writ.utils import yaml_dumps
-
     for agent_file in agent_files:
         agent_name = agent_file.stem
         content = agent_file.read_text(encoding="utf-8").strip()
@@ -390,26 +532,11 @@ def _install_builtin_agents(detected_formats: list[str]) -> int:
         for fmt in detected_formats:
             if fmt not in IDE_PATHS:
                 continue
-            ide_config = IDE_PATHS[fmt]
-            agents_entry = ide_config.agents
-            agent_dir = root / agents_entry.directory
-            agent_dir.mkdir(parents=True, exist_ok=True)
-            filename = _build_filename(agents_entry, agent_name)
-            path = agent_dir / filename
-
-            if agents_entry.frontmatter_fn:
-                fm_dict = agents_entry.frontmatter_fn(cfg)
-                if fm_dict:
-                    fm_str = yaml_dumps(fm_dict).strip()
-                    path.write_text(
-                        f"---\n{fm_str}\n---\n\n{content}\n",
-                        encoding="utf-8",
-                    )
-                else:
-                    path.write_text(content + "\n", encoding="utf-8")
-            else:
-                path.write_text(content + "\n", encoding="utf-8")
-            wrote_to_ide = True
+            try:
+                IDEFormatter(fmt).write(cfg, content, root=root)
+                wrote_to_ide = True
+            except OSError:
+                continue
 
         if wrote_to_ide:
             count += 1

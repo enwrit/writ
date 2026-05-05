@@ -14,6 +14,13 @@ from writ.core.models import CompositionConfig, InstructionConfig
 from writ.utils import console, slugify
 
 
+def _sync_context_if_skill(cfg: InstructionConfig) -> None:
+    """Rebuild writ-context table if the instruction is a skill."""
+    if cfg.task_type == "skill":
+        from writ.commands.init import rebuild_writ_context
+        rebuild_writ_context()
+
+
 def _require_init() -> None:
     """Ensure .writ/ is initialized."""
     if not store.is_initialized():
@@ -47,6 +54,8 @@ def _write_to_ide(
             console.print(f"  [green]Wrote[/green] {fmt} -> {path}")
         except (KeyError, Exception):  # noqa: BLE001
             pass
+    if written:
+        _sync_context_if_skill(cfg)
     return written
 
 
@@ -595,6 +604,7 @@ def remove(
     console.print(f"[green]Removed[/green] {name}")
     if cleaned_from:
         console.print(f"  [dim]Cleaned IDE files: {', '.join(cleaned_from)}[/dim]")
+    _sync_context_if_skill(inst)
 
 
 # ---------------------------------------------------------------------------

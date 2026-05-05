@@ -718,7 +718,10 @@ def run_health_check(root: Path | None = None) -> DocHealthReport:
         dead_refs = check_dead_references(text, root, fp)
         fr.issues.extend(dead_refs)
 
-        is_builtin_skill = "skills/writ/" in rel or "skills\\writ\\" in rel
+        is_builtin_skill = (
+            "skills/writ/" in rel or "skills\\writ\\" in rel
+            or "skills/writ-" in rel or "skills\\writ-" in rel
+        )
         if not is_builtin_skill and (
             "\u251c" in text or "\u2514" in text or "\u2502" in text
         ):
@@ -761,7 +764,10 @@ def run_health_check(root: Path | None = None) -> DocHealthReport:
             continue
         if base in core_files or rel_posix in core_files:
             continue
-        if "skills/writ/" in rel_posix or "skills\\writ\\" in rel:
+        if (
+            "skills/writ/" in rel_posix or "skills\\writ\\" in rel
+            or "skills/writ-" in rel_posix or "skills\\writ-" in rel
+        ):
             continue
         fr.issues.append(DocIssue(
             kind="orphan",

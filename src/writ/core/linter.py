@@ -186,6 +186,7 @@ def lint(
     results.extend(_check_wall_of_text(agent))
 
     results.extend(_check_missing_metadata(agent, source_path, writ_managed))
+    results.extend(_check_skillmd_frontmatter(agent, source_path))
     results.extend(_check_empty_globs(agent))
 
     if writ_managed:
@@ -726,6 +727,198 @@ def _check_missing_metadata(
                 message=(
                     "YAML config should have a meaningful "
                     "description (10+ chars)."
+                ),
+                base_penalty=5,
+            ))
+
+    return results
+
+
+def _is_skill_md_path(source_path: Path | None) -> bool:
+    """True when the file looks like an AAIF SKILL.md (filename + parent dir)."""
+    if source_path is None:
+        return False
+    if source_path.name.upper() != "SKILL.MD":
+        return False
+    return True
+
+
+_SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+def _check_skillmd_frontmatter(
+    agent: InstructionConfig,
+    source_path: Path | None,
+) -> list[LintResult]:
+    """Validate AAIF SKILL.md spec frontmatter.
+
+    Only fires when the source file is named ``SKILL.md`` (folder-per-skill
+    layout) or the instruction is tagged ``task_type=skill`` AND has YAML
+    frontmatter on disk.  Mirrors the rules in
+    ``hook-lint-skill.md`` so Tier 1 catches the obvious failures even
+    without an LLM in the loop.
+    """
+    if not _is_skill_md_path(source_path):
+        if agent.task_type != "skill":
+            return []
+        if source_path is None or source_path.suffix.lower() not in (".md", ".mdc"):
+            return []
+
+    results: list[LintResult] = []
+
+    raw_text: str | None = None
+    if source_path and source_path.exists():
+        try:
+            raw_text = source_path.read_text(encoding="utf-8")
+        except OSError:
+            raw_text = None
+
+    fm_dict: dict | None = None
+    if raw_text and raw_text.lstrip().startswith("---"):
+        try:
+            from writ.core.scanner import _extract_frontmatter
+
+            fm_dict, _ = _extract_frontmatter(raw_text)
+        except Exception:  # noqa: BLE001
+            fm_dict = None
+
+    if _is_skill_md_path(source_path) and fm_dict is None:
+        results.append(LintResult(
+            level="warning",
+            rule="skill-frontmatter-missing",
+            message=(
+                "SKILL.md should start with YAML frontmatter "
+                "containing 'name' and 'description'."
+            ),
+            base_penalty=10,
+        ))
+        return results
+
+    name_value = (fm_dict or {}).get("name") if fm_dict else agent.name
+    desc_value = (
+        (fm_dict or {}).get("description") if fm_dict else agent.description
+    )
+
+    if not name_value or not str(name_value).strip():
+        results.append(LintResult(
+            level="warning",
+            rule="skill-name-required",
+            message="SKILL.md frontmatter is missing required 'name'.",
+            base_penalty=10,
+        ))
+    else:
+        nm = str(name_value).strip()
+        if len(nm) > 64:
+            results.append(LintResult(
+                level="warning",
+                rule="skill-name-too-long",
+                message=(
+                    f"SKILL.md 'name' is {len(nm)} chars (>64). "
+                    "Keep names short and lowercase-kebab."
+                ),
+                base_penalty=5,
+            ))
+        if not _SKILL_NAME_PATTERN.match(nm):
+            results.append(LintResult(
+                level="warning",
+                rule="skill-name-format",
+                message=(
+                    f"SKILL.md 'name' '{nm}' should be lowercase-kebab "
+                    "(letters, digits, hyphens only)."
+                ),
+                base_penalty=5,
+            ))
+        if (
+            source_path
+            and source_path.name.upper() == "SKILL.MD"
+            and source_path.parent.name
+            and source_path.parent.name != nm
+        ):
+            results.append(LintResult(
+                level="info",
+                rule="skill-name-folder-mismatch",
+                message=(
+                    f"SKILL.md 'name' '{nm}' does not match folder name "
+                    f"'{source_path.parent.name}'."
+                ),
+                base_penalty=5,
+            ))
+
+    if not desc_value or not str(desc_value).strip():
+        results.append(LintResult(
+            level="warning",
+            rule="skill-description-required",
+            message="SKILL.md frontmatter is missing required 'description'.",
+            base_penalty=10,
+        ))
+    else:
+        desc = str(desc_value).strip()
+        if len(desc) > 1024:
+            results.append(LintResult(
+                level="warning",
+                rule="skill-description-too-long",
+                message=(
+                    f"SKILL.md 'description' is {len(desc)} chars (>1024). "
+                    "Trim it -- model prompts include the description verbatim."
+                ),
+                base_penalty=5,
+            ))
+        if "<" in desc or ">" in desc:
+            results.append(LintResult(
+                level="warning",
+                rule="skill-description-injection-risk",
+                message=(
+                    "SKILL.md 'description' contains '<' or '>' -- "
+                    "remove angle brackets to avoid prompt-injection risk "
+                    "(description is concatenated into model prompts)."
+                ),
+                base_penalty=10,
+            ))
+        if len(desc) < 30:
+            results.append(LintResult(
+                level="info",
+                rule="skill-description-too-short",
+                message=(
+                    f"SKILL.md 'description' is only {len(desc)} chars. "
+                    "Add a 'use when ...' trigger so the agent knows "
+                    "when to invoke the skill."
+                ),
+                base_penalty=5,
+            ))
+        else:
+            triggers = (
+                "use when",
+                "when the user",
+                "when user asks",
+                "triggers when",
+                "activate on",
+                "run when",
+            )
+            if not any(t in desc.lower() for t in triggers):
+                results.append(LintResult(
+                    level="info",
+                    rule="skill-description-no-trigger",
+                    message=(
+                        "SKILL.md 'description' has no trigger phrase "
+                        "('use when ...', 'triggers when ...'). Without "
+                        "an explicit trigger, agents under-invoke the skill."
+                    ),
+                    base_penalty=5,
+                ))
+
+    if (
+        source_path
+        and source_path.name.upper() == "SKILL.MD"
+        and source_path.parent.is_dir()
+    ):
+        sibling_readme = source_path.parent / "README.md"
+        if sibling_readme.exists():
+            results.append(LintResult(
+                level="info",
+                rule="skill-readme-conflict",
+                message=(
+                    "Skill folder has both SKILL.md and README.md. "
+                    "Agents only read SKILL.md; the README causes drift."
                 ),
                 base_penalty=5,
             ))

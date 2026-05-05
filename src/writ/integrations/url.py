@@ -54,7 +54,10 @@ class URLIntegration:
         initial_name = (
             name_override if name_override is not None else _name_from_url(final_url)
         )
-        cfg = parse_markdown_content(content, initial_name, ext_hint=ext)
+        url_path = urlparse(final_url).path
+        cfg = parse_markdown_content(
+            content, initial_name, ext_hint=ext, path_hint=url_path,
+        )
         if cfg is not None:
             if not cfg.source:
                 cfg.source = final_url

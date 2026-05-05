@@ -6,6 +6,7 @@ Supports both local (filesystem) and remote (backend relay) transport.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -16,6 +17,24 @@ from rich.table import Table
 from writ.core import messaging, peers, store
 from writ.core.models import AutoRespondTier, Conversation, ConversationStatus, PeerConfig
 from writ.utils import console, error_console
+
+
+def _safe_console_text(text: str) -> str:
+    """Render ``text`` so it survives the active stdout encoding.
+
+    On Windows/PowerShell the console is cp1252 and characters such as
+    ``\u2192`` or box-drawing glyphs raise ``UnicodeEncodeError``.  We
+    encode/decode through the active encoding with ``backslashreplace``
+    so unrepresentable characters appear as ``\\uXXXX`` instead of
+    crashing the print.  No-op on UTF-8 terminals.
+    """
+    encoding = getattr(sys.stdout, "encoding", None) or ""
+    if not encoding or "utf" in encoding.lower():
+        return text
+    try:
+        return text.encode(encoding, errors="backslashreplace").decode(encoding)
+    except (UnicodeError, LookupError):
+        return text.encode("ascii", errors="replace").decode("ascii")
 
 chat_app = typer.Typer(
     name="chat",
@@ -350,14 +369,17 @@ def chat_read(
     if last_n > 0 and conv.messages:
         console.print(f"[dim]Showing last {last_n} of {len(conv.messages)} messages[/dim]\n")
         for msg in conv.messages[-last_n:]:
-            console.print(f"[bold cyan]{msg.author_agent}[/bold cyan] . {msg.author_repo} "
-                          f"[dim]@ {messaging._fmt_ts(msg.timestamp)}[/dim]")
-            console.print(msg.content)
+            console.print(
+                f"[bold cyan]{_safe_console_text(msg.author_agent)}[/bold cyan] . "
+                f"{_safe_console_text(msg.author_repo)} "
+                f"[dim]@ {messaging._fmt_ts(msg.timestamp)}[/dim]",
+            )
+            console.print(_safe_console_text(msg.content))
             if msg.attachments:
                 console.print(f"[dim]({len(msg.attachments)} attachment(s))[/dim]")
             console.print("---")
     else:
-        console.print(text)
+        console.print(_safe_console_text(text))
 
 
 # ---------------------------------------------------------------------------

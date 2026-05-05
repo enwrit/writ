@@ -355,19 +355,41 @@ def _extract_frontmatter(content: str) -> tuple[dict, str]:
     return {}, content
 
 
-def _infer_task_type(name: str, frontmatter: dict) -> str:
-    """Infer task_type from name and frontmatter heuristics.
+def _infer_task_type(
+    name: str,
+    frontmatter: dict,
+    path_hint: str | None = None,
+) -> str:
+    """Infer task_type from name, frontmatter, and optional source path.
 
-    Rules: if the frontmatter has alwaysApply/globs (Cursor rule fields),
-    or the name contains 'rule', it's a rule. Otherwise it's an agent.
+    Detection order:
+    1. Cursor rule fields (``alwaysApply``/``globs``) -> rule
+    2. AAIF SKILL.md indicators (path ends with ``SKILL.md``, optional
+       ``disable-model-invocation`` field, or ``skill`` in the name) -> skill
+    3. Name contains ``rule``/``context``/``program`` -> matching type
+    4. Default -> agent
     """
     if "alwaysApply" in frontmatter or "globs" in frontmatter:
         return "rule"
-    if "rule" in name.lower():
+
+    if path_hint:
+        path_lower = path_hint.replace("\\", "/").lower()
+        if path_lower.endswith("/skill.md") or path_lower == "skill.md":
+            return "skill"
+        if "/skills/" in path_lower:
+            return "skill"
+
+    if "disable-model-invocation" in frontmatter:
+        return "skill"
+
+    name_lower = name.lower()
+    if "skill" in name_lower:
+        return "skill"
+    if "rule" in name_lower:
         return "rule"
-    if "context" in name.lower():
+    if "context" in name_lower:
         return "context"
-    if "program" in name.lower():
+    if "program" in name_lower:
         return "program"
     return "agent"
 
@@ -376,13 +398,16 @@ def parse_markdown_content(
     content: str,
     name: str,
     ext_hint: str = ".md",
+    path_hint: str | None = None,
 ) -> InstructionConfig | None:
     """Parse markdown/text content into an InstructionConfig.
 
     Handles YAML frontmatter for both .md and .mdc files:
     - Extracts name, description, tags from frontmatter
     - Preserves Cursor-specific fields (alwaysApply, globs) in format_overrides
-    - Infers task_type from name and frontmatter heuristics
+    - Infers task_type from name, frontmatter, and optional source path.
+      ``path_hint`` lets callers pass the source filename or URL path so
+      ``SKILL.md`` files and ``/skills/`` paths are routed correctly.
     - Uses the body (after frontmatter) as instructions
     """
     import re
@@ -424,7 +449,11 @@ def parse_markdown_content(
         tags = []
 
     fm_task_type = fm.get("task_type")
-    task_type = str(fm_task_type) if fm_task_type else _infer_task_type(name, fm)
+    task_type = (
+        str(fm_task_type)
+        if fm_task_type
+        else _infer_task_type(name, fm, path_hint=path_hint)
+    )
 
     fm_includes = fm.get("includes")
     includes = [str(i) for i in fm_includes] if isinstance(fm_includes, list) else []
@@ -467,7 +496,11 @@ def parse_markdown_file(
 
     name = name_override or slugify(path.stem) or "imported"
     ext = path.suffix.lower()
-    return parse_markdown_content(content, name, ext_hint=ext)
+    # Pass parent/filename so SKILL.md files and ``/skills/`` paths route
+    # to the skill task_type even without explicit frontmatter.
+    parent = path.parent.name.lower() if path.parent != path else ""
+    path_hint = f"{parent}/{path.name}" if parent else path.name
+    return parse_markdown_content(content, name, ext_hint=ext, path_hint=path_hint)
 
 
 # ---------------------------------------------------------------------------

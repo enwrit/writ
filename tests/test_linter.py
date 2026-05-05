@@ -762,6 +762,145 @@ class TestEmptyGlobs:
         assert not any(r.rule == "empty-globs" for r in results)
 
 
+class TestSkillMdFrontmatter:
+    """AAIF SKILL.md spec compliance checks (Phase 5)."""
+
+    @staticmethod
+    def _write_skill(tmp_path, frontmatter: str, body: str = "# Body\n\nContent.\n"):
+        skill_dir = tmp_path / "skills" / "writ-example"
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        path = skill_dir / "SKILL.md"
+        path.write_text(f"---\n{frontmatter}\n---\n\n{body}", encoding="utf-8")
+        return path
+
+    def test_missing_name(self, tmp_path):
+        path = self._write_skill(tmp_path, "description: Use when testing.")
+        agent = InstructionConfig(
+            name="writ-example", task_type="skill",
+            description="Use when testing.", instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        # name is set on the agent but missing in frontmatter -> warn
+        assert any(r.rule == "skill-name-required" for r in results)
+
+    def test_missing_description(self, tmp_path):
+        path = self._write_skill(tmp_path, "name: writ-example")
+        agent = InstructionConfig(
+            name="writ-example", task_type="skill", instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        assert any(r.rule == "skill-description-required" for r in results)
+
+    def test_description_with_angle_brackets(self, tmp_path):
+        path = self._write_skill(
+            tmp_path,
+            "name: writ-example\n"
+            "description: Use when <inject> happens for the user.",
+        )
+        agent = InstructionConfig(
+            name="writ-example", task_type="skill",
+            description="Use when <inject> happens for the user.",
+            instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        assert any(
+            r.rule == "skill-description-injection-risk" for r in results
+        )
+
+    def test_name_format(self, tmp_path):
+        path = self._write_skill(
+            tmp_path,
+            "name: BadName_123\n"
+            "description: Use when names go wild for the user under test.",
+        )
+        agent = InstructionConfig(
+            name="BadName_123", task_type="skill",
+            description="Use when names go wild for the user under test.",
+            instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        assert any(r.rule == "skill-name-format" for r in results)
+
+    def test_name_folder_mismatch(self, tmp_path):
+        skill_dir = tmp_path / "skills" / "writ-example"
+        skill_dir.mkdir(parents=True)
+        path = skill_dir / "SKILL.md"
+        path.write_text(
+            "---\n"
+            "name: completely-different-name\n"
+            "description: Use when nothing matches up for the user.\n"
+            "---\n\n# Body\n",
+            encoding="utf-8",
+        )
+        agent = InstructionConfig(
+            name="completely-different-name", task_type="skill",
+            description="Use when nothing matches up for the user.",
+            instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        assert any(
+            r.rule == "skill-name-folder-mismatch" for r in results
+        )
+
+    def test_description_no_trigger_phrase(self, tmp_path):
+        path = self._write_skill(
+            tmp_path,
+            "name: writ-example\n"
+            "description: This skill helps you with various development tasks.",
+        )
+        agent = InstructionConfig(
+            name="writ-example", task_type="skill",
+            description="This skill helps you with various development tasks.",
+            instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        assert any(r.rule == "skill-description-no-trigger" for r in results)
+
+    def test_description_with_trigger_passes(self, tmp_path):
+        path = self._write_skill(
+            tmp_path,
+            "name: writ-example\n"
+            "description: Use when the user runs writ commands or queries the index.",
+        )
+        agent = InstructionConfig(
+            name="writ-example", task_type="skill",
+            description=(
+                "Use when the user runs writ commands or queries the index."
+            ),
+            instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        assert not any(
+            r.rule == "skill-description-no-trigger" for r in results
+        )
+
+    def test_readme_conflict(self, tmp_path):
+        path = self._write_skill(
+            tmp_path,
+            "name: writ-example\n"
+            "description: Use when the user runs the example skill.",
+        )
+        (path.parent / "README.md").write_text("# Drift", encoding="utf-8")
+        agent = InstructionConfig(
+            name="writ-example", task_type="skill",
+            description="Use when the user runs the example skill.",
+            instructions="body",
+        )
+        results = linter.lint(agent, source_path=path)
+        assert any(r.rule == "skill-readme-conflict" for r in results)
+
+    def test_non_skill_file_ignored(self, tmp_path):
+        path = tmp_path / "not-a-skill.md"
+        path.write_text("# just a doc", encoding="utf-8")
+        agent = InstructionConfig(
+            name="not-a-skill", task_type="agent",
+            description="Some agent.", instructions="body content here",
+        )
+        results = linter.lint(agent, source_path=path)
+        skill_rules = [r for r in results if r.rule.startswith("skill-")]
+        assert skill_rules == []
+
+
 class TestDeadContent:
     def test_detects_todo(self):
         agent = InstructionConfig(
