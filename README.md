@@ -119,7 +119,7 @@ The documentation index (`writ-docs-index`) acts as a schema for your project's 
 
 ## 11 Built-in Skills
 
-`writ init` auto-installs 11 battle-tested skills into your IDE's skill directory (`.cursor/skills/writ/`, `.claude/skills/writ/`, etc.). Each is generalized from popular open-source repos:
+`writ init` auto-installs 12 battle-tested skills into your IDE's skill directory as folder-per-skill (`.cursor/skills/writ-<name>/SKILL.md`, `.claude/skills/writ-<name>/SKILL.md`, etc.). Each is generalized from popular open-source repos:
 
 | Skill | What it does | Inspired by |
 |-------|-------------|-------------|
@@ -143,16 +143,16 @@ writ writes to **native IDE files** -- your editor picks them up automatically. 
 
 | Tool | Auto-detected | Rules | Skills | Agents |
 |------|:---:|-------|--------|--------|
-| Cursor | Yes | `.cursor/rules/` | `.cursor/skills/writ/` | `.cursor/agents/` |
-| Claude Code | Yes | `.claude/rules/` | `.claude/skills/writ/` | `.claude/agents/` |
-| GitHub Copilot | Yes | `.github/instructions/` | `.github/skills/writ/` | `.github/agents/` |
-| Kiro | Yes | `.kiro/steering/` | `.kiro/skills/writ/` | `.kiro/agents/` |
-| Windsurf | Yes | `.windsurf/rules/` | `.windsurf/skills/writ/` | `.windsurf/agents/` |
-| Codex | Yes | `.codex/rules/` | `.codex/skills/writ/` | `.codex/agents/` |
-| Gemini CLI | Yes | `.gemini/rules/` | `.gemini/skills/writ/` | `.gemini/agents/` |
-| OpenCode | Yes | `.opencode/rules/` | `.opencode/skills/writ/` | `.opencode/agents/` |
-| Cline | Yes | `.clinerules/` | `.cline/skills/writ/` | `.cline/agents/` |
-| Roo Code | Yes | `.roo/rules/` | `.roo/skills/writ/` | `.roo/agents/` |
+| Cursor | Yes | `.cursor/rules/` | `.cursor/skills/writ-*/` | `.cursor/agents/` |
+| Claude Code | Yes | `.claude/rules/` | `.claude/skills/writ-*/` | `.claude/agents/` |
+| GitHub Copilot | Yes | `.github/instructions/` | `.github/skills/writ-*/` | `.github/agents/` |
+| Kiro | Yes | `.kiro/steering/` | `.kiro/skills/writ-*/` | `.kiro/agents/` |
+| Windsurf | Yes | `.windsurf/rules/` | `.windsurf/skills/writ-*/` | `.windsurf/agents/` |
+| Codex | Yes | `.codex/rules/` | `.codex/skills/writ-*/` | `.codex/agents/` |
+| Gemini CLI | Yes | `.gemini/rules/` | `.gemini/skills/writ-*/` | `.gemini/agents/` |
+| OpenCode | Yes | `.opencode/rules/` | `.opencode/skills/writ-*/` | `.opencode/agents/` |
+| Cline | Yes | `.clinerules/` | `.cline/skills/writ-*/` | `.cline/agents/` |
+| Roo Code | Yes | `.roo/rules/` | `.roo/skills/writ-*/` | `.roo/agents/` |
 | Amazon Q | Yes | `.amazonq/rules/` | `.amazonq/rules/` | `.amazonq/agents/` |
 
 When you run `writ add reviewer`, the tool composes all relevant context and writes it directly into the files your IDE already reads.
