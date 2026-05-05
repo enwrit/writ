@@ -14,6 +14,7 @@ from rich.panel import Panel
 from writ.core import scanner, store
 from writ.core.formatter import (
     IDE_PATHS,
+    IDEConfig,
     IDEFormatter,
     cleanup_legacy_skill_files,
 )
@@ -328,7 +329,11 @@ def _extract_user_rows(file_path: Path, skills_dir: str) -> list[str]:
     writ_prefix = f"{skills_dir}/writ-"
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped.startswith("|") or stripped.startswith("| Skill") or stripped.startswith("|---"):
+        if (
+            not stripped.startswith("|")
+            or stripped.startswith("| Skill")
+            or stripped.startswith("|---")
+        ):
             continue
         # Row managed by writ -- skip (will be regenerated)
         if writ_prefix in stripped:
@@ -392,7 +397,7 @@ def _install_writ_context(detected_formats: list[str]) -> None:
         console.print(f"[green]Wrote[/green] writ-context -> {path}")
 
 
-def _writ_context_path(ide_cfg: "IDEConfig", root: Path) -> Path:
+def _writ_context_path(ide_cfg: IDEConfig, root: Path) -> Path:
     """Resolve the file path where writ-context lives for a given IDE."""
     rules = ide_cfg.rules
     return root / rules.directory / f"writ-context.{rules.extension}"
