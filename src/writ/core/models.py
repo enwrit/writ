@@ -181,7 +181,7 @@ class DimensionScore(BaseModel):
 
     name: str = Field(
         description="Machine name: clarity, structure, coverage, "
-        "brevity, examples, verification.",
+        "economy, examples, verification.",
     )
     label: str = Field(description="Display name: Clarity, Structure, etc.")
     score: int = Field(description="0-100 score for this dimension.")

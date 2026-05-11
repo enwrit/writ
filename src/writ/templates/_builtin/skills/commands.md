@@ -38,10 +38,12 @@ and routes AI instructions across coding tools, projects, and agents.
 - `writ lint --prompt --fix` -- review + instruct the AI to apply fixes directly
 - `writ lint --prompt --with-file` -- inline file content in the prompt (instead of asking agent to read it)
 - `writ lint --prompt --subagent` -- instruct IDE to launch a subagent for the review
+- `writ lint --prompt --security` -- deep OWASP-based security review via IDE's AI
 - `writ lint --cloud` -- AI scoring via enwrit.com API only (requires login)
 - `writ lint --local` -- AI scoring via your configured local model (writ model set local)
 - `writ lint --local-model` -- bundled writ-lint-0.8B model (auto-downloaded, no setup needed)
 - `writ lint --code` -- deterministic code-only scoring
+- `writ lint --sarif` -- SARIF 2.1.0 JSON output (GitHub Security tab integration)
 - `writ plan review <file>` -- plan review via prompt injection (default, no API call)
 - `writ plan review <file> --with-plan` -- include plan content inline in the prompt
 - `writ plan review <file> --local` -- send to your configured local model (writ model set local)
@@ -98,5 +100,23 @@ and routes AI instructions across coding tools, projects, and agents.
 - `writ mcp install` -- auto-configure MCP server in detected IDEs (slim mode, opt-in)
 - `writ mcp uninstall` -- remove writ MCP config from IDEs
 - `writ mcp serve` -- expose writ tools via MCP protocol (24 tools full / 2 slim)
+
+### Hooks & CI
+
+Claude Code auto-lint (add to `.claude/settings.json`):
+```json
+{"hooks": [{"event": "PostToolUse", "matcher": {"toolName": "Write|Edit", "filePath": "**/*.md"}, "command": "writ lint \"$CLAUDE_FILE_PATH\" --code --quiet"}]}
+```
+
+GitHub Action with SARIF + PR comments:
+```yaml
+- uses: enwrit/writ@main
+  with:
+    files: ".cursor/rules/*.mdc"
+    min-score: 50
+    sarif: true
+    comment: true
+    changed-only: true
+```
 
 Docs: https://github.com/enwrit/writ

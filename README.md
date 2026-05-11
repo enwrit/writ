@@ -14,10 +14,10 @@ The quality and communication layer for AI coding agents. Lint instructions, rev
 
 ```bash
 pip install enwrit
-writ lint CLAUDE.md               # Instant quality score (0-100) for any instruction
+writ lint SKILL.md                # Instant quality score (0-100) for any instruction
 writ plan review plan.md          # AI-powered plan review before implementation
 writ init                         # Initialize + install 11 built-in skills
-writ search "code reviewer"       # Find from 6,000+ instructions on the Hub
+writ search "code reviewer"       # Find from 14,000+ instructions on the Hub
 writ add code-review-agent        # Add to project + activate in your IDE
 ```
 
@@ -49,9 +49,9 @@ Three tiers depending on your needs:
 
 ```bash
 writ lint CLAUDE.md                     # Default: ML-powered, local, free (TF-IDF + LightGBM)
-writ lint AGENTS.md --prompt            # Type-aware qualitative review (your IDE's AI)
-writ lint AGENTS.md --prompt --fix      # Review + auto-fix
-writ lint AGENTS.md --local             # Your configured local model (LM Studio etc)
+writ lint SKILL.md --prompt            # Type-aware qualitative review (your IDE's AI)
+writ lint SKILL.md --prompt --fix      # Review + auto-fix
+writ lint SKILL.md --local             # Your configured local model (LM Studio etc)
 writ lint AGENTS.md --cloud             # AI scoring via enwrit.com (Gemini)
 writ lint AGENTS.md --local-model       # Bundled writ-lint-0.8B (auto-downloaded)
 writ lint rules.mdc --json              # Machine-readable output for CI
@@ -166,7 +166,7 @@ When you run `writ add reviewer`, the tool composes all relevant context and wri
 | **Docs health** | Schema-driven knowledge health: docs index, heuristic scan, AI-powered update pass, knowledge log. |
 | **Multi-format export** | One instruction, 11 auto-detected IDE formats + legacy opt-in formats. |
 | **Personal library + cloud sync** | `writ save` → `writ add --lib` on any device. Your instructions follow you. |
-| **Hub with 6,000+ instructions** | Semantic search across rules, agents, skills, programs. `writ search` / `writ add`. |
+| **Hub with 14,000+ instructions** | Semantic search across rules, agents, skills, programs. `writ search` / `writ add`. |
 | **Built-in skills** | 11 community-tested skills auto-installed on `writ init`. |
 | **Local model support** | LM Studio, Ollama, vLLM -- fully private, no data leaves your machine. |
 | **Agent communication** | Structured conversations between agents across repos and devices. |
@@ -218,12 +218,30 @@ writ mcp install      # Auto-detects Cursor, VS Code, Claude Code, Kiro, Windsur
 {"mcpServers": {"writ": {"command": "uvx", "args": ["enwrit", "mcp", "serve"]}}}
 ```
 
-## Git Pre-Commit Hook
+## Hooks & CI Integration
+
+### Git pre-commit hook
 
 ```bash
 writ hook install     # Quality gate: lint instructions on every commit
 writ hook uninstall   # Remove cleanly
 ```
+
+### Claude Code hook
+
+Auto-lint instruction files on every write/edit in Claude Code:
+
+```json
+{
+  "hooks": [{
+    "event": "PostToolUse",
+    "matcher": {"toolName": "Write|Edit", "filePath": "**/*.md"},
+    "command": "writ lint \"$CLAUDE_FILE_PATH\" --code --quiet"
+  }]
+}
+```
+
+Add to `.claude/settings.json` (project) or `~/.claude/settings.json` (global).
 
 ## Agent-to-Agent Communication
 
@@ -249,6 +267,8 @@ writ inbox                          # Check for responses
 | `writ save <name>` | Save to personal library (syncs to cloud if logged in) |
 | `writ search <query>` | Semantic search across Hub |
 | `writ lint [file] [--prompt] [--local] [--cloud]` | Quality score, review via IDE/local model/cloud |
+| `writ lint --prompt --security` | Deep OWASP-based security review via IDE's AI |
+| `writ lint --sarif` | SARIF 2.1.0 output (GitHub Security tab) |
 | `writ lint --local-model` | Bundled writ-lint-0.8B (no setup needed) |
 | `writ lint --ci --min-score N` | CI gate: exit 1 if score below threshold |
 | `writ plan review <file>` | Plan review via prompt injection (default) |
@@ -278,6 +298,9 @@ writ inbox                          # Check for responses
   with:
     files: ".cursor/rules/*.mdc"
     min-score: 50
+    sarif: true           # Upload to GitHub Security tab
+    comment: true         # Post score summary on PR
+    changed-only: true    # Only lint files changed in the PR
 ```
 
 ## Development

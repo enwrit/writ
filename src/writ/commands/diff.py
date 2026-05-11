@@ -20,7 +20,7 @@ _DISPLAY_DIM_ORDER: tuple[str, ...] = (
     "clarity",
     "verification",
     "coverage",
-    "brevity",
+    "economy",
     "structure",
     "examples",
 )

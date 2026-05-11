@@ -5,7 +5,7 @@ cursor-doctor (50-repo scan, 998 issues), AGENTIF (NeurIPS 2025),
 MCP Smells (arXiv:2602.14878), and Boris Cherny's verification research.
 
 Scoring uses 6 user-facing dimensions (Clarity, Structure, Coverage,
-Brevity, Examples, Verification) each 0-100, with a weighted headline.
+Economy, Examples, Verification) each 0-100, with a weighted headline.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ DIMENSION_WEIGHTS: dict[str, float] = {
     "clarity": 0.25,
     "verification": 0.25,
     "coverage": 0.20,
-    "brevity": 0.15,
+    "economy": 0.15,
     "structure": 0.10,
     "examples": 0.05,
 }
@@ -118,6 +118,70 @@ VERIFICATION_KEYWORDS = re.compile(
     re.I,
 )
 
+# ---------------------------------------------------------------------------
+# Security awareness patterns (warnings only, never errors/blockers)
+# ---------------------------------------------------------------------------
+
+_SEC_SECRET_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bsk-[a-zA-Z0-9]{20,}"), "OpenAI API key"),
+    (re.compile(r"\bAKIA[A-Z0-9]{16}\b"), "AWS access key"),
+    (re.compile(r"\bghp_[a-zA-Z0-9]{36,}\b"), "GitHub personal access token"),
+    (re.compile(r"\bgho_[a-zA-Z0-9]{36,}\b"), "GitHub OAuth token"),
+    (re.compile(r"\bghs_[a-zA-Z0-9]{36,}\b"), "GitHub server token"),
+    (re.compile(r"\bglpat-[a-zA-Z0-9\-_]{20,}\b"), "GitLab personal access token"),
+    (re.compile(r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----"), "private key"),
+    (re.compile(
+        r"""(?:password|passwd|secret|api_key|apikey|token|auth_token)"""
+        r"""\s*[=:]\s*["'][^"'\s]{8,}["']""",
+        re.I,
+    ), "hardcoded credential"),
+    (re.compile(r"\bxox[bpras]-[a-zA-Z0-9\-]{10,}\b"), "Slack token"),
+]
+
+_SEC_SHELL_EXEC_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\beval\s*\("), "eval()"),
+    (re.compile(r"\bexec\s*\("), "exec()"),
+    (re.compile(r"\bos\.system\s*\("), "os.system()"),
+    (re.compile(r"\bcurl\s+[^\n]*\|\s*(?:ba)?sh\b"), "curl | bash"),
+    (re.compile(r"\bwget\s+[^\n]*\|\s*(?:ba)?sh\b"), "wget | bash"),
+]
+
+_SEC_EXFILTRATION_PATTERN = re.compile(
+    r"(?:curl\s+.*-X\s*POST|fetch\s*\(|httpx\.post|requests\.post)"
+    r"[^\n]*(?:\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD)\w*\}?"
+    r"|process\.env|os\.environ)",
+    re.I,
+)
+
+_SEC_OVERRIDE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bignore\s+(?:all\s+)?previous\s+instructions?\b", re.I),
+     "ignore previous instructions"),
+    (re.compile(r"\bdisregard\s+(?:all\s+)?(?:safety|guidelines?|rules?)\b", re.I),
+     "disregard safety/guidelines"),
+    (re.compile(r"\boverride\s+(?:all\s+)?(?:safety|system|restrictions?)\b", re.I),
+     "override safety/system"),
+]
+
+_SEC_PERSISTENCE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bcrontab\b"), "crontab"),
+    (re.compile(r"\bLaunchAgent\b"), "LaunchAgent"),
+    (re.compile(r"~/\.bashrc\b|~/\.bash_profile\b|~/\.zshrc\b"), "shell profile write"),
+    (re.compile(r"~/\.ssh/"), ".ssh/ directory access"),
+]
+
+# ---------------------------------------------------------------------------
+# Technology names for has-stack-versions rule
+# ---------------------------------------------------------------------------
+
+_TECH_NAMES = re.compile(
+    r"\b(React|Next\.js|Vue|Angular|Svelte|Node(?:\.js)?|Django|FastAPI"
+    r"|Flask|Express|Spring|Rails|Laravel|Nuxt|Remix|Astro"
+    r"|Python|TypeScript|Java|Kotlin|Go|Rust|Ruby|PHP|Swift"
+    r"|Tailwind|Bootstrap|jQuery|Webpack|Vite|Postgres|MySQL"
+    r"|MongoDB|Redis|Docker|Kubernetes|Terraform)\b",
+)
+_VERSION_SUFFIX = re.compile(r"\s*v?\d+(?:\.\d+)")
+
 COMMAND_PATTERN = re.compile(r"`[^`]+`")
 
 # ---------------------------------------------------------------------------
@@ -184,6 +248,9 @@ def lint(
     results.extend(_check_has_examples(agent))
     results.extend(_check_general_knowledge(agent))
     results.extend(_check_wall_of_text(agent))
+
+    results.extend(_check_security(agent))
+    results.extend(_check_stack_versions(agent))
 
     results.extend(_check_missing_metadata(agent, source_path, writ_managed))
     results.extend(_check_skillmd_frontmatter(agent, source_path))
@@ -987,6 +1054,124 @@ def _check_has_boundaries(agent: InstructionConfig) -> list[LintResult]:
                 "must not/ask first). Add clear constraints."
             ),
             base_penalty=12,
+        )]
+    return []
+
+
+def _check_security(agent: InstructionConfig) -> list[LintResult]:
+    """Surface security-relevant patterns as info/warnings (never errors).
+
+    These are awareness rules -- they flag patterns that *may* indicate
+    security issues but cannot judge intent.  Defensive mentions (e.g.
+    "don't ignore previous instructions") will legitimately match.
+    Penalties are small (0-10); no headline caps, no publish blockers.
+    """
+    if not agent.instructions:
+        return []
+
+    text = agent.instructions
+    results: list[LintResult] = []
+
+    for pat, label in _SEC_SECRET_PATTERNS:
+        m = pat.search(text)
+        if m:
+            results.append(LintResult(
+                level="warning",
+                rule="security-secrets",
+                message=(
+                    f"[security] Possible hardcoded {label} detected. "
+                    "Use environment variables or a secrets manager."
+                ),
+                base_penalty=10,
+            ))
+            break
+
+    for pat, label in _SEC_SHELL_EXEC_PATTERNS:
+        if pat.search(text):
+            results.append(LintResult(
+                level="info",
+                rule="security-shell-exec",
+                message=(
+                    f"[security] Shell execution pattern: {label}. "
+                    "May be legitimate (teaching example, install guide) "
+                    "-- verify intent."
+                ),
+                base_penalty=0,
+            ))
+            break
+
+    if _SEC_EXFILTRATION_PATTERN.search(text):
+        results.append(LintResult(
+            level="warning",
+            rule="security-exfiltration",
+            message=(
+                "[security] Outbound HTTP call combined with "
+                "secret/env var references. Verify this is not "
+                "exfiltrating credentials."
+            ),
+            base_penalty=10,
+        ))
+
+    for pat, label in _SEC_OVERRIDE_PATTERNS:
+        if pat.search(text):
+            results.append(LintResult(
+                level="info",
+                rule="security-override",
+                message=(
+                    f"[security] Prompt override phrase: '{label}'. "
+                    "This may be defensive (teaching the agent to resist "
+                    "attacks) or malicious -- verify intent."
+                ),
+                base_penalty=0,
+            ))
+            break
+
+    for pat, label in _SEC_PERSISTENCE_PATTERNS:
+        if pat.search(text):
+            results.append(LintResult(
+                level="info",
+                rule="security-persistence",
+                message=(
+                    f"[security] Persistence mechanism: {label}. "
+                    "May be legitimate for devops/setup instructions."
+                ),
+                base_penalty=0,
+            ))
+            break
+
+    return results
+
+
+def _check_stack_versions(agent: InstructionConfig) -> list[LintResult]:
+    """Flag technology names without version numbers (info-only nudge).
+
+    "React 18" or "Python 3.11" is more useful than just "React" or
+    "Python" because it anchors the agent to specific API surfaces.
+    Only fires when >= 2 unversioned references found.
+    """
+    if not agent.instructions:
+        return []
+
+    text = agent.instructions
+    unversioned: list[str] = []
+
+    for m in _TECH_NAMES.finditer(text):
+        after = text[m.end():m.end() + 10]
+        if not _VERSION_SUFFIX.match(after):
+            unversioned.append(m.group(1))
+
+    unique = list(dict.fromkeys(unversioned))
+    if len(unique) >= 2:
+        examples = ", ".join(unique[:4])
+        return [LintResult(
+            level="info",
+            rule="has-stack-versions",
+            message=(
+                f"Technology names without versions: {examples}. "
+                "Adding version numbers (e.g. 'React 19', "
+                "'Python 3.12') anchors the agent to specific APIs."
+            ),
+            base_penalty=0,
         )]
     return []
 
@@ -1938,7 +2123,7 @@ def compute_score(
         clarity * DIMENSION_WEIGHTS["clarity"]
         + verification * DIMENSION_WEIGHTS["verification"]
         + coverage * DIMENSION_WEIGHTS["coverage"]
-        + brevity * DIMENSION_WEIGHTS["brevity"]
+        + brevity * DIMENSION_WEIGHTS["economy"]
         + structure * DIMENSION_WEIGHTS["structure"]
         + examples * DIMENSION_WEIGHTS["examples"]
     )
@@ -1973,10 +2158,10 @@ def compute_score(
             ),
         ),
         DimensionScore(
-            name="brevity", label="Brevity",
+            name="economy", label="Economy",
             score=brevity,
             summary=_dim_summary(
-                "brevity", brevity, v2_signals,
+                "economy", brevity, v2_signals,
             ),
         ),
         DimensionScore(
@@ -2048,7 +2233,7 @@ def _dim_summary(
     if dim == "coverage":
         return "Key topics missing or lack substance"
 
-    if dim == "brevity":
+    if dim == "economy":
         if signals.get("information_density", 1) < 0.1:
             return "Short but lacks actionable content"
         return "Could be more concise"
@@ -2114,7 +2299,7 @@ def _generate_suggestions(
                 "guidance each"
             )
 
-        elif dim.name == "brevity" and dim.score < 70:
+        elif dim.name == "economy" and dim.score < 70:
             suggestions.append(
                 "Trim instruction length -- "
                 "over-specification reduces agent "

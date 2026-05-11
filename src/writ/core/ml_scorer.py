@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 TIER2_DIR = Path(__file__).parent.parent / "models" / "tier2"
 
 DIMENSION_NAMES = [
-    "clarity", "structure", "coverage", "brevity", "examples", "verification",
+    "clarity", "structure", "coverage", "economy", "examples", "verification",
 ]
 DIMENSION_LABELS = {
     "clarity": "Clarity", "structure": "Structure", "coverage": "Coverage",
-    "brevity": "Brevity", "examples": "Examples", "verification": "Verification",
+    "economy": "Economy", "examples": "Examples", "verification": "Verification",
 }
 
 
@@ -421,6 +421,9 @@ def _build_feature_vector(
     values["tier1_headline"] = float(tier1_score)
     for dim in DIMENSION_NAMES:
         values[f"tier1_{dim}"] = float(tier1_dimensions.get(dim, 50))
+    # Backward compat: ML models trained before economy rename expect tier1_brevity
+    if "tier1_brevity" not in values and "tier1_economy" in values:
+        values["tier1_brevity"] = values["tier1_economy"]
 
     # SetFit boolean features (setfit_*) -- threshold to binary to match training
     # Training data has binary 0/1 labels; inference produces continuous probabilities.
@@ -826,7 +829,7 @@ def _retrieve_suggestions_v3(
 # Template-based suggestions (v4) -- replaces kNN retrieval
 # ---------------------------------------------------------------------------
 
-_DIM_PRIORITY = ["verification", "examples", "coverage", "clarity", "structure", "brevity"]
+_DIM_PRIORITY = ["verification", "examples", "coverage", "clarity", "structure", "economy"]
 
 _LABEL_TO_DIM_MAP: dict[str, str] = {
     "setfit_has_verification": "verification",
@@ -909,8 +912,8 @@ _RULE_TO_DIMENSION: dict[str, str] = {
     "has-examples": "examples",
     "excessive-examples": "examples",
     "has-boundaries": "coverage",
-    "instruction-bloat": "brevity",
-    "instructions-long": "brevity",
+    "instruction-bloat": "economy",
+    "instructions-long": "economy",
     "wall-of-text": "structure",
     "long-without-structure": "structure",
 }

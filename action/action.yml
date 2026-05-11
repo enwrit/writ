@@ -9,7 +9,8 @@ branding:
 inputs:
   files:
     description: "Glob pattern for instruction files to lint (e.g. '.cursor/rules/*.mdc')"
-    required: true
+    required: false
+    default: ""
   min-score:
     description: "Minimum quality score (0-100). Fails the check if any file scores below this."
     required: false
@@ -18,6 +19,18 @@ inputs:
     description: "Python version to use"
     required: false
     default: "3.11"
+  sarif:
+    description: "Upload SARIF to GitHub Security tab (true/false)"
+    required: false
+    default: "false"
+  changed-only:
+    description: "Only lint instruction files changed in this PR (true/false)"
+    required: false
+    default: "false"
+  comment:
+    description: "Post a summary comment on the PR (true/false)"
+    required: false
+    default: "false"
 
 outputs:
   results:
@@ -26,6 +39,9 @@ outputs:
   lowest-score:
     description: "The lowest score across all linted files"
     value: ${{ steps.lint.outputs.lowest_score }}
+  sarif-file:
+    description: "Path to generated SARIF file (when sarif input is true)"
+    value: ${{ steps.lint.outputs.sarif_file }}
 
 runs:
   using: "composite"
@@ -45,65 +61,182 @@ runs:
       run: |
         FILES_PATTERN="${{ inputs.files }}"
         MIN_SCORE="${{ inputs.min-score }}"
-        
-        echo "Linting files matching: $FILES_PATTERN"
-        echo "Minimum score: $MIN_SCORE"
-        echo ""
-        
+        SARIF_MODE="${{ inputs.sarif }}"
+        CHANGED_ONLY="${{ inputs.changed-only }}"
+
         RESULTS="[]"
         LOWEST=100
         FAILED=0
         TOTAL=0
-        
-        shopt -s globstar nullglob
-        for file in $FILES_PATTERN; do
-          if [ ! -f "$file" ]; then
-            continue
+        COMMENT_BODY=""
+
+        # Determine files to lint
+        FILES_TO_LINT=()
+
+        if [ "$CHANGED_ONLY" = "true" ]; then
+          echo "Mode: changed files only"
+          BASE_REF="${GITHUB_BASE_REF:-main}"
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            [ ! -f "$f" ] && continue
+            case "$f" in
+              .cursor/*|.claude/*|.github/instructions/*|.kiro/*|.windsurf/*|\
+              .codex/*|.gemini/*|.opencode/*|.clinerules/*|.roo/*|.amazonq/*|\
+              .writ/*|*.mdc|*.md|AGENTS.md|CLAUDE.md|SKILL.md)
+                FILES_TO_LINT+=("$f")
+                ;;
+            esac
+          done < <(git diff --name-only "origin/$BASE_REF"...HEAD 2>/dev/null || true)
+
+          if [ ${#FILES_TO_LINT[@]} -eq 0 ]; then
+            echo "No instruction files changed in this PR."
+            echo "results=[]" >> $GITHUB_OUTPUT
+            echo "lowest_score=100" >> $GITHUB_OUTPUT
+            exit 0
           fi
-          
+        elif [ -n "$FILES_PATTERN" ]; then
+          echo "Mode: glob pattern -- $FILES_PATTERN"
+          shopt -s globstar nullglob
+          for file in $FILES_PATTERN; do
+            [ -f "$file" ] && FILES_TO_LINT+=("$file")
+          done
+        else
+          echo "::warning::No files specified. Set 'files' glob or 'changed-only: true'."
+          echo "results=[]" >> $GITHUB_OUTPUT
+          echo "lowest_score=100" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Lint each file
+        for file in "${FILES_TO_LINT[@]}"; do
           TOTAL=$((TOTAL + 1))
           echo "--- Linting: $file ---"
-          
-          # Get JSON result
-          JSON=$(writ lint "$file" --json 2>/dev/null || echo '{"headline_score": 0}')
-          SCORE=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('headline_score', 0))" 2>/dev/null || echo "0")
+
+          JSON=$(writ lint "$file" --json 2>/dev/null || echo '{"score": 0}')
+          SCORE=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('score', d.get('headline_score', 0)))" 2>/dev/null || echo "0")
           TIER=$(echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tier', 'unknown'))" 2>/dev/null || echo "unknown")
-          
-          # Also print human-readable output
+
           writ lint "$file" --quiet 2>/dev/null || true
           echo ""
-          
-          # Track results
+
           RESULTS=$(echo "$RESULTS" | python3 -c "
         import sys, json
         arr = json.load(sys.stdin)
         arr.append({'file': '$file', 'score': $SCORE, 'tier': '$TIER'})
         print(json.dumps(arr))
         ")
-          
+
           if [ "$SCORE" -lt "$LOWEST" ] 2>/dev/null; then
             LOWEST=$SCORE
           fi
-          
+
           if [ "$MIN_SCORE" -gt 0 ] && [ "$SCORE" -lt "$MIN_SCORE" ] 2>/dev/null; then
             echo "::error file=$file::Score $SCORE is below minimum $MIN_SCORE"
             FAILED=$((FAILED + 1))
           fi
+
+          COMMENT_BODY="${COMMENT_BODY}| \`$file\` | $SCORE | $TIER |\n"
         done
-        
-        if [ "$TOTAL" -eq 0 ]; then
-          echo "::warning::No files matched pattern: $FILES_PATTERN"
-        fi
-        
+
         echo "results=$RESULTS" >> $GITHUB_OUTPUT
         echo "lowest_score=$LOWEST" >> $GITHUB_OUTPUT
-        
+
         echo ""
         echo "=== Summary ==="
         echo "Files linted: $TOTAL"
         echo "Lowest score: $LOWEST"
-        
+
+        # Generate SARIF if requested
+        if [ "$SARIF_MODE" = "true" ] && [ "$TOTAL" -gt 0 ]; then
+          SARIF_FILE="writ-lint-results.sarif"
+          SARIF_FILES=""
+          for file in "${FILES_TO_LINT[@]}"; do
+            SARIF_FILES="$SARIF_FILES $file"
+          done
+          # Generate merged SARIF from first file (single-file for now)
+          # For multi-file, use --changed which produces merged SARIF
+          FIRST_FILE="${FILES_TO_LINT[0]}"
+          writ lint "$FIRST_FILE" --sarif > "$SARIF_FILE" 2>/dev/null || true
+          if [ ${#FILES_TO_LINT[@]} -gt 1 ]; then
+            # Re-generate with all files by linting each and merging
+            python3 -c "
+        import json, subprocess, sys
+        files = '''${FILES_TO_LINT[@]}'''.split()
+        all_results = []
+        all_rules = {}
+        for f in files:
+            try:
+                out = subprocess.check_output(['writ', 'lint', f, '--sarif'], text=True, stderr=subprocess.DEVNULL)
+                sarif = json.loads(out)
+                run = sarif['runs'][0]
+                all_results.extend(run['results'])
+                for r in run['tool']['driver']['rules']:
+                    all_rules[r['id']] = r
+            except: pass
+        merged = {
+            '\$schema': 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json',
+            'version': '2.1.0',
+            'runs': [{'tool': {'driver': {'name': 'writ-lint', 'informationUri': 'https://github.com/enwrit/writ', 'rules': list(all_rules.values())}}, 'results': all_results}]
+        }
+        print(json.dumps(merged, indent=2))
+        " > "$SARIF_FILE" 2>/dev/null || true
+          fi
+          echo "sarif_file=$SARIF_FILE" >> $GITHUB_OUTPUT
+          echo "SARIF written to $SARIF_FILE"
+        fi
+
         if [ "$FAILED" -gt 0 ]; then
           echo "::error::$FAILED file(s) scored below minimum ($MIN_SCORE)"
           exit 1
         fi
+
+    - name: Upload SARIF
+      if: inputs.sarif == 'true' && steps.lint.outputs.sarif_file != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.lint.outputs.sarif_file }}
+      continue-on-error: true
+
+    - name: Post PR comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const results = JSON.parse('${{ steps.lint.outputs.results }}');
+          const lowest = ${{ steps.lint.outputs.lowest_score }};
+          const minScore = ${{ inputs.min-score }};
+          if (results.length === 0) return;
+
+          let body = '## writ lint results\n\n';
+          body += '| File | Score | Tier |\n|------|-------|------|\n';
+          for (const r of results) {
+            const emoji = r.score >= 70 ? '🟢' : r.score >= 50 ? '🟡' : '🔴';
+            body += `| \`${r.file}\` | ${emoji} ${r.score} | ${r.tier} |\n`;
+          }
+          body += `\n**Lowest score:** ${lowest}`;
+          if (minScore > 0) {
+            body += ` (minimum: ${minScore})`;
+          }
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find(c => c.body.includes('## writ lint results'));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
+      continue-on-error: true

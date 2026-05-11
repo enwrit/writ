@@ -77,14 +77,14 @@ SYSTEM_PROMPT = (
 )
 
 DIMENSION_NAMES = [
-    "clarity", "structure", "coverage", "brevity", "examples", "verification",
+    "clarity", "structure", "coverage", "economy", "examples", "verification",
 ]
 
 DIMENSION_LABELS = {
     "clarity": "Clarity",
     "structure": "Structure",
     "coverage": "Coverage",
-    "brevity": "Brevity",
+    "economy": "Economy",
     "examples": "Examples",
     "verification": "Verification",
 }
@@ -542,7 +542,7 @@ def _build_qwen_prompt(instruction_text: str, ml_score: LintScore) -> str:
         f"Clarity: {dims.get('clarity', 50)}/100  |  "
         f"Structure: {dims.get('structure', 50)}/100\n"
         f"Coverage: {dims.get('coverage', 50)}/100  |  "
-        f"Brevity: {dims.get('brevity', 50)}/100\n"
+        f"Economy: {dims.get('economy', 50)}/100\n"
         f"Examples: {dims.get('examples', 50)}/100  |  "
         f"Verification: {dims.get('verification', 50)}/100"
     )

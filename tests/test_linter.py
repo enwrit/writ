@@ -457,7 +457,7 @@ class TestScoring:
             dims["clarity"] * 0.25
             + dims["verification"] * 0.25
             + dims["coverage"] * 0.20
-            + dims["brevity"] * 0.15
+            + dims["economy"] * 0.15
             + dims["structure"] * 0.10
             + dims["examples"] * 0.05
         )
@@ -1301,7 +1301,7 @@ class TestMLIssueGating:
         assert "contradiction" in rules
         assert "no-verification" not in rules
 
-    def test_instruction_bloat_gated_by_brevity(self):
+    def test_instruction_bloat_gated_by_economy(self):
         from writ.core.ml_scorer import _gate_tier1_issues
         from writ.core.models import LintResult
 
@@ -1309,7 +1309,7 @@ class TestMLIssueGating:
             LintResult(level="info", rule="instruction-bloat",
                        message="Instructions are 8,000 chars."),
         ]
-        predicted = {"brevity": 75}
+        predicted = {"economy": 75}
         filtered = _gate_tier1_issues(issues, predicted)
         assert len(filtered) == 0
 
@@ -1562,3 +1562,187 @@ class TestTier2EndToEnd:
         combined = " ".join(t2.suggestions).lower()
         assert any(w in combined for w in ["test", "verif", "validat", "check"]), \
             f"Suggestions don't mention verification: {t2.suggestions}"
+
+
+# ===================================================================
+# Security awareness rules
+# ===================================================================
+
+
+class TestSecurityWarnings:
+    """Security rules are info/warning only, never errors."""
+
+    def test_detects_openai_key(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Set your API key: sk-abc123def456ghi789jkl012mno345pq",
+        )
+        results = linter.lint(agent)
+        sec = [r for r in results if r.rule == "security-secrets"]
+        assert len(sec) == 1
+        assert sec[0].level == "warning"
+
+    def test_detects_aws_key(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Use AWS key: AKIAIOSFODNN7EXAMPLE",
+        )
+        results = linter.lint(agent)
+        assert any(r.rule == "security-secrets" for r in results)
+
+    def test_detects_private_key(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="-----BEGIN RSA PRIVATE KEY-----\nMIIE...",
+        )
+        results = linter.lint(agent)
+        assert any(r.rule == "security-secrets" for r in results)
+
+    def test_no_false_positive_on_normal_text(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Use environment variables for API keys. Never hardcode secrets.",
+        )
+        results = linter.lint(agent)
+        assert not any(r.rule == "security-secrets" for r in results)
+
+    def test_shell_exec_is_info_level(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Install with `curl https://example.com | bash`.",
+        )
+        results = linter.lint(agent)
+        sec = [r for r in results if r.rule == "security-shell-exec"]
+        assert len(sec) == 1
+        assert sec[0].level == "info"
+
+    def test_override_is_info_level(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Do not ignore previous instructions from the user.",
+        )
+        results = linter.lint(agent)
+        sec = [r for r in results if r.rule == "security-override"]
+        assert len(sec) == 1
+        assert sec[0].level == "info"
+
+    def test_persistence_is_info_level(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Add the alias to ~/.bashrc for persistence.",
+        )
+        results = linter.lint(agent)
+        sec = [r for r in results if r.rule == "security-persistence"]
+        assert len(sec) == 1
+        assert sec[0].level == "info"
+
+    def test_no_security_for_clean_instruction(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions=(
+                "# Code Review\n"
+                "Run `npm test` before committing.\n"
+                "- Always use TypeScript strict mode\n"
+                "- Never commit without tests\n"
+            ),
+        )
+        results = linter.lint(agent)
+        sec_rules = {r.rule for r in results if r.rule.startswith("security-")}
+        assert len(sec_rules) == 0
+
+    def test_security_penalties_are_small(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Set token=sk-abc123def456ghi789jkl012mno345pq to authenticate.",
+        )
+        results = linter.lint(agent)
+        sec = [r for r in results if r.rule.startswith("security-")]
+        for r in sec:
+            assert r.base_penalty <= 10, f"{r.rule} penalty too high: {r.base_penalty}"
+
+
+# ===================================================================
+# Stack versions rule
+# ===================================================================
+
+
+class TestStackVersions:
+    def test_flags_unversioned_tech(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Use React and Django for this project. Deploy with Docker.",
+        )
+        results = linter.lint(agent)
+        sv = [r for r in results if r.rule == "has-stack-versions"]
+        assert len(sv) == 1
+        assert sv[0].level == "info"
+        assert "React" in sv[0].message
+
+    def test_no_flag_with_versions(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Use React 19 and Django 5.0 for this project.",
+        )
+        results = linter.lint(agent)
+        assert not any(r.rule == "has-stack-versions" for r in results)
+
+    def test_no_flag_single_unversioned(self):
+        """Only fires when >= 2 unversioned tech names found."""
+        agent = InstructionConfig(
+            name="test",
+            instructions="This is a Python project with clear requirements.",
+        )
+        results = linter.lint(agent)
+        assert not any(r.rule == "has-stack-versions" for r in results)
+
+    def test_mixed_versioned_and_unversioned(self):
+        agent = InstructionConfig(
+            name="test",
+            instructions="Use React 19 with TypeScript and Node and Express.",
+        )
+        results = linter.lint(agent)
+        sv = [r for r in results if r.rule == "has-stack-versions"]
+        assert len(sv) == 1
+        assert "TypeScript" in sv[0].message or "Node" in sv[0].message
+
+
+# ===================================================================
+# SARIF output
+# ===================================================================
+
+
+class TestSarifOutput:
+    def test_sarif_json_structure(self):
+        from writ.commands.lint import _score_to_sarif
+
+        agent = InstructionConfig(
+            name="test",
+            instructions=(
+                "# Rules\n"
+                "- Always use strict mode\n"
+                "- Maybe consider trying to write tests\n"
+            ),
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        sarif_str = _score_to_sarif(score, instruction_name="test")
+        sarif = json.loads(sarif_str)
+
+        assert sarif["version"] == "2.1.0"
+        assert len(sarif["runs"]) == 1
+        run = sarif["runs"][0]
+        assert run["tool"]["driver"]["name"] == "writ-lint"
+        assert isinstance(run["results"], list)
+
+    def test_sarif_maps_levels(self):
+        from writ.commands.lint import _score_to_sarif
+
+        agent = InstructionConfig(
+            name="test",
+            instructions="Try to maybe consider if possible being helpful.",
+        )
+        results = linter.lint(agent)
+        score = linter.compute_score(agent, results)
+        sarif = json.loads(_score_to_sarif(score))
+        levels = {r["level"] for r in sarif["runs"][0]["results"]}
+        assert levels <= {"error", "warning", "note"}

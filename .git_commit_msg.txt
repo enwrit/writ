@@ -1,0 +1,8 @@
+feat: v0.4.18 -- security rules, SARIF output, GitHub Action upgrade, improved ML scoring
+
+Security: 5 deterministic rules (secrets, shell-exec, exfiltration, override, persistence),
+two-tier hooks for lint --prompt (light always-on + deep --security with OWASP Top 10).
+SARIF 2.1.0 output for GitHub Security tab integration.
+GitHub Action: sarif upload, changed-only lint, PR comment with scores table.
+ML: retrained Tier 2 on 12.4K instructions (was 6.5K), headline MAE 6.62->4.70 (29% better),
+grade accuracy 65%->75%. Dimension renamed brevity->economy.

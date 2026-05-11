@@ -193,6 +193,67 @@ def _score_to_json(lint_score: LintScore) -> str:
     return lint_score.model_dump_json(indent=2)
 
 
+def _score_to_sarif(
+    lint_score: LintScore,
+    file_path: Path | None = None,
+    instruction_name: str | None = None,
+) -> str:
+    """Convert LintScore to SARIF 2.1.0 JSON for GitHub Security tab."""
+    level_map = {"error": "error", "warning": "warning", "info": "note"}
+    rules: list[dict] = []
+    rule_ids_seen: set[str] = set()
+    results_list: list[dict] = []
+
+    uri = ""
+    if file_path:
+        uri = file_path.as_posix()
+    elif instruction_name:
+        uri = instruction_name
+
+    for issue in lint_score.issues:
+        rule_id = issue.rule or "unknown"
+        if rule_id not in rule_ids_seen:
+            rule_ids_seen.add(rule_id)
+            rules.append({
+                "id": rule_id,
+                "shortDescription": {"text": rule_id.replace("-", " ").title()},
+            })
+
+        result: dict = {
+            "ruleId": rule_id,
+            "level": level_map.get(issue.level, "note"),
+            "message": {"text": issue.message},
+        }
+        if uri:
+            location: dict = {
+                "physicalLocation": {
+                    "artifactLocation": {"uri": uri},
+                },
+            }
+            if issue.line:
+                location["physicalLocation"]["region"] = {
+                    "startLine": issue.line,
+                }
+            result["locations"] = [location]
+        results_list.append(result)
+
+    sarif = {
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "writ-lint",
+                    "informationUri": "https://github.com/enwrit/writ",
+                    "rules": rules,
+                },
+            },
+            "results": results_list,
+        }],
+    }
+    return json.dumps(sarif, indent=2)
+
+
 _LINT_SCORES_FILE = "lint-scores.json"
 
 
@@ -399,6 +460,7 @@ def _run_deep_review(
     file: Path | None,
     fix: bool = False,
     with_file: bool = False,
+    security: bool = False,
 ) -> None:
     """Print a qualitative review instruction for the IDE's AI agent."""
     from writ.core.type_inference import infer_instruction_type
@@ -449,6 +511,17 @@ def _run_deep_review(
     if hook:
         console.print()
         console.print(hook)
+
+    security_light = _load_type_hook("security-light")
+    if security_light:
+        console.print()
+        console.print(security_light)
+
+    if security:
+        security_deep = _load_type_hook("security-deep")
+        if security_deep:
+            console.print()
+            console.print(security_deep)
 
     if fix:
         console.print()
@@ -769,6 +842,9 @@ def _run_configured_local_lint(
     system_prompt = rubric
     if hook:
         system_prompt += "\n\n" + hook
+    sec_light = _load_type_hook("security-light")
+    if sec_light:
+        system_prompt += "\n\n" + sec_light
 
     user_prompt = (
         f"## Instruction to review ({inferred_type}): {label}\n\n"
@@ -893,6 +969,13 @@ def lint_command(
             help="Output full score as JSON (for CI/tooling).",
         ),
     ] = False,
+    sarif: Annotated[
+        bool,
+        typer.Option(
+            "--sarif",
+            help="Output SARIF 2.1.0 JSON (GitHub Security tab integration).",
+        ),
+    ] = False,
     ci: Annotated[
         bool,
         typer.Option(
@@ -989,6 +1072,13 @@ def lint_command(
         typer.Option(
             "--ml",
             help="ML-predicted scoring (Tier 2) -- this is the default.",
+        ),
+    ] = False,
+    security: Annotated[
+        bool,
+        typer.Option(
+            "--security",
+            help="With --prompt: include full OWASP Agentic Top 10 security review.",
         ),
     ] = False,
     # LEGACY aliases (hidden) -------------------------------------------------
@@ -1094,7 +1184,10 @@ def lint_command(
                 "lint", name=name, file=file, fix=fix,
             )
             return
-        _run_deep_review(name=name, file=file, fix=fix, with_file=with_file)
+        _run_deep_review(
+            name=name, file=file, fix=fix,
+            with_file=with_file, security=security,
+        )
         return
     if use_cloud:
         _run_deep_api_lint(
@@ -1114,6 +1207,8 @@ def lint_command(
             return
 
         all_scores_changed: list[LintScore] = []
+        sarif_all_results: list[dict] = []
+        sarif_all_rules: dict[str, dict] = {}
         scores_batch: dict[str, dict] = {}
         for fp in changed_files:
             agent = _parse_file_to_config(fp)
@@ -1124,6 +1219,16 @@ def lint_command(
                 rel_k = _path_key_for_scores(fp)
                 if rel_k:
                     scores_batch[rel_k] = _storage_entry_from_lint_score(lint_score)
+
+            if sarif:
+                sarif_json = json.loads(
+                    _score_to_sarif(lint_score, file_path=fp),
+                )
+                run = sarif_json["runs"][0]
+                sarif_all_results.extend(run["results"])
+                for r in run["tool"]["driver"]["rules"]:
+                    sarif_all_rules[r["id"]] = r
+                continue
 
             if json_output:
                 data = json.loads(lint_score.model_dump_json())
@@ -1144,6 +1249,29 @@ def lint_command(
                 console.print(f"\n[bold]{fp.name}[/bold]:")
                 _print_results(results)
                 _print_score(lint_score)
+
+        if sarif:
+            merged_sarif = {
+                "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+                "version": "2.1.0",
+                "runs": [{
+                    "tool": {
+                        "driver": {
+                            "name": "writ-lint",
+                            "informationUri": "https://github.com/enwrit/writ",
+                            "rules": list(sarif_all_rules.values()),
+                        },
+                    },
+                    "results": sarif_all_results,
+                }],
+            }
+            sys.stdout.write(json.dumps(merged_sarif, indent=2) + "\n")
+            _merge_write_lint_scores(scores_batch)
+            if ci and all_scores_changed:
+                worst = min(s.score for s in all_scores_changed)
+                if worst < min_score:
+                    raise typer.Exit(1)
+            return
 
         if badge:
             avg = sum(s.score for s in all_scores_changed) // len(all_scores_changed)
@@ -1168,6 +1296,13 @@ def lint_command(
         agent = _parse_file_to_config(file)
         results = lint_engine.lint(agent, source_path=file)
         lint_score = _maybe_ml_score(agent, results, force_code=code)
+
+        if sarif:
+            sys.stdout.write(_score_to_sarif(lint_score, file_path=file) + "\n")
+            _persist_lint_scores(lint_score=lint_score, file=file)
+            if ci and lint_score.score < min_score:
+                raise typer.Exit(1)
+            return
 
         if json_output:
             sys.stdout.write(_score_to_json(lint_score) + "\n")

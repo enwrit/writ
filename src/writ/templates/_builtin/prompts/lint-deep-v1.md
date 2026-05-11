@@ -67,7 +67,7 @@ Where would concrete examples make the instruction clearer? Consider:
 Suggest examples only where they would have clear, high impact.
 
 ## Points to often consider of the linted file
-- Clarity, Structure, Coverage, Brevity, Examples, Verfication.
+- Clarity, Structure, Coverage, Economy, Examples, Verification.
 
 ---
 

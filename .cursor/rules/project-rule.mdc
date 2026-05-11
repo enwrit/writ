@@ -47,20 +47,20 @@ src/writ/
 
 The tool writes to native IDE/CLI files. LLM APIs are only called for `writ lint --cloud` (enwrit.com Gemini), `writ lint --local` / `writ plan review --local` (user's configured model), and `writ lint --local-model` (bundled Qwen). `writ lint --prompt`, `writ plan review` (default), and `writ docs update` use the "commands as injected instructions" pattern -- they print instructions for the IDE's own LLM to execute, no API cost. `writ lint --prompt` is type-aware: it infers the file type (skill/agent/rule/plan/context/other) from its path and injects a type-specific review hook via modular prompts in `prompts/hooks/`. Default `writ lint` uses bundled ML models (Tier 2) when available, falling back to code heuristics (Tier 1).
 
-11 tools auto-detected via `IDE_PATHS` in `formatter.py`. Instructions routed to `rules/`, `skills/writ/`, or `agents/` based on `task_type`:
+11 tools auto-detected via `IDE_PATHS` in `formatter.py`. Instructions routed to `rules/`, `skills/writ-*/`, or `agents/` based on `task_type`:
 
 | Tool | Detect | Example path | Mode |
 |------|--------|-------------|------|
-| Cursor | `.cursor/` | `.cursor/{rules,skills/writ,agents}/writ-*.mdc` | Auto-detected |
-| Claude Code | `.claude/` | `.claude/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
-| GitHub Copilot | `.github/` | `.github/{instructions,skills/writ,agents}/writ-*` | Auto-detected |
-| Kiro | `.kiro/` | `.kiro/{steering,skills/writ,agents}/writ-*.md` | Auto-detected |
-| Windsurf | `.windsurf/` | `.windsurf/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
-| Codex | `.codex/` | `.codex/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
-| Gemini CLI | `.gemini/` | `.gemini/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
-| OpenCode | `.opencode/` | `.opencode/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| Cursor | `.cursor/` | `.cursor/{rules,skills/writ-*,agents}/writ-*.mdc` | Auto-detected |
+| Claude Code | `.claude/` | `.claude/{rules,skills/writ-*,agents}/writ-*.md` | Auto-detected |
+| GitHub Copilot | `.github/` | `.github/{instructions,skills/writ-*,agents}/writ-*` | Auto-detected |
+| Kiro | `.kiro/` | `.kiro/{steering,skills/writ-*,agents}/writ-*.md` | Auto-detected |
+| Windsurf | `.windsurf/` | `.windsurf/{rules,skills/writ-*,agents}/writ-*.md` | Auto-detected |
+| Codex | `.codex/` | `.codex/{rules,skills/writ-*,agents}/writ-*.md` | Auto-detected |
+| Gemini CLI | `.gemini/` | `.gemini/{rules,skills/writ-*,agents}/writ-*.md` | Auto-detected |
+| OpenCode | `.opencode/` | `.opencode/{rules,skills/writ-*,agents}/writ-*.md` | Auto-detected |
 | Cline | `.clinerules/` | `.clinerules/writ-*.md`, `.cline/agents/` | Auto-detected |
-| Roo Code | `.roo/` | `.roo/{rules,skills/writ,agents}/writ-*.md` | Auto-detected |
+| Roo Code | `.roo/` | `.roo/{rules,skills/writ-*,agents}/writ-*.md` | Auto-detected |
 | Amazon Q | `.amazonq/` | `.amazonq/{rules,agents}/writ-*.md` | Auto-detected |
 
 Legacy shared-file formats (opt-in via `--format`): `claude`, `agents_md`, `copilot_legacy`, `windsurf_legacy`, `codex_legacy`, `kiro`.
@@ -92,6 +92,8 @@ writ lint --prompt              Qualitative review via prompt injection for IDE'
 writ lint --prompt --fix        Review + instruct AI to apply fixes directly
 writ lint --prompt --with-file  Inline file content in the prompt output
 writ lint --prompt --subagent   Launch a subagent for the review
+writ lint --prompt --security   Deep OWASP-based security review via IDE's AI
+writ lint --sarif               SARIF 2.1.0 JSON output (GitHub Security tab integration)
 writ lint --cloud               AI scoring via enwrit.com API only (requires login)
 writ lint --local               AI scoring via your configured local model (writ model set local)
 writ lint --local-model         Bundled writ-lint-0.8B model (auto-downloaded, no setup needed)
