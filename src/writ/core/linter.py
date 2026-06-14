@@ -169,6 +169,54 @@ _SEC_PERSISTENCE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"~/\.ssh/"), ".ssh/ directory access"),
 ]
 
+# OWASP AST03: Over-privileged skill patterns
+_SEC_OVERPRIVILEGE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\b(?:full|unrestricted|unlimited)\s+(?:file\s*system|disk|fs)\s+access\b", re.I),
+     "unrestricted filesystem access"),
+    (re.compile(r"\b(?:run\s+as|requires?|needs?)\s+(?:root|admin(?:istrator)?|sudo)\b", re.I),
+     "elevated privilege requirement"),
+    (re.compile(r"\baccess\s+(?:all|any|every)\s+(?:files?|directories|folders?|repos?)\b", re.I),
+     "blanket file access"),
+    (re.compile(r"\b(?:disable|bypass|skip|ignore)\s+(?:all\s+)?(?:security|permissions?|auth(?:orization)?)\b", re.I),
+     "security bypass"),
+    (re.compile(r"\b(?:read|write|modify|delete|access)\s+(?:any|all|every)\s+"
+                r"(?:env(?:ironment)?\s+var(?:iable)?s?|secrets?|credentials?)\b", re.I),
+     "broad secret access"),
+]
+
+# OWASP AST04: Insecure metadata / identity impersonation
+_SEC_IMPERSONATION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\b(?:official|verified|certified)\s+(?:by|from)\s+"
+                r"(?:google|microsoft|openai|anthropic|meta|amazon|aws|apple|nvidia)\b", re.I),
+     "unverified vendor attribution"),
+    (re.compile(r"\bthis\s+(?:skill|instruction|agent)\s+(?:is|was)\s+"
+                r"(?:approved|endorsed|certified|verified)\s+by\b", re.I),
+     "unverified approval claim"),
+]
+
+# OWASP AST01 expansion: Encoded payload / obfuscation patterns
+_SEC_ENCODING_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bbase64\s*[.:]?\s*(?:decode|b64decode)\b", re.I),
+     "base64 decode"),
+    (re.compile(r"\bbytes\.fromhex\b|\bbytearray\.fromhex\b", re.I),
+     "hex decode"),
+    (re.compile(r"\b(?:pickle|cPickle)\.(?:loads?|load)\b"),
+     "pickle deserialization"),
+    (re.compile(r"\byaml\.(?:unsafe_load|full_load)\b"),
+     "unsafe YAML loading"),
+    (re.compile(r"\b__import__\s*\("), "dynamic import"),
+]
+
+# OWASP AST01: Agent identity file manipulation
+_SEC_IDENTITY_WRITE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\b(?:write|modify|overwrite|append|update)\b[^\n]*"
+                r"(?:AGENTS\.md|CLAUDE\.md|MEMORY\.md|SOUL\.md|\.cursorrules)\b", re.I),
+     "agent identity file write"),
+    (re.compile(r"\b(?:write|modify|overwrite|append|update)\b[^\n]*"
+                r"(?:\.cursor/rules|\.claude/rules|\.github/instructions)\b", re.I),
+     "IDE instruction directory write"),
+]
+
 # ---------------------------------------------------------------------------
 # Technology names for has-stack-versions rule
 # ---------------------------------------------------------------------------
@@ -1136,6 +1184,64 @@ def _check_security(agent: InstructionConfig) -> list[LintResult]:
                     "May be legitimate for devops/setup instructions."
                 ),
                 base_penalty=0,
+            ))
+            break
+
+    # OWASP AST03: over-privileged access
+    for pat, label in _SEC_OVERPRIVILEGE_PATTERNS:
+        if pat.search(text):
+            results.append(LintResult(
+                level="warning",
+                rule="security-overprivilege",
+                message=(
+                    f"[security/AST03] Over-privileged pattern: {label}. "
+                    "Skills should request minimal necessary permissions."
+                ),
+                base_penalty=5,
+            ))
+            break
+
+    # OWASP AST04: identity impersonation
+    for pat, label in _SEC_IMPERSONATION_PATTERNS:
+        if pat.search(text):
+            results.append(LintResult(
+                level="warning",
+                rule="security-impersonation",
+                message=(
+                    f"[security/AST04] {label}. "
+                    "Unverified vendor claims can mislead users into "
+                    "trusting malicious skills."
+                ),
+                base_penalty=10,
+            ))
+            break
+
+    # OWASP AST01 expansion: encoded payloads / unsafe deserialization
+    for pat, label in _SEC_ENCODING_PATTERNS:
+        if pat.search(text):
+            results.append(LintResult(
+                level="warning",
+                rule="security-encoding",
+                message=(
+                    f"[security/AST01] Encoding/deserialization pattern: "
+                    f"{label}. May be used to obfuscate malicious payloads."
+                ),
+                base_penalty=5,
+            ))
+            break
+
+    # OWASP AST01: agent identity file writes
+    for pat, label in _SEC_IDENTITY_WRITE_PATTERNS:
+        if pat.search(text):
+            results.append(LintResult(
+                level="warning",
+                rule="security-identity-write",
+                message=(
+                    f"[security/AST01] {label}. "
+                    "Skills should not modify agent identity or "
+                    "instruction files unless explicitly justified."
+                ),
+                base_penalty=5,
             ))
             break
 

@@ -1,6 +1,6 @@
 # writ
 
-**Better instructions. Connected agents.**
+**The quality layer for AI agent instructions.**
 
 [![PyPI](https://img.shields.io/pypi/v/enwrit)](https://pypi.org/project/enwrit/)
 [![Downloads](https://static.pepy.tech/badge/enwrit)](https://pepy.tech/project/enwrit)
@@ -8,7 +8,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/enwrit/writ/actions/workflows/ci.yml/badge.svg)](https://github.com/enwrit/writ/actions)
 
-The quality and communication layer for AI coding agents. Lint instructions, review plans, check documentation health, and connect agents across repos, devices, and tools.
+Lint instructions, review plans, check documentation health, and connect agents across repos, devices, and tools. OWASP AST10-aligned security checks included.
 
 > **Requires Python 3.11+.** On macOS, `brew install python@3.12` or use [pyenv](https://github.com/pyenv/pyenv). The default macOS Python (3.9) will show "no matching distribution" on install.
 
@@ -27,7 +27,7 @@ writ add code-review-agent        # Add to project + activate in your IDE
 
 ## Lint Your Instructions
 
-`writ lint` scores any instruction 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Brevity**, **Structure**, **Examples**. Works on any `.md`, `.mdc`, `.txt`, or YAML file -- no `writ init` required.
+`writ lint` scores any instruction 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Economy**, **Structure**, **Examples**. Works on any `.md`, `.mdc`, `.txt`, or YAML file -- no `writ init` required.
 
 ```bash
 writ lint .cursor/rules/my-rule.mdc
@@ -36,7 +36,7 @@ writ lint .cursor/rules/my-rule.mdc
 # Clarity            43  Moderate              
 # Structure          44  Moderate            
 # Coverage           31  Needs improvement              
-# Brevity            51  Moderate              
+# Exconomy           51  Moderate              
 # Examples           15  Critical
 # Verification       10  Critical
 # Suggestions:
@@ -161,9 +161,10 @@ When you run `writ add reviewer`, the tool composes all relevant context and wri
 
 | Capability | What it means |
 |-----------|--------------|
-| **Instruction linting** | 6-dimension quality scoring (0-100). Code-based, ML-powered, or AI-powered. |
+| **Instruction linting** | 6-dimension quality scoring (0-100). Code-based, ML-powered, or AI-powered. OWASP AST10-aligned security checks. |
 | **Plan review** | AI analyzes your implementation plans before coding. Local or cloud models. |
 | **Docs health** | Schema-driven knowledge health: docs index, heuristic scan, AI-powered update pass, knowledge log. |
+| **Security scanning** | Detects malicious skills, over-privileged access, identity impersonation, encoded payloads, unsafe deserialization (OWASP AST01-05). |
 | **Multi-format export** | One instruction, 11 auto-detected IDE formats + legacy opt-in formats. |
 | **Personal library + cloud sync** | `writ save` → `writ add --lib` on any device. Your instructions follow you. |
 | **Hub with 14,000+ instructions** | Semantic search across rules, agents, skills, programs. `writ search` / `writ add`. |
@@ -267,7 +268,7 @@ writ inbox                          # Check for responses
 | `writ save <name>` | Save to personal library (syncs to cloud if logged in) |
 | `writ search <query>` | Semantic search across Hub |
 | `writ lint [file] [--prompt] [--local] [--cloud]` | Quality score, review via IDE/local model/cloud |
-| `writ lint --prompt --security` | Deep OWASP-based security review via IDE's AI |
+| `writ lint --prompt --security` | Deep OWASP AST10 security review via IDE's AI |
 | `writ lint --sarif` | SARIF 2.1.0 output (GitHub Security tab) |
 | `writ lint --local-model` | Bundled writ-lint-0.8B (no setup needed) |
 | `writ lint --ci --min-score N` | CI gate: exit 1 if score below threshold |
@@ -311,7 +312,7 @@ cd writ
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                    # 650+ tests
+pytest                    # 730+ tests
 ruff check src/ tests/
 ```
 
