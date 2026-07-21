@@ -1,6 +1,6 @@
 ---
 name: coding-agent
-model: claude-4.6-opus-high-thinking
+model: grok-4.5[]
 description: Primary coding agent -- implements features according to the implementation plan (enwrit/writ)
 ---
 

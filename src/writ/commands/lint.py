@@ -153,6 +153,49 @@ def _get_changed_instruction_files() -> list[Path]:
     return result
 
 
+def _get_all_instruction_files() -> list[Path]:
+    """Return all instruction files within the project root.
+
+    Walks the current working directory looking for files in each IDE's
+    configured rules, skills, and agents directories, plus .writ/ store dirs
+    and well-known root files. Strictly within cwd.
+    """
+    from writ.core.formatter import IDE_PATHS
+
+    root = Path.cwd().resolve()
+    result: list[Path] = []
+
+    ide_dirs = {
+        entry.directory
+        for cfg in IDE_PATHS.values()
+        for entry in (cfg.rules, cfg.skills, cfg.agents)
+    }
+    writ_dirs = ["agents", "rules", "context", "programs"]
+
+    for ide_dir in ide_dirs:
+        d = root / ide_dir
+        if d.is_dir():
+            for p in d.rglob("*"):
+                if p.is_file() and p.suffix in (".md", ".mdc", ".yaml", ".yml", ".txt"):
+                    result.append(p)
+
+    writ_root = root / ".writ"
+    if writ_root.is_dir():
+        for sub in writ_dirs:
+            d = writ_root / sub
+            if d.is_dir():
+                for p in d.rglob("*"):
+                    if p.is_file() and p.suffix in (".md", ".yaml", ".yml"):
+                        result.append(p)
+
+    for name in ("CLAUDE.md", "AGENTS.md", "SKILL.md", ".windsurfrules", ".cursorrules"):
+        p = root / name
+        if p.is_file():
+            result.append(p)
+
+    return sorted(set(result))
+
+
 def _print_score(lint_score: LintScore, quiet: bool = False) -> None:
     """Print the full lint score in rich format.
 
@@ -162,10 +205,17 @@ def _print_score(lint_score: LintScore, quiet: bool = False) -> None:
     from rich.table import Table
 
     color = _score_color(lint_score.score)
-    console.print(
+    score_line = (
         f"\n  Score: [{color}][bold]{lint_score.score}"
-        f"[/bold] / 100[/{color}]",
+        f"[/bold] / 100[/{color}]"
     )
+    if lint_score.safety_score is not None:
+        sc = _score_color(lint_score.safety_score)
+        score_line += (
+            f"  |  Safety (experimental): [{sc}][bold]"
+            f"{lint_score.safety_score}[/bold] / 100[/{sc}]"
+        )
+    console.print(score_line)
 
     table = Table(show_header=True, box=None, padding=(0, 1))
     table.add_column("Dimension", style="bold", min_width=14)
@@ -182,8 +232,23 @@ def _print_score(lint_score: LintScore, quiet: bool = False) -> None:
 
     console.print(table)
 
+    if not quiet and lint_score.safety_score is not None and lint_score.safety_score < 80:
+        security_issues = [
+            i for i in lint_score.issues if i.rule and i.rule.startswith("security-")
+        ]
+        if security_issues:
+            console.print("\n  [bold red]Safety concerns:[/bold red]")
+            for issue in security_issues:
+                console.print(f"    - {issue.message}")
+        else:
+            console.print(
+                "\n  [yellow]Safety score is low.[/yellow] "
+                "Review this instruction for overprivileged access, "
+                "unsafe operations, or identity spoofing.",
+            )
+
     if not quiet and lint_score.suggestions:
-        console.print("\n  [bold]Suggestions:[/bold]")
+        console.print("\n  [bold]Quality suggestions:[/bold]")
         for i, sug in enumerate(lint_score.suggestions, 1):
             console.print(f"    {i}. {sug}")
 
@@ -279,7 +344,7 @@ def _path_key_for_scores(path: Path | None) -> str | None:
 def _storage_entry_from_lint_score(lint_score: LintScore) -> dict:
     ts = _lint_timestamp()
     dims = {d.name: d.score for d in lint_score.dimensions}
-    return {
+    entry: dict = {
         "headline_score": lint_score.score,
         "tier": lint_score.tier,
         "dimensions": dims,
@@ -287,6 +352,9 @@ def _storage_entry_from_lint_score(lint_score: LintScore) -> dict:
         "suggestion_count": len(lint_score.suggestions),
         "timestamp": ts,
     }
+    if lint_score.safety_score is not None:
+        entry["safety_score"] = lint_score.safety_score
+    return entry
 
 
 def _dim_name_from_api_row(d: dict) -> str:
@@ -1004,6 +1072,13 @@ def lint_command(
             help="Print shields.io badge URL for the score.",
         ),
     ] = False,
+    lint_all: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="Lint all instruction files in the project (IDE dirs, .writ/, root files).",
+        ),
+    ] = False,
     changed: Annotated[
         bool,
         typer.Option(
@@ -1136,6 +1211,7 @@ def lint_command(
         writ lint rules.mdc --json          # JSON output
         writ lint --code                    # force Tier 1 only
         writ lint --ci --min-score 60       # fail CI if < 60
+        writ lint --all                     # all instruction files
         writ lint --changed                 # only modified files
         writ lint --stop-server             # free GPU memory
     """
@@ -1150,6 +1226,13 @@ def lint_command(
     if file is None and name is not None and _looks_like_file(name):
         file = Path(name)
         name = None
+
+    if lint_all and (name is not None or file is not None):
+        console.print("[red]--all cannot be combined with a target.[/red]")
+        raise typer.Exit(2)
+    if lint_all and changed:
+        console.print("[red]--all cannot be combined with --changed.[/red]")
+        raise typer.Exit(2)
 
     # Resolve LEGACY aliases to canonical flags
     use_prompt = prompt or deep
@@ -1200,6 +1283,106 @@ def lint_command(
             quiet=quiet,
         )
         return
+    if lint_all:
+        all_files = _get_all_instruction_files()
+        if not all_files:
+            console.print("[yellow]No instruction files found.[/yellow]")
+            return
+
+        console.print(f"[dim]Found {len(all_files)} instruction file(s)[/dim]")
+        all_scores_all: list[LintScore] = []
+        sarif_all_results_all: list[dict] = []
+        sarif_all_rules_all: dict[str, dict] = {}
+        scores_batch_all: dict[str, dict] = {}
+        failed_files_all: list[Path] = []
+        for fp in all_files:
+            try:
+                agent = _parse_file_to_config(fp)
+                results = lint_engine.lint(agent, source_path=fp)
+                lint_score = _maybe_ml_score(agent, results, force_code=code)
+            except Exception as exc:  # noqa: BLE001 - isolate malformed project files
+                failed_files_all.append(fp)
+                console.print(f"[red]Could not lint {fp}:[/red] {exc}")
+                continue
+            all_scores_all.append(lint_score)
+            rel_k = _path_key_for_scores(fp)
+            display_name = rel_k or str(fp)
+            if rel_k:
+                scores_batch_all[rel_k] = _storage_entry_from_lint_score(lint_score)
+
+            if sarif:
+                sarif_json = json.loads(
+                    _score_to_sarif(lint_score, file_path=fp),
+                )
+                run = sarif_json["runs"][0]
+                sarif_all_results_all.extend(run["results"])
+                for r in run["tool"]["driver"]["rules"]:
+                    sarif_all_rules_all[r["id"]] = r
+                continue
+
+            if json_output:
+                data = json.loads(lint_score.model_dump_json())
+                data["name"] = agent.name
+                data["file"] = str(fp)
+                sys.stdout.write(json.dumps(data, indent=2) + "\n")
+            elif badge:
+                pass
+            elif score_only:
+                color = _score_color(lint_score.score)
+                safety_str = ""
+                if lint_score.safety_score is not None:
+                    sc = _score_color(lint_score.safety_score)
+                    safety_str = (
+                        f"  safety(exp)=[{sc}]"
+                        f"{lint_score.safety_score}[/{sc}]"
+                    )
+                console.print(
+                    f"  {display_name}: [{color}]{lint_score.score}[/{color}]{safety_str}",
+                )
+            elif quiet:
+                console.print(f"\n[bold]{display_name}[/bold]:")
+                _print_score(lint_score, quiet=True)
+            else:
+                console.print(f"\n[bold]{display_name}[/bold]:")
+                _print_results(results)
+                _print_score(lint_score)
+
+        if sarif and all_scores_all:
+            merged = {
+                "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+                "version": "2.1.0",
+                "runs": [{
+                    "tool": {
+                        "driver": {
+                            "name": "writ-lint",
+                            "informationUri": "https://github.com/enwrit/writ",
+                            "rules": list(sarif_all_rules_all.values()),
+                        },
+                    },
+                    "results": sarif_all_results_all,
+                }],
+            }
+            sys.stdout.write(json.dumps(merged, indent=2) + "\n")
+
+        if badge and all_scores_all:
+            avg = sum(s.score for s in all_scores_all) // len(all_scores_all)
+            console.print(_badge_url(avg))
+        elif not json_output and not score_only and not badge and not quiet and not sarif:
+            _print_summary(all_scores_all)
+
+        _merge_write_lint_scores(scores_batch_all)
+
+        if failed_files_all:
+            console.print(
+                f"[red]{len(failed_files_all)} instruction file(s) could not be linted.[/red]",
+            )
+            raise typer.Exit(1)
+        if ci and all_scores_all:
+            worst = min(s.score for s in all_scores_all)
+            if worst < min_score:
+                raise typer.Exit(1)
+        return
+
     if changed:
         changed_files = _get_changed_instruction_files()
         if not changed_files:
@@ -1441,12 +1624,21 @@ def _print_summary(scores: list[LintScore]) -> None:
         if i.level == "warning"
     )
     avg_score = sum(s.score for s in scores) // len(scores)
+    safety_scores = [s.safety_score for s in scores if s.safety_score is not None]
 
     color = _score_color(avg_score)
     console.print(
         f"  Average score: [{color}][bold]{avg_score}"
         f"[/bold] / 100[/{color}]",
     )
+    if safety_scores:
+        avg_safety = sum(safety_scores) // len(safety_scores)
+        safety_color = _score_color(avg_safety)
+        console.print(
+            f"  Average safety (experimental): "
+            f"[{safety_color}][bold]{avg_safety}"
+            f"[/bold] / 100[/{safety_color}]",
+        )
 
     if total_errors:
         console.print(

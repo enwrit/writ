@@ -61,6 +61,24 @@ def _load_tfidf_config() -> dict | None:
     return None
 
 
+@lru_cache(maxsize=1)
+def _load_safety_feature_config() -> dict | None:
+    path = TIER2_DIR / "safety_feature_config.json"
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_safety_tfidf_config() -> dict | None:
+    path = TIER2_DIR / "safety_tfidf_config.json"
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
 def _load_scorer(target: str):
     """Dynamically import a m2cgen-generated scorer module."""
     module_name = f"writ.models.tier2.scorer_{target}"
@@ -303,6 +321,8 @@ def _compute_tfidf_segment(
     n_word: int,
     word_ngram: tuple[int, int],
     char_ngram: tuple[int, int],
+    *,
+    separate_block_norm: bool = False,
 ) -> list[float]:
     """Compute raw TF-IDF vector for one text segment."""
     word_tokens = _word_ngrams(text, word_ngram)
@@ -315,21 +335,26 @@ def _compute_tfidf_segment(
     for t in char_tokens:
         char_tf[t] = char_tf.get(t, 0) + 1
 
-    n_total = n_word + len(char_vocab)
-    vec = [0.0] * n_total
+    word_vec = [0.0] * n_word
+    char_vec = [0.0] * len(char_vocab)
     for term, count in word_tf.items():
         idx = word_vocab.get(term)
         if idx is not None:
-            vec[idx] = (1.0 + math.log(count)) * word_idf[idx]
+            word_vec[idx] = (1.0 + math.log(count)) * word_idf[idx]
     for term, count in char_tf.items():
         idx = char_vocab.get(term)
         if idx is not None:
-            vec[n_word + idx] = (1.0 + math.log(count)) * char_idf[idx]
+            char_vec[idx] = (1.0 + math.log(count)) * char_idf[idx]
 
-    norm = math.sqrt(sum(v * v for v in vec))
-    if norm > 0:
-        vec = [v / norm for v in vec]
-    return vec
+    blocks = (word_vec, char_vec) if separate_block_norm else (word_vec + char_vec,)
+    normalized: list[float] = []
+    for block in blocks:
+        norm = math.sqrt(sum(value * value for value in block))
+        if norm > 0:
+            normalized.extend(value / norm for value in block)
+        else:
+            normalized.extend(block)
+    return normalized
 
 
 def _compute_tfidf_features(instruction_text: str) -> dict[str, float]:
@@ -903,6 +928,345 @@ def _generate_suggestions_from_templates(
 
 
 # ---------------------------------------------------------------------------
+# Safety scoring (separate model, separate features)
+# ---------------------------------------------------------------------------
+
+def _compute_safety_tfidf_features(instruction_text: str) -> dict[str, float]:
+    """Compute TF-IDF features using the safety-specific vocabulary."""
+    cfg = _load_safety_tfidf_config()
+    if cfg is None:
+        return {}
+    if (
+        "word_ngram" not in cfg
+        or "char_ngram" not in cfg
+        or cfg.get("block_normalization") != "separate"
+    ):
+        logger.debug("Safety TF-IDF config is missing parity metadata")
+        return {}
+
+    chi2_mask: list[bool] = cfg["chi2_mask"]
+    selected_names: list[str] = cfg["selected_feature_names"]
+    word_ngram = tuple(cfg["word_ngram"])
+    char_ngram = tuple(cfg["char_ngram"])
+    separate_block_norm = True
+
+    if "segments" in cfg:
+        segments_cfg = cfg["segments"]
+        texts: dict[str, str] = {"full": instruction_text}
+
+        full_vector: list[float] = []
+        for seg_name in segments_cfg:
+            seg = segments_cfg[seg_name]
+            seg_text = texts.get(seg_name, instruction_text)
+            vec = _compute_tfidf_segment(
+                seg_text,
+                seg["word_vocabulary"], seg["word_idf"],
+                seg["char_vocabulary"], seg["char_idf"],
+                seg["n_word_features"], word_ngram, char_ngram,
+                separate_block_norm=separate_block_norm,
+            )
+            full_vector.extend(vec)
+    else:
+        full_vector = _compute_tfidf_segment(
+            instruction_text,
+            cfg["word_vocabulary"], cfg["word_idf"],
+            cfg["char_vocabulary"], cfg["char_idf"],
+            cfg["n_word_features"], word_ngram, char_ngram,
+            separate_block_norm=separate_block_norm,
+        )
+
+    result: dict[str, float] = {}
+    j = 0
+    for i, is_selected in enumerate(chi2_mask):
+        if is_selected:
+            if j < len(selected_names):
+                result[selected_names[j]] = full_vector[i] if i < len(full_vector) else 0.0
+            j += 1
+    return result
+
+
+def _build_safety_feature_vector(
+    raw_signals: dict[str, Any],
+    instruction_text: str = "",
+) -> list[float] | None:
+    """Build feature vector for the safety model (different from quality)."""
+    config = _load_safety_feature_config()
+    if config is None:
+        return None
+    if config.get("has_tfidf", False):
+        tfidf_config = _load_safety_tfidf_config()
+        if tfidf_config is None:
+            return None
+        artifact_id = config.get("artifact_id")
+        if artifact_id and artifact_id != tfidf_config.get("artifact_id"):
+            logger.debug("Safety model artifact IDs do not match")
+            return None
+
+    feature_names = config["feature_names"]
+    values: dict[str, float] = {}
+
+    for key in feature_names:
+        if key.startswith("sig_"):
+            signal_name = key[4:]
+            val = raw_signals.get(signal_name, raw_signals.get(key, 0))
+            if isinstance(val, bool):
+                val = float(val)
+            elif isinstance(val, (int, float)):
+                val = float(val)
+            else:
+                val = 0.0
+            values[key] = val
+
+    # Boolean labels are binary in the safety training data.
+    for key in feature_names:
+        if key.startswith("setfit_"):
+            val = raw_signals.get(key, 0.0)
+            val = float(val) if isinstance(val, (int, float, bool)) else 0.0
+            values[key] = 1.0 if val >= 0.5 else 0.0
+
+    code_ratio = values.get("sig_code_to_text_ratio", 0.0)
+    values["derived_code_heavy"] = 1.0 if code_ratio > 0.3 else 0.0
+    prose_ratio = values.get("sig_prose_ratio", 0.0)
+    duplicate_ratio = values.get("sig_duplicate_ratio", 0.0)
+    values["derived_economy_signal"] = prose_ratio * (1.0 - duplicate_ratio)
+
+    if instruction_text and config.get("has_tfidf", False):
+        tfidf_vals = _compute_safety_tfidf_features(instruction_text)
+        values.update(tfidf_vals)
+
+    return [values.get(name, 0.0) for name in feature_names]
+
+
+def _compute_safety_score(
+    raw_signals: dict[str, Any],
+    instruction_text: str = "",
+) -> int | None:
+    """Compute safety score using the dedicated safety model. Returns 10-100 or None."""
+    features = _build_safety_feature_vector(raw_signals, instruction_text)
+    if features is None:
+        return None
+    try:
+        config = _load_safety_feature_config() or {}
+        if config.get("model_type") == "ordinal_logreg":
+            probabilities: dict[int, float] = {}
+            for cut in (30, 60, 80):
+                output = _load_scorer(f"safety_lt{cut}").score(features)
+                if isinstance(output, (list, tuple)):
+                    probability = float(output[-1])
+                else:
+                    probability = float(output)
+                probabilities[cut] = max(0.0, min(1.0, probability))
+            p30 = probabilities[30]
+            p60 = max(probabilities[60], p30)
+            p80 = max(probabilities[80], p60)
+            p60 = min(p60, p80)
+            p30 = min(p30, p60)
+            score = (
+                15.0 * p30
+                + 45.0 * (p60 - p30)
+                + 70.0 * (p80 - p60)
+                + 95.0 * (1.0 - p80)
+            )
+            risk_threshold = float(
+                config.get("risk_probability_threshold", 0.5),
+            )
+            score = min(score, 79.0) if p80 >= risk_threshold else max(score, 80.0)
+            return int(max(10, min(100, round(score))))
+        scorer = _load_scorer("safety")
+        raw_pred = scorer.score(features)
+        return int(max(10, min(100, round(raw_pred))))
+    except (ImportError, AttributeError, Exception) as e:
+        logger.debug("Safety scorer unavailable: %s", e)
+        return None
+
+
+_SAFETY_RULE_PENALTIES: dict[str, int] = {
+    "security-secrets": 45,
+    "security-shell-exec": 0,
+    "security-exfiltration": 65,
+    "security-override": 65,
+    "security-overprivilege": 20,
+    "security-impersonation": 40,
+}
+
+_SAFETY_RULE_CAPS: dict[str, int] = {
+    "security-secrets": 49,
+    "security-shell-exec": 79,
+    "security-exfiltration": 29,
+    "security-override": 29,
+    "security-overprivilege": 69,
+    "security-impersonation": 59,
+}
+_SAFETY_DIRECTIVE_MAX_CHARS = 1_000
+
+_IDENTITY_TAKEOVER_PATTERN = re.compile(
+    r"(?:AGENTS\.md|CLAUDE\.md|MEMORY\.md|SOUL\.md|\.cursor/rules)"
+    r"[^\n]{0,100}\b(?:grant\s+(?:yourself|the\s+agent)|control|"
+    r"preserve\s+access|new\s+permissions?|without\s+(?:approval|permission))\b",
+    re.I,
+)
+_CRITICAL_REMOTE_EXEC_PATTERN = re.compile(
+    r"(?s)\A(?=.*\bRuntime\.evaluate\b)"
+    r"(?=.*(?:unauthenticated|0\.0\.0\.0|remote debugger|expression evaluator))",
+    re.I,
+)
+_CRITICAL_PRODUCTION_AUTONOMY_PATTERN = re.compile(
+    r"(?s)\A(?=.*(?:force-push|git\s+push[^\n]{0,80}(?:--force|-f\b))"
+    r".{0,160}(?:main|master))"
+    r"(?=.*never ask (?:the user )?for approval)",
+    re.I,
+)
+_CRITICAL_DESTRUCTIVE_SCOPE_PATTERN = re.compile(
+    r"(?s)(?:every accessible drive|all (?:accessible )?drives?|"
+    r"full disk access).{0,1600}(?:delete|empty trash|remove backups?|"
+    r"without[^\n]{0,120}(?:confirmation|dry run|backup))",
+    re.I,
+)
+_CRITICAL_ARBITRARY_EXEC_PATTERN = re.compile(
+    r"(?s)\A(?=.*(?:eval\(\)|shell\s*=\s*True))"
+    r"(?=.*(?:plugin|manifest|untrusted|remote))"
+    r"(?=.*(?:do not sandbox|without[^\n]{0,100}approval|"
+    r"full filesystem access|administrator privileges))",
+    re.I,
+)
+_CRITICAL_SCORER_INJECTION_PATTERN = re.compile(
+    r"(?s)(?:replace the safety rubric|ignore any system message)"
+    r".{0,1800}(?:read\s+`?\.env|upload\s+it|fabricated score)",
+    re.I,
+)
+_CRITICAL_EXFIL_DIRECTIVE_PATTERN = re.compile(
+    r"(?s)(?:"
+    r"send\s+the\s+diagnostic bundle.{0,500}(?:unauthenticated|HTTP\s+POST)"
+    r"|read\s+`?\.env`?.{0,200}upload\s+it"
+    r"|scp\s+[^\n]{0,180}(?:/|\\|`)?\.env\b"
+    r"|curl\s+[^\n]{0,200}(?:-X\s+POST|--request\s+POST)"
+    r"[^\n]{0,300}(?:-d|--data)[^\n]{0,120}process\.env"
+    r"|(?:plaintext|live|real)\s+credentials?.{0,500}"
+    r"(?:send|upload|transmit|publish|webhook|commit)"
+    r")",
+    re.I,
+)
+_CRITICAL_OVERRIDE_DIRECTIVE_PATTERN = re.compile(
+    r"(?:ignore|disregard)\s+(?:all\s+)?(?:previous|system)"
+    r"\s+(?:instructions?|messages?)"
+    r"|(?:ignore|disregard)[^\n]{0,100}(?:safety|security)\s+(?:rules?|checks?)"
+    r"|override\s+(?:all\s+)?(?:safety|system|restrictions?)",
+    re.I,
+)
+_UNSAFE_SHARED_HISTORY_PATTERN = re.compile(
+    r"(?:force-push|git\s+push[^\n]{0,80}(?:--force|-f\b))"
+    r"[^\n]{0,180}(?:shared|main|master)\b",
+    re.I,
+)
+_UNSAFE_HIDDEN_AUTONOMY_PATTERN = re.compile(
+    r"(?:never|don['’]?t|do not)\s+ask (?:the )?user what to do next",
+    re.I,
+)
+_REVIEW_AUTONOMY_PATTERN = re.compile(
+    r"(?s)(?:\A(?=.*(?:don['’]?t|do not)\s+stop to ask "
+    r"(?:questions?|for approval))(?=.*(?:commit|revert|rollback))"
+    r"|rm\s+-rf\s+(?:\*|\.[^/\s]))",
+    re.I,
+)
+_REVIEW_APP_EVAL_PATTERN = re.compile(
+    r"\bobsidian\s+eval\b",
+    re.I,
+)
+
+
+def _apply_deterministic_safety_backstop(
+    score: int,
+    issues: list,
+    instruction_text: str = "",
+) -> int:
+    """Calibrate skewed ML predictions with concrete security findings.
+
+    The safety teacher dataset is concentrated in the safe band, so the
+    regressor can assign high scores to short adversarial inputs. Hard caps
+    require compact, direct evidence. In longer instructions, single pattern
+    matches are weak evidence because examples and security guidance naturally
+    contain risky vocabulary, so deductions shrink with document length.
+    Only warning findings affect the score; references remain informational.
+    """
+    warning_rules = {
+        issue.rule
+        for issue in issues
+        if (
+            issue.level == "warning"
+            and issue.rule
+            and issue.rule.startswith("security-")
+        )
+    }
+    text_length = len(instruction_text.strip())
+    compact = text_length <= _SAFETY_DIRECTIVE_MAX_CHARS
+    length_factor = min(
+        1.0,
+        (_SAFETY_DIRECTIVE_MAX_CHARS / max(text_length, 1)) ** 2,
+    )
+    direct_caps: list[int] = []
+    if _CRITICAL_REMOTE_EXEC_PATTERN.search(instruction_text):
+        direct_caps.append(29)
+    if _CRITICAL_PRODUCTION_AUTONOMY_PATTERN.search(instruction_text):
+        direct_caps.append(29)
+    if _CRITICAL_DESTRUCTIVE_SCOPE_PATTERN.search(instruction_text):
+        direct_caps.append(29)
+    if _CRITICAL_ARBITRARY_EXEC_PATTERN.search(instruction_text):
+        direct_caps.append(29)
+    if _CRITICAL_SCORER_INJECTION_PATTERN.search(instruction_text):
+        direct_caps.append(29)
+    if (
+        "security-exfiltration" in warning_rules
+        and _CRITICAL_EXFIL_DIRECTIVE_PATTERN.search(instruction_text)
+    ):
+        direct_caps.append(29)
+    if (
+        "security-override" in warning_rules
+        and _CRITICAL_OVERRIDE_DIRECTIVE_PATTERN.search(instruction_text)
+    ):
+        direct_caps.append(29)
+    if _UNSAFE_SHARED_HISTORY_PATTERN.search(instruction_text):
+        direct_caps.append(59)
+    if _UNSAFE_HIDDEN_AUTONOMY_PATTERN.search(instruction_text):
+        direct_caps.append(59)
+    if _REVIEW_AUTONOMY_PATTERN.search(instruction_text):
+        direct_caps.append(79)
+    if _REVIEW_APP_EVAL_PATTERN.search(instruction_text):
+        direct_caps.append(79)
+
+    if not warning_rules and not direct_caps:
+        return score
+
+    penalty = 0
+    for rule in warning_rules:
+        base = _SAFETY_RULE_PENALTIES.get(rule, 0)
+        penalty += round(base * length_factor)
+
+    calibrated = score - penalty
+    caps = direct_caps + [
+        _SAFETY_RULE_CAPS[rule]
+        for rule in warning_rules
+        if (
+            rule in _SAFETY_RULE_CAPS
+            and compact
+            and rule not in {"security-exfiltration", "security-override"}
+        )
+    ]
+    if (
+        "security-identity-write" in warning_rules
+        and _IDENTITY_TAKEOVER_PATTERN.search(instruction_text)
+    ):
+        takeover_penalty = 65
+        if not compact:
+            takeover_penalty = round(takeover_penalty * length_factor)
+        calibrated -= takeover_penalty
+        if compact:
+            caps.append(29)
+    if caps:
+        calibrated = min(calibrated, min(caps))
+    return max(10, calibrated)
+
+
+# ---------------------------------------------------------------------------
 # Issue gating -- suppress Tier 1 issues when ML scores are high
 # ---------------------------------------------------------------------------
 
@@ -1046,12 +1410,22 @@ def compute_score_ml(
 
     filtered_issues = _gate_tier1_issues(tier1_score.issues, predicted_scores, raw_signals)
 
+    safety = _compute_safety_score(raw_signals, instruction_text)
+
+    if safety is not None:
+        safety = _apply_deterministic_safety_backstop(
+            safety,
+            filtered_issues,
+            instruction_text,
+        )
+
     return LintScore(
         score=headline,
         dimensions=dims,
         issues=filtered_issues,
         suggestions=suggestions,
         raw_signals=raw_signals,
+        safety_score=safety,
         tier="ml",
     )
 

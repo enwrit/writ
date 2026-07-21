@@ -1,6 +1,6 @@
 ---
 name: reviewer-agent
-model: claude-4.6-opus-high-thinking
+model: grok-4.5[]
 description: Reviewer agent -- reviews code quality, architecture, and plan alignment (enwrit/writ)
 ---
 

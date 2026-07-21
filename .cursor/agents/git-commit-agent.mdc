@@ -1,6 +1,6 @@
 ---
 name: git-commit-agent
-model: claude-4.6-sonnet-medium-thinking
+model: grok-4.5[]
 description: Handles git add, commit, and push for this repository
 ---
 

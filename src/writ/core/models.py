@@ -221,6 +221,13 @@ class LintScore(BaseModel):
         default=None,
         description="Internal 8-dim IQR 1-5 scores.",
     )
+    safety_score: int | None = Field(
+        default=None,
+        description=(
+            "Experimental 0-100 ML safety signal, separate from quality; "
+            "not a security guarantee."
+        ),
+    )
     tier: str = Field(
         default="code",
         description="Evaluation tier: code, ml, or ai.",

@@ -144,13 +144,25 @@ _SEC_SHELL_EXEC_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bos\.system\s*\("), "os.system()"),
     (re.compile(r"\bcurl\s+[^\n]*\|\s*(?:ba)?sh\b"), "curl | bash"),
     (re.compile(r"\bwget\s+[^\n]*\|\s*(?:ba)?sh\b"), "wget | bash"),
+    (re.compile(r"\bRuntime\.evaluate\b"), "remote Runtime.evaluate"),
+    (re.compile(r"\bobsidian\s+eval\b", re.I), "Obsidian eval"),
+    (re.compile(r"\brm\s+-rf\s+(?:\*|\.[^/\s])"), "broad rm -rf"),
 ]
 
 _SEC_EXFILTRATION_PATTERN = re.compile(
-    r"(?:curl\s+.*-X\s*POST|fetch\s*\(|httpx\.post|requests\.post)"
-    r"[^\n]*(?:\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD)\w*\}?"
-    r"|process\.env|os\.environ)",
-    re.I,
+    r"(?:"
+    r"curl\s+[^\n]*(?:-d|--data(?:-raw|-binary)?)\s+[^\n]*"
+    r"(?:\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD)\w*\}?|process\.env|os\.environ)"
+    r"|(?:fetch|httpx\.post|requests\.post)\s*\([^\n]*"
+    r"(?:body|data|json)\s*[=:][^\n]*"
+    r"(?:\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD)\w*\}?|process\.env|os\.environ)"
+    r"|(?:send|upload|transmit|publish|scp)\s+(?:the\s+)?"
+    r"(?:diagnostic bundle|\.env|credentials?|secrets?|tokens?|passwords?|"
+    r"private keys?)"
+    r"|(?:\.env|private keys?|plaintext credentials?).{0,160}"
+    r"(?:send|post|upload|transmit|publish|webhook|scp)\b"
+    r")",
+    re.I | re.S,
 )
 
 _SEC_OVERRIDE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -160,6 +172,10 @@ _SEC_OVERRIDE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
      "disregard safety/guidelines"),
     (re.compile(r"\boverride\s+(?:all\s+)?(?:safety|system|restrictions?)\b", re.I),
      "override safety/system"),
+    (re.compile(r"\bignore\s+(?:any|the)\s+system\s+message\b", re.I),
+     "ignore system message"),
+    (re.compile(r"\breplace\s+the\s+safety\s+rubric\b", re.I),
+     "replace safety rubric"),
 ]
 
 _SEC_PERSISTENCE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -177,8 +193,10 @@ _SEC_OVERPRIVILEGE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
      "elevated privilege requirement"),
     (re.compile(r"\baccess\s+(?:all|any|every)\s+(?:files?|directories|folders?|repos?)\b", re.I),
      "blanket file access"),
-    (re.compile(r"\b(?:disable|bypass|skip|ignore)\s+(?:all\s+)?(?:security|permissions?|auth(?:orization)?)\b", re.I),
-     "security bypass"),
+    (re.compile(
+        r"\b(?:disable|bypass|skip|ignore)\s+(?:all\s+)?(?:security|permissions?|auth(?:orization)?)\b",
+        re.I,
+    ), "security bypass"),
     (re.compile(r"\b(?:read|write|modify|delete|access)\s+(?:any|all|every)\s+"
                 r"(?:env(?:ironment)?\s+var(?:iable)?s?|secrets?|credentials?)\b", re.I),
      "broad secret access"),
@@ -216,6 +234,58 @@ _SEC_IDENTITY_WRITE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
                 r"(?:\.cursor/rules|\.claude/rules|\.github/instructions)\b", re.I),
      "IDE instruction directory write"),
 ]
+
+_SEC_REFERENCE_MARKERS = re.compile(
+    r"\b(?:do\s+not|don't|never|must\s+not|should\s+not|"
+    r"reject|refuse|resist|detect|flag|prevent|avoid|prohibit|"
+    r"red\s+flags?|violations?|vulnerabilit(?:y|ies)|unsafe|"
+    r"attack(?:s|er|\s+vectors?)?|mitigations?|jailbreak|"
+    r"prompt\s+injection|malicious|"
+    r"tests|testing|for\s+example|examples|bad|wrong|incorrect|"
+    r"hardcoded|security\s+risk|common\s+pitfalls?|"
+    r"authorized|authorization|consent|confirmation|approved|allowlisted?|"
+    r"redacted?|synthetic|task-required|disclosure|acknowledg(?:e|ed|ement)|"
+    r"example\s*(?::|of|showing)|patterns?\s+to\s+(?:watch|detect))\b",
+    re.I,
+)
+_SEC_PLACEHOLDER_CREDENTIAL = re.compile(
+    r"\b(?:your[-_\s]|test[-_\s]|example|sample|dummy|fake|"
+    r"hardcoded|password123|secret123|admin-secret|production-key|"
+    r"my-secret-key|required|changeme|replace[-_\s]?me|x{3,})"
+    r"|\.{3}"
+    r"|(?:\$\{|\{\{|[\"']\{[a-z_])"
+    r"|[\"'][A-Z][A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD)"
+    r"(?:_HERE)?[\"']",
+    re.I,
+)
+_SEC_IDENTITY_TAKEOVER_PATTERN = re.compile(
+    r"(?:AGENTS\.md|CLAUDE\.md|MEMORY\.md|SOUL\.md|\.cursor/rules)"
+    r"[^\n]{0,100}\b(?:grant\s+(?:yourself|the\s+agent)|control|"
+    r"preserve\s+access|new\s+permissions?|without\s+(?:approval|permission))\b",
+    re.I,
+)
+
+
+def _is_defensive_security_reference(
+    text: str,
+    match_start: int,
+    match_end: int | None = None,
+) -> bool:
+    """Return whether a risky phrase is framed as a reference or counterexample."""
+    start = max(0, match_start - 240)
+    before = text[start:match_start]
+    if _SEC_REFERENCE_MARKERS.search(before):
+        return True
+    end = min(len(text), (match_end or match_start) + 120)
+    after = text[match_end or match_start:end]
+    return bool(re.search(
+        r"(?:^\s*(?:is|are|must\s+be|should\s+be)\s+"
+        r"(?:blocked|rejected|refused|prevented|prohibited|forbidden)\b"
+        r"|expected_detected[\"']?\s*:\s*true)",
+        after,
+        re.I,
+    ))
+
 
 # ---------------------------------------------------------------------------
 # Technology names for has-stack-versions rule
@@ -1123,54 +1193,90 @@ def _check_security(agent: InstructionConfig) -> list[LintResult]:
     for pat, label in _SEC_SECRET_PATTERNS:
         m = pat.search(text)
         if m:
+            reference = (
+                bool(_SEC_PLACEHOLDER_CREDENTIAL.search(m.group(0)))
+                or _is_defensive_security_reference(text, m.start(), m.end())
+            )
             results.append(LintResult(
-                level="warning",
+                level="info" if reference else "warning",
                 rule="security-secrets",
                 message=(
                     f"[security] Possible hardcoded {label} detected. "
-                    "Use environment variables or a secrets manager."
+                    + (
+                        "Placeholder or defensive example detected; verify no "
+                        "real credential is embedded."
+                        if reference
+                        else "Use environment variables or a secrets manager."
+                    )
                 ),
-                base_penalty=10,
+                base_penalty=0 if reference else 10,
             ))
             break
 
     for pat, label in _SEC_SHELL_EXEC_PATTERNS:
-        if pat.search(text):
+        match = pat.search(text)
+        if match:
+            defensive = _is_defensive_security_reference(
+                text, match.start(), match.end(),
+            )
             results.append(LintResult(
-                level="info",
+                level="info" if defensive else "warning",
                 rule="security-shell-exec",
                 message=(
                     f"[security] Shell execution pattern: {label}. "
-                    "May be legitimate (teaching example, install guide) "
-                    "-- verify intent."
+                    + (
+                        "Defensive mention detected; verify the instruction "
+                        "continues to prohibit this pattern."
+                        if defensive
+                        else "Downloads piped directly to a shell or dynamic "
+                        "execution require explicit validation and sandboxing."
+                    )
                 ),
-                base_penalty=0,
+                base_penalty=0 if defensive else 10,
             ))
             break
 
-    if _SEC_EXFILTRATION_PATTERN.search(text):
+    exfiltration = _SEC_EXFILTRATION_PATTERN.search(text)
+    if exfiltration:
+        defensive = _is_defensive_security_reference(
+            text, exfiltration.start(), exfiltration.end(),
+        )
         results.append(LintResult(
-            level="warning",
+            level="info" if defensive else "warning",
             rule="security-exfiltration",
             message=(
                 "[security] Outbound HTTP call combined with "
-                "secret/env var references. Verify this is not "
-                "exfiltrating credentials."
+                "secret/env var references. "
+                + (
+                    "Defensive or test example detected; verify no real "
+                    "credential is transmitted."
+                    if defensive
+                    else "Verify this is not exfiltrating credentials."
+                )
             ),
-            base_penalty=10,
+            base_penalty=0 if defensive else 10,
         ))
 
     for pat, label in _SEC_OVERRIDE_PATTERNS:
-        if pat.search(text):
+        match = pat.search(text)
+        if match:
+            defensive = _is_defensive_security_reference(
+                text, match.start(), match.end(),
+            )
             results.append(LintResult(
-                level="info",
+                level="info" if defensive else "warning",
                 rule="security-override",
                 message=(
                     f"[security] Prompt override phrase: '{label}'. "
-                    "This may be defensive (teaching the agent to resist "
-                    "attacks) or malicious -- verify intent."
+                    + (
+                        "Defensive mention detected; verify the instruction "
+                        "continues to reject prompt overrides."
+                        if defensive
+                        else "Direct override instructions are a critical "
+                        "prompt-injection risk."
+                    )
                 ),
-                base_penalty=0,
+                base_penalty=0 if defensive else 10,
             ))
             break
 
@@ -1189,59 +1295,86 @@ def _check_security(agent: InstructionConfig) -> list[LintResult]:
 
     # OWASP AST03: over-privileged access
     for pat, label in _SEC_OVERPRIVILEGE_PATTERNS:
-        if pat.search(text):
+        match = pat.search(text)
+        if match:
+            defensive = _is_defensive_security_reference(
+                text, match.start(), match.end(),
+            )
             results.append(LintResult(
-                level="warning",
+                level="info" if defensive else "warning",
                 rule="security-overprivilege",
                 message=(
                     f"[security/AST03] Over-privileged pattern: {label}. "
-                    "Skills should request minimal necessary permissions."
+                    + (
+                        "Defensive or test example detected; verify least "
+                        "privilege remains enforced."
+                        if defensive
+                        else "Skills should request minimal necessary permissions."
+                    )
                 ),
-                base_penalty=5,
+                base_penalty=0 if defensive else 5,
             ))
             break
 
     # OWASP AST04: identity impersonation
     for pat, label in _SEC_IMPERSONATION_PATTERNS:
-        if pat.search(text):
+        match = pat.search(text)
+        if match:
+            defensive = _is_defensive_security_reference(
+                text, match.start(), match.end(),
+            )
             results.append(LintResult(
-                level="warning",
+                level="info" if defensive else "warning",
                 rule="security-impersonation",
                 message=(
                     f"[security/AST04] {label}. "
-                    "Unverified vendor claims can mislead users into "
-                    "trusting malicious skills."
+                    + (
+                        "Defensive or test example detected; verify no false "
+                        "attribution is asserted."
+                        if defensive
+                        else "Unverified vendor claims can mislead users into "
+                        "trusting malicious skills."
+                    )
                 ),
-                base_penalty=10,
+                base_penalty=0 if defensive else 10,
             ))
             break
 
-    # OWASP AST01 expansion: encoded payloads / unsafe deserialization
+    # OWASP AST01 expansion: encoded payloads / unsafe deserialization.
+    # Presence alone is capability evidence, not malicious intent.
     for pat, label in _SEC_ENCODING_PATTERNS:
         if pat.search(text):
             results.append(LintResult(
-                level="warning",
+                level="info",
                 rule="security-encoding",
                 message=(
                     f"[security/AST01] Encoding/deserialization pattern: "
-                    f"{label}. May be used to obfuscate malicious payloads."
+                    f"{label}. Review the data source and execution context."
                 ),
-                base_penalty=5,
+                base_penalty=0,
             ))
             break
 
-    # OWASP AST01: agent identity file writes
+    # OWASP AST01: agent identity file writes. Routine documentation updates
+    # are informational; takeover language makes this a warning.
     for pat, label in _SEC_IDENTITY_WRITE_PATTERNS:
-        if pat.search(text):
+        match = pat.search(text)
+        if match:
+            takeover = bool(_SEC_IDENTITY_TAKEOVER_PATTERN.search(text))
             results.append(LintResult(
-                level="warning",
+                level="warning" if takeover else "info",
                 rule="security-identity-write",
                 message=(
                     f"[security/AST01] {label}. "
-                    "Skills should not modify agent identity or "
-                    "instruction files unless explicitly justified."
+                    + (
+                        "Identity takeover or permission escalation language "
+                        "requires explicit review."
+                        if takeover
+                        else "Instruction-file maintenance detected; verify the "
+                        "requested update is scoped and user-authorized."
+                    )
                 ),
-                base_penalty=5,
+                base_penalty=10 if takeover else 0,
             ))
             break
 

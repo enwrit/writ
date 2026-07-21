@@ -27,19 +27,19 @@ writ add code-review-agent        # Add to project + activate in your IDE
 
 ## Lint Your Instructions
 
-`writ lint` scores any instruction 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Economy**, **Structure**, **Examples**. Works on any `.md`, `.mdc`, `.txt`, or YAML file -- no `writ init` required.
+`writ lint` scores instruction quality 0-100 across 6 dimensions: **Clarity**, **Verification**, **Coverage**, **Economy**, **Structure**, **Examples**. Default ML linting also reports a separate experimental 0-100 safety signal. Treat it as review guidance, not a security guarantee. Works on any `.md`, `.mdc`, `.txt`, or YAML file -- no `writ init` required.
 
 ```bash
 writ lint .cursor/rules/my-rule.mdc
-# Score: 34 / 100
+# Score: 34 / 100  |  Safety (experimental): 96 / 100
 # Dimension       Score  Summary
 # Clarity            43  Moderate              
 # Structure          44  Moderate            
 # Coverage           31  Needs improvement              
-# Exconomy           51  Moderate              
+# Economy            51  Moderate
 # Examples           15  Critical
 # Verification       10  Critical
-# Suggestions:
+# Quality suggestions:
 #   Replace vague phrases with imperative commands
 #   Add verification: test/build/lint commands (2-3x quality impact)
 #   Add 1-2 code examples showing desired patterns
@@ -56,6 +56,7 @@ writ lint AGENTS.md --cloud             # AI scoring via enwrit.com (Gemini)
 writ lint AGENTS.md --local-model       # Bundled writ-lint-0.8B (auto-downloaded)
 writ lint rules.mdc --json              # Machine-readable output for CI
 writ lint --ci --min-score 60           # Exit 1 if score too low (CI gate)
+writ lint --all                         # Lint every instruction file in the project
 ```
 
 ---
@@ -267,7 +268,8 @@ writ inbox                          # Check for responses
 | `writ remove <name>` | Remove instruction |
 | `writ save <name>` | Save to personal library (syncs to cloud if logged in) |
 | `writ search <query>` | Semantic search across Hub |
-| `writ lint [file] [--prompt] [--local] [--cloud]` | Quality score, review via IDE/local model/cloud |
+| `writ lint [file] [--prompt] [--local] [--cloud]` | Quality score + experimental safety signal; IDE/local/cloud review |
+| `writ lint --all` | Lint all project instruction files and persist scores |
 | `writ lint --prompt --security` | Deep OWASP AST10 security review via IDE's AI |
 | `writ lint --sarif` | SARIF 2.1.0 output (GitHub Security tab) |
 | `writ lint --local-model` | Bundled writ-lint-0.8B (no setup needed) |

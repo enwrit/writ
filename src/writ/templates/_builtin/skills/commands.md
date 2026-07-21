@@ -33,7 +33,8 @@ and routes AI instructions across coding tools, projects, and agents.
 - `writ remove <name>` -- remove instruction
 
 ### Quality
-- `writ lint [file|name]` -- score instruction quality (0-100, ML-powered)
+- `writ lint [file|name]` -- score quality + experimental safety (separate 0-100 ML signals; safety is not a guarantee)
+- `writ lint --all` -- lint all project instruction files and persist results to `.writ/lint-scores.json`
 - `writ lint --prompt` -- type-aware qualitative review (prints analysis instruction for your IDE's AI)
 - `writ lint --prompt --fix` -- review + instruct the AI to apply fixes directly
 - `writ lint --prompt --with-file` -- inline file content in the prompt (instead of asking agent to read it)

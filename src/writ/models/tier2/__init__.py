@@ -15,8 +15,19 @@ TIER2_DIR = Path(__file__).parent
 
 
 def models_available() -> bool:
-    """Check if Tier 2 model files are bundled."""
+    """Check if Tier 2 quality model files are bundled."""
     return (
         (TIER2_DIR / "scorer_headline.py").exists()
         and (TIER2_DIR / "feature_config.json").exists()
     )
+
+
+def safety_models_available() -> bool:
+    """Check if Tier 2 safety model files are bundled."""
+    feature_config = TIER2_DIR / "safety_feature_config.json"
+    legacy_available = (TIER2_DIR / "scorer_safety.py").exists()
+    ordinal_available = all(
+        (TIER2_DIR / f"scorer_safety_lt{cut}.py").exists()
+        for cut in (30, 60, 80)
+    )
+    return feature_config.exists() and (legacy_available or ordinal_available)

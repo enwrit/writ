@@ -1,0 +1,14 @@
+{
+  "artifact_id": "e9123bd18c32682dda7994aaa1c3d25a3eaa3a5bffc832658590745956ce3192",
+  "family": "ordinal_logreg",
+  "model_files": [
+    "scorer_safety_lt30.py",
+    "scorer_safety_lt60.py",
+    "scorer_safety_lt80.py"
+  ],
+  "feature_config": "feature_config.json",
+  "tfidf_config": "tfidf_config.json",
+  "n_training_rows": 2020,
+  "rubric_version": "safety-v3",
+  "decision_threshold": 0.45
+}
